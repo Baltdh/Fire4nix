@@ -49,6 +49,7 @@ public:
     void closeCurrentTab();
     void resetTabs(int index = 0);
     void applyAction(UiAction action);
+    void pollBrowserState();
 
     void beginAddressEditing();
     void cancelAddressEditing();
@@ -111,6 +112,7 @@ private:
     ::StatusBar statusBar_;
     std::vector<std::string> history_;
     std::size_t historyIndex_{0};
+    std::string lastBrowserState_;
     TopBarWidget topWidget_{};
     AddressBarWidget addressWidget_{};
     BottomBarWidget bottomWidget_{};
