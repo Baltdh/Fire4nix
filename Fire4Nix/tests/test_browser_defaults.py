@@ -36,6 +36,16 @@ class BrowserDefaults(unittest.TestCase):
         self.assertNotIn("--no-sandbox", source)
         self.assertNotIn("--disable-gpu-sandbox", source)
 
+    def test_wpe_constrained_defaults_are_opt_in(self):
+        source = (ROOT / "src/wpe/wpe_platform_launcher.cpp").read_text()
+        self.assertIn('envEnabled("FIRE4NIX_DEVELOPER_EXTRAS", false)', source)
+        self.assertIn('envEnabled("FIRE4NIX_ENABLE_WEBRTC", false)', source)
+        self.assertIn('envEnabled("FIRE4NIX_ENABLE_MEDIA_STREAM", false)', source)
+        self.assertIn('envEnabled("FIRE4NIX_ENABLE_ENCRYPTED_MEDIA", false)', source)
+        self.assertNotIn('"enable-developer-extras", TRUE', source)
+        self.assertNotIn('"enable-webrtc", TRUE', source)
+        self.assertNotIn('"enable-media-stream", TRUE', source)
+        self.assertNotIn('"enable-encrypted-media", TRUE', source)
 
 if __name__ == "__main__":
     unittest.main()
