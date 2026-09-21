@@ -560,6 +560,14 @@ gboolean pollBrowserCommands(gpointer userData)
         return G_SOURCE_CONTINUE;
     if (static_cast<std::uintmax_t>(consumer->offset) > size)
         consumer->offset = 0;
+    constexpr std::uintmax_t kMaxCommandJournalBytes = 256 * 1024;
+    if (size > kMaxCommandJournalBytes) {
+        g_warning("Fire4Nix WPE IPC journal exceeded limit; resetting stale commands");
+        std::ofstream reset(consumer->path, std::ios::trunc);
+        if (reset.good())
+            consumer->offset = 0;
+        return G_SOURCE_CONTINUE;
+    }
 
     std::ifstream input(consumer->path);
     if (!input.is_open())
