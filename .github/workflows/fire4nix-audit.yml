@@ -45,5 +45,10 @@ jobs:
 
       - name: Makefile WPE detection regression check
         run: |
-          grep -F '$(PKG_CONFIG) --exists $pkg' Makefile
-          grep -F 'Compiler: $($(CXX) -dumpmachine' Makefile
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path("Makefile").read_text()
+          assert "$(PKG_CONFIG) --exists $$pkg" in text
+          assert "Compiler: $$($(CXX) -dumpmachine" in text
+          print("Makefile WPE escaping: PASS")
+          PY
