@@ -23,7 +23,7 @@ WPE_PLATFORM_PKG_CANDIDATES ?= wpe-platform-wayland-2.0 wpe-platform-2.0
 WPE_PKG_NAME ?= $(shell for pkg in $(WPE_PKG_CANDIDATES); do $(PKG_CONFIG) --exists $$pkg >/dev/null 2>&1 && { printf '%s\n' $$pkg; break; }; done)
 WPE_CFLAGS ?= $(shell test -n "$(WPE_PKG_NAME)" && $(PKG_CONFIG) --cflags $(WPE_PKG_NAME) 2>/dev/null)
 WPE_LIBS ?= $(shell test -n "$(WPE_PKG_NAME)" && $(PKG_CONFIG) --libs $(WPE_PKG_NAME) 2>/dev/null)
-WPE_PLATFORM_PKG_NAME ?= $(shell for pkg in $(WPE_PLATFORM_PKG_CANDIDATES); do $(PKG_CONFIG) --exists $pkg >/dev/null 2>&1 && { echo $pkg; break; }; done)
+WPE_PLATFORM_PKG_NAME ?= $(shell for pkg in $(WPE_PLATFORM_PKG_CANDIDATES); do $(PKG_CONFIG) --exists $$pkg >/dev/null 2>&1 && { echo $$pkg; break; }; done)
 WPE_PLATFORM_CFLAGS ?= $(shell test -n "$(WPE_PLATFORM_PKG_NAME)" && $(PKG_CONFIG) --cflags $(WPE_PLATFORM_PKG_NAME) 2>/dev/null)
 WPE_PLATFORM_LIBS ?= $(shell test -n "$(WPE_PLATFORM_PKG_NAME)" && $(PKG_CONFIG) --libs $(WPE_PLATFORM_PKG_NAME) 2>/dev/null)
 
@@ -75,7 +75,7 @@ wpe-preflight:
 	@echo "WPE package: $(WPE_PKG_NAME)"
 	@echo "WPE version: $$($(PKG_CONFIG) --modversion "$(WPE_PKG_NAME)")"
 	@echo "WPE platform package: $(if $(WPE_PLATFORM_PKG_NAME),$(WPE_PLATFORM_PKG_NAME),legacy/not-found)"
-	@echo "Compiler: $($(CXX) -dumpmachine 2>/dev/null || echo unknown)"
+	@echo "Compiler: $$($(CXX) -dumpmachine 2>/dev/null || echo unknown)"
 
 wpe-platform-launcher: wpe-preflight src/wpe/wpe_platform_launcher.cpp
 	$(CXX) $(CPPFLAGS) $(WARNFLAGS) -std=c++17 -O2 $(WPE_CFLAGS) $(WPE_PLATFORM_CFLAGS) src/wpe/wpe_platform_launcher.cpp $(LDFLAGS) $(WPE_LIBS) $(WPE_PLATFORM_LIBS) -o $(WPE_TARGET)
