@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -450,6 +452,80 @@ gboolean onWebProcessTerminated(WebKitWebView* view, WebKitWebProcessTermination
     return TRUE;
 }
 
+std::filesystem::path commandFilePath()
+{
+    if (const char* explicitPath = g_getenv("FIRE4NIX_BROWSER_COMMAND_FILE"); explicitPath && *explicitPath)
+        return explicitPath;
+    if (const char* runtime = g_getenv("FIRE4NIX_RUNTIME_DIR"); runtime && *runtime)
+        return std::filesystem::path(runtime) / "browser.cmd";
+    return std::filesystem::path(".fire4nix") / "runtime" / "browser.cmd";
+}
+
+struct CommandConsumer {
+    WebKitWebView* view { nullptr };
+    std::filesystem::path path;
+    std::streamoff offset { 0 };
+};
+
+bool applyBrowserCommand(WebKitWebView* view, const std::string& command)
+{
+    if (!view || command.empty() || command.size() > 8192)
+        return false;
+    if (command.rfind("load:", 0) == 0) {
+        const auto uri = command.substr(5);
+        if (uri.rfind("https://", 0) != 0 && uri.rfind("http://", 0) != 0 &&
+            uri != "about:home" && uri != "about:blank")
+            return false;
+        webkit_web_view_load_uri(view, uri.c_str());
+        return true;
+    }
+    if (command == "back") {
+        if (webkit_web_view_can_go_back(view))
+            webkit_web_view_go_back(view);
+        return true;
+    }
+    if (command == "key:alt+Right") {
+        if (webkit_web_view_can_go_forward(view))
+            webkit_web_view_go_forward(view);
+        return true;
+    }
+    if (command == "key:ctrl+r") {
+        webkit_web_view_reload(view);
+        return true;
+    }
+    return false;
+}
+
+gboolean pollBrowserCommands(gpointer userData)
+{
+    auto* consumer = static_cast<CommandConsumer*>(userData);
+    if (!consumer || !consumer->view)
+        return G_SOURCE_REMOVE;
+
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(consumer->path, ec);
+    if (ec)
+        return G_SOURCE_CONTINUE;
+    if (static_cast<std::uintmax_t>(consumer->offset) > size)
+        consumer->offset = 0;
+
+    std::ifstream input(consumer->path);
+    if (!input.is_open())
+        return G_SOURCE_CONTINUE;
+    input.seekg(consumer->offset);
+
+    std::string command;
+    while (std::getline(input, command)) {
+        if (!command.empty() && command.back() == '\r')
+            command.pop_back();
+        if (!applyBrowserCommand(consumer->view, command))
+            g_warning("Fire4Nix WPE rejected IPC command: %s", command.c_str());
+    }
+    const auto pos = input.tellg();
+    consumer->offset = pos >= 0 ? pos : static_cast<std::streamoff>(size);
+    return G_SOURCE_CONTINUE;
+}
+
 void onTitleNotify(GObject* object, GParamSpec*, gpointer)
 {
     auto* view = WEBKIT_WEB_VIEW(object);
@@ -504,8 +580,17 @@ int main(int argc, char** argv)
     g_unix_signal_add(SIGINT, onUnixSignal, loop);
     g_unix_signal_add(SIGTERM, onUnixSignal, loop);
 
+    CommandConsumer commandConsumer { view, commandFilePath(), 0 };
+    std::error_code commandEc;
+    if (std::filesystem::exists(commandConsumer.path, commandEc))
+        commandConsumer.offset = static_cast<std::streamoff>(std::filesystem::file_size(commandConsumer.path, commandEc));
+    const guint commandPollSource = g_timeout_add(50, pollBrowserCommands, &commandConsumer);
+
     webkit_web_view_load_uri(view, options.url.c_str());
     g_main_loop_run(loop);
+
+    if (commandPollSource != 0)
+        g_source_remove(commandPollSource);
 
     if (view != nullptr)
         g_object_unref(view);
