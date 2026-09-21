@@ -22,6 +22,14 @@ for pkg in wpe-webkit-2.0 wpe-webkit wpewebkit; do
 done
 [ -n "$WPE_PKG" ] || fail "WPE WebKit development package not found"
 
+WPE_PLATFORM_PKG=""
+for pkg in wpe-platform-wayland-2.0 wpe-platform-2.0; do
+    if "$PKG_CONFIG_BIN" --exists "$pkg" >/dev/null 2>&1; then
+        WPE_PLATFORM_PKG="$pkg"
+        break
+    fi
+done
+
 TRIPLE=$("$CXX_BIN" -dumpmachine 2>/dev/null || true)
 case "$TRIPLE" in
     aarch64*|arm64*) ;;
@@ -29,9 +37,10 @@ case "$TRIPLE" in
 esac
 
 printf 'Fire4Nix WPE package: %s %s\n' "$WPE_PKG" "$("$PKG_CONFIG_BIN" --modversion "$WPE_PKG")"
+printf 'Fire4Nix WPE platform package: %s\n' "${WPE_PLATFORM_PKG:-legacy/not-found}"
 printf 'Fire4Nix compiler target: %s\n' "$TRIPLE"
 
-make PKG_CONFIG="$PKG_CONFIG_BIN" CXX="$CXX_BIN" WPE_PKG_NAME="$WPE_PKG" WPE_TARGET="$OUT" wpe-platform-launcher
+make PKG_CONFIG="$PKG_CONFIG_BIN" CXX="$CXX_BIN" WPE_PKG_NAME="$WPE_PKG" WPE_PLATFORM_PKG_NAME="$WPE_PLATFORM_PKG" WPE_TARGET="$OUT" wpe-platform-launcher
 
 [ -f "$OUT" ] || fail "expected output '$OUT' was not created"
 [ -x "$OUT" ] || chmod +x "$OUT"
