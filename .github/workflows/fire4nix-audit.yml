@@ -38,6 +38,12 @@ jobs:
         run: |
           make test-bridge
           make test-ipc
+      - name: WPE state feedback contract
+        run: |
+          grep -F 'publishBrowserState' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'FIRE4NIX_BROWSER_STATE_FILE' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'load-finished' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'web-process-terminated' src/wpe/wpe_platform_launcher.cpp
       - name: WPE IPC consumer contract
         run: |
           grep -F 'pollBrowserCommands' src/wpe/wpe_platform_launcher.cpp
