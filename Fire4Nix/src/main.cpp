@@ -1,6 +1,8 @@
 #include "sdl_compat.hpp"
 #include "fire4nix_renderer.hpp"
 #include "gui/browser_bridge.hpp"
+#include "gui/gui_context.hpp"
+#include "gui/event_dispatcher.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1040,6 +1042,16 @@ public:
         fire4nix::gui::setBrowserCommandHandler([this](const std::string& command) {
             return backend_.sendCommand(command);
         });
+        modularGuiEnabled_ = envFlagEnabled("FIRE4NIX_MODULAR_GUI", false);
+        if (modularGuiEnabled_) {
+            if (!modularGui_.initialize()) {
+                logError("Modular GUI initialization failed");
+                return false;
+            }
+            modularGui_.manager().chrome().setUrl(state_.currentUrl);
+            modularGui_.manager().chrome().setStatus("SELECT / F7: return to page");
+            modularGuiFocused_ = true;
+        }
         updateTitle();
         return true;
     }
@@ -1060,11 +1072,17 @@ public:
             auto inputStart = loopStart;
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
+                if (routeModularEvent(event)) continue;
                 handleEvent(event);
             }
             updateKeyboardCursorBlinkState();
 
-            bool needsRender = updateSticks() || uiDirty_;
+            if (modularGuiFocused_) {
+                modularGui_.manager().processInput();
+                modularGui_.manager().update(0.0f);
+                uiDirty_ = uiDirty_ || modularGui_.manager().needsRender();
+            }
+            bool needsRender = (modularGuiFocused_ ? false : updateSticks()) || uiDirty_;
 
             if (state_.requestReload) {
                 state_.requestReload = false;
@@ -1211,6 +1229,7 @@ public:
 
     void shutdown() {
         SDL_StopTextInput();
+        modularGui_.shutdown();
         fire4nix::gui::setBrowserCommandHandler({});
         fire4nix::renderer::detach();
         closeController();
@@ -1229,6 +1248,39 @@ public:
     }
 
 private:
+    bool routeModularEvent(const SDL_Event& event) {
+        if (!modularGuiEnabled_) return false;
+        const bool toggle = (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F7 && !event.key.repeat)
+            || (event.type == SDL_CONTROLLERBUTTONDOWN && event.cbutton.button == SDL_CONTROLLER_BUTTON_BACK);
+        if (toggle) {
+            modularGuiFocused_ = !modularGuiFocused_;
+            fire4nix::gui::clear_action();
+            while (fire4nix::gui::has_text_input()) fire4nix::gui::consume_text_input();
+            while (fire4nix::gui::has_text_editing()) fire4nix::gui::consume_text_editing();
+            uiDirty_ = true;
+            return true;
+        }
+        if (!modularGuiFocused_) return false;
+        // App still owns quit/window events. Modal input never reaches the page.
+        switch (event.type) {
+#ifdef FIRE4NIX_SDL_COMPAT_REAL
+        case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
+        case SDL_MOUSEMOTION: case SDL_MOUSEWHEEL:
+            return true;
+#endif
+        case SDL_KEYDOWN: case SDL_KEYUP:
+        case SDL_TEXTINPUT: case SDL_TEXTEDITING:
+        case SDL_CONTROLLERBUTTONDOWN: case SDL_CONTROLLERBUTTONUP:
+        case SDL_CONTROLLERAXISMOTION:
+        case SDL_JOYBUTTONDOWN: case SDL_JOYBUTTONUP:
+        case SDL_JOYAXISMOTION: case SDL_JOYHATMOTION:
+            fire4nix::gui::dispatch_event(event);
+            uiDirty_ = true;
+            return true;
+        default: return false;
+        }
+    }
+
     bool createWindow() {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
@@ -3028,6 +3080,10 @@ private:
 
         renderKeyboardOverlay(width, height);
 
+        if (modularGuiFocused_) {
+            modularGui_.manager().render(width, height);
+        }
+
         uiDirty_ = false;
 
         SDL_RenderPresent(renderer_);
@@ -3105,6 +3161,9 @@ private:
     }
 
     BrowserState state_;
+    fire4nix::gui::GuiContext modularGui_;
+    bool modularGuiEnabled_{false};
+    bool modularGuiFocused_{false};
     Framebuffer framebuffer_;
     SDL_Texture* framebufferTexture_{nullptr};
     int lastFramebufferWidth_{0};  // Track previous framebuffer size to detect when texture needs recreation

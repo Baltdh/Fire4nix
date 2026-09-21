@@ -27,6 +27,7 @@ public:
     void shutdown();
 
     bool initialized() const { return initialized_; }
+    fire4nix::gui::BrowserChrome& chrome() { return browserChrome_; }
     unsigned long frameCounter() const { return frameCounter_; }
     fire4nix::gui::LayoutManager& layout() { return layout_; }
     fire4nix::gui::RenderScheduler& scheduler() { return scheduler_; }
