@@ -46,6 +46,8 @@ class BrowserDefaults(unittest.TestCase):
         self.assertNotIn('"enable-webrtc", TRUE', source)
         self.assertNotIn('"enable-media-stream", TRUE', source)
         self.assertNotIn('"enable-encrypted-media", TRUE', source)
+        self.assertIn('envOr("FIRE4NIX_COMMAND_POLL_MS", "100")', source)
+        self.assertIn('std::clamp<unsigned long>(parsed, 25, 1000)', source)
 
 if __name__ == "__main__":
     unittest.main()
