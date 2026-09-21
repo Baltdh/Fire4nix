@@ -39,6 +39,7 @@ struct LaunchOptions {
     bool webRtc { false };
     bool mediaStream { false };
     bool encryptedMedia { false };
+    unsigned commandPollMs { 100 };
 };
 
 struct FilterSaveData {
@@ -136,6 +137,13 @@ LaunchOptions parseOptions(int argc, char** argv)
     options.webRtc = envEnabled("FIRE4NIX_ENABLE_WEBRTC", false);
     options.mediaStream = envEnabled("FIRE4NIX_ENABLE_MEDIA_STREAM", false);
     options.encryptedMedia = envEnabled("FIRE4NIX_ENABLE_ENCRYPTED_MEDIA", false);
+    {
+        const auto pollText = envOr("FIRE4NIX_COMMAND_POLL_MS", "100");
+        char* end = nullptr;
+        const auto parsed = std::strtoul(pollText.c_str(), &end, 10);
+        if (end != pollText.c_str() && *end == '\0')
+            options.commandPollMs = static_cast<unsigned>(std::clamp<unsigned long>(parsed, 25, 1000));
+    }
     options.backgroundColor = envOr("FIRE4NIX_BG_COLOR", envOr("FIRE4NIX_WPE_BG_COLOR", "white"));
     options.timeZone = envOr("FIRE4NIX_TIME_ZONE", envOr("FIRE4NIX_WPE_TIME_ZONE", ""));
     options.cookiesFile = envOr("FIRE4NIX_COOKIES_FILE", envOr("FIRE4NIX_WPE_COOKIES_FILE", ""));
@@ -634,7 +642,8 @@ int main(int argc, char** argv)
     std::error_code commandEc;
     if (std::filesystem::exists(commandConsumer.path, commandEc))
         commandConsumer.offset = static_cast<std::streamoff>(std::filesystem::file_size(commandConsumer.path, commandEc));
-    const guint commandPollSource = g_timeout_add(50, pollBrowserCommands, &commandConsumer);
+    const guint commandPollSource = g_timeout_add(options.commandPollMs, pollBrowserCommands, &commandConsumer);
+    g_message("Fire4Nix WPE IPC poll interval: %u ms", options.commandPollMs);
 
     webkit_web_view_load_uri(view, options.url.c_str());
     g_main_loop_run(loop);
