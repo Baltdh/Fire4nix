@@ -1,0 +1,51 @@
+name: Fire4Nix audit
+
+on:
+  push:
+    branches: [main, codex/fire4nix-preparation]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-audit:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: Fire4Nix
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host audit dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config python3 libcurl4-openssl-dev
+
+      - name: Shell and project audit
+        run: bash scripts/project_audit.sh
+
+      - name: Python syntax
+        run: |
+          python3 -m py_compile firefox-framebuffer-wrapper.py install-es-system.py
+          python3 -m py_compile tests/test_browser_defaults.py
+
+      - name: SDL compatibility build
+        run: make AUDIT_MODE=1 BUILD_MODE=SDL_ONLY
+
+      - name: Focused regression tests
+        run: |
+          make test-bridge
+          make test-renderer
+          make test-gui
+
+      - name: WPE ARM64 guard self-test
+        run: |
+          set +e
+          sh scripts/build_wpe_arm64.sh > /tmp/wpe-guard.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/wpe-guard.log
+          test "$rc" -ne 0
+          grep -Eq "WPE WebKit development package not found|not ARM64/aarch64" /tmp/wpe-guard.log
