@@ -38,6 +38,11 @@ jobs:
         run: |
           make test-bridge
           make test-ipc
+      - name: WPE IPC consumer contract
+        run: |
+          grep -F 'pollBrowserCommands' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'applyBrowserCommand' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'FIRE4NIX_BROWSER_COMMAND_FILE' src/wpe/wpe_platform_launcher.cpp
           make test-renderer
           make test-gui
 
