@@ -66,6 +66,7 @@ syntax_targets = [
     "scripts/wpe_platform_launch.sh",
     "scripts/project_audit.sh",
     "scripts/build_wpe_arm64.sh",
+    "scripts/wpe_dependency_probe.sh",
 ]
 for rel in syntax_targets:
     path = os.path.join(app_dir, rel)
