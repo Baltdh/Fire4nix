@@ -41,11 +41,4 @@ jobs:
           make test-gui
 
       - name: WPE ARM64 guard self-test
-        run: |
-          set +e
-          sh scripts/build_wpe_arm64.sh > /tmp/wpe-guard.log 2>&1
-          rc=$?
-          set -e
-          cat /tmp/wpe-guard.log
-          test "$rc" -ne 0
-          grep -Eq "WPE WebKit development package not found|not ARM64/aarch64" /tmp/wpe-guard.log
+        run: sh tests/test_wpe_arm64_guard.sh
