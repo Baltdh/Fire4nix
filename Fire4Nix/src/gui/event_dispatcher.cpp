@@ -11,6 +11,8 @@ namespace {
 std::deque<UiAction> g_action_queue;
 std::deque<std::string> g_last_text_inputs;
 std::deque<std::string> g_last_text_editings;
+int g_axis_direction_x = 0;
+int g_axis_direction_y = 0;
 
 void set_action(UiAction action)
 {
@@ -47,8 +49,9 @@ UiAction map_key_action(const SDL_KeyboardEvent& key)
     case SDLK_SPACE:
         return UiAction::Activate;
     case SDLK_ESCAPE:
-    case SDLK_BACKSPACE:
         return UiAction::Back;
+    case SDLK_BACKSPACE:
+        return UiAction::DeleteBackward;
     case SDLK_RIGHTBRACKET:
     case SDLK_F7:
         return UiAction::Forward;
@@ -106,22 +109,40 @@ UiAction map_controller_button_action(const SDL_ControllerButtonEvent& button)
 UiAction map_controller_axis_action(const SDL_ControllerAxisEvent& axis)
 {
     constexpr auto threshold = 16000;
+    constexpr auto releaseThreshold = 9000;
 
+    int* latchedDirection = nullptr;
     switch (axis.axis) {
     case SDL_CONTROLLER_AXIS_LEFTX:
+        latchedDirection = &g_axis_direction_x;
+        break;
     case SDL_CONTROLLER_AXIS_LEFTY:
-        if (axis.value > threshold) {
-            return UiAction::FocusNext;
-        }
-        if (axis.value < -threshold) {
-            return UiAction::FocusPrevious;
-        }
+        latchedDirection = &g_axis_direction_y;
         break;
     default:
-        break;
+        return UiAction::None;
     }
 
-    return UiAction::None;
+    if (axis.value >= -releaseThreshold && axis.value <= releaseThreshold) {
+        *latchedDirection = 0;
+        return UiAction::None;
+    }
+
+    int direction = 0;
+    if (axis.value > threshold) {
+        direction = 1;
+    } else if (axis.value < -threshold) {
+        direction = -1;
+    } else {
+        return UiAction::None;
+    }
+
+    if (*latchedDirection == direction) {
+        return UiAction::None;
+    }
+
+    *latchedDirection = direction;
+    return direction > 0 ? UiAction::FocusNext : UiAction::FocusPrevious;
 }
 
 } // namespace
