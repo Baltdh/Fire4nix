@@ -21,6 +21,11 @@ struct TestWidget : fire4nix::Widget {
         text += value;
         return true;
     }
+    bool handleDeleteBackward() override {
+        if (text.empty()) return false;
+        text.pop_back();
+        return true;
+    }
 };
 
 int main() {
@@ -55,6 +60,14 @@ int main() {
     assert(widgets.dispatchTextInput(input::consume_text_input()));
     assert(second.text == "https://example.org");
     assert(input::consume_text_input().empty());
+
+    event = {};
+    event.type = SDL_KEYDOWN;
+    event.key.keysym.sym = SDLK_BACKSPACE;
+    assert(dispatch_event(event) == DispatchResult::Handled);
+    assert(input::consume_action() == UiAction::DeleteBackward);
+    assert(widgets.dispatchAction(UiAction::DeleteBackward));
+    assert(second.text == "https://example.or");
     event = {};
     event.type = SDL_TEXTEDITING;
     std::strcpy(event.edit.text, "composicao");
@@ -70,6 +83,10 @@ int main() {
     event.caxis.value = -20000;
     dispatch_event(event);
     assert(widgets.dispatchAction(input::consume_action()));
+    dispatch_event(event);
+    assert(input::consume_action() == UiAction::None);
+    event.caxis.value = 0;
+    assert(dispatch_event(event) == DispatchResult::Ignored);
     assert(first.focused());
     assert(widgets.dispatchAction(UiAction::FocusPrevious));
     assert(second.focused());
