@@ -30,6 +30,19 @@ for pkg in wpe-platform-wayland-2.0 wpe-platform-2.0; do
     fi
 done
 
+if [ "$WPE_PKG" = "wpe-webkit-2.0" ] && [ -z "$WPE_PLATFORM_PKG" ]; then
+    fail "wpe-webkit-2.0 requires WPE Platform; install wpe-platform-wayland-2.0 (preferred) or wpe-platform-2.0"
+fi
+
+MIN_SECURE_WPE="${FIRE4NIX_MIN_SECURE_WPE:-2.52.6}"
+if ! "$PKG_CONFIG_BIN" --atleast-version="$MIN_SECURE_WPE" "$WPE_PKG" >/dev/null 2>&1; then
+    if [ "${FIRE4NIX_ALLOW_OLD_WPE:-0}" = "1" ]; then
+        printf "Fire4Nix WPE build: WARNING: %s is older than security baseline %s\n" "$WPE_PKG" "$MIN_SECURE_WPE" >&2
+    else
+        fail "$WPE_PKG is older than security baseline $MIN_SECURE_WPE; set FIRE4NIX_ALLOW_OLD_WPE=1 only for offline compatibility testing"
+    fi
+fi
+
 TRIPLE=$("$CXX_BIN" -dumpmachine 2>/dev/null || true)
 case "$TRIPLE" in
     aarch64*|arm64*) ;;
