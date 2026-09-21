@@ -17,6 +17,10 @@ int main() {
     assert(bridge.reload() && sent.back() == "key:ctrl+r");
     assert(bridge.goBack() && sent.back() == "back");
     assert(bridge.goForward() && sent.back() == "key:alt+Right");
+    assert(bridgeJournalCommandCount() == 4);
+    assert(bridgeJournalLastCommand() == "key:alt+Right");
+    assert(bridgeJournalSummary() == "4 commands");
+    const auto journalCount = bridgeJournalCommandCount();
     const auto count = sent.size();
     assert(!bridge.loadUrl("https://example.org/\nkey:ctrl+w"));
     assert(!bridge.loadUrl("javascript:alert(1)"));
@@ -26,7 +30,10 @@ int main() {
     assert(sent.size() == count);
     setBrowserCommandHandler([](const std::string&) { return false; });
     assert(!bridge.reload());
+    assert(bridgeJournalCommandCount() == journalCount);
+    assert(bridgeJournalLastCommand() == "key:alt+Right");
     setBrowserCommandHandler({});
     assert(!bridge.goBack());
+    assert(bridgeJournalCommandCount() == journalCount);
     std::cout << "PASS: bridge delivery, disconnect, backend rejection and URL validation\n";
 }
