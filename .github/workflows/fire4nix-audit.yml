@@ -37,6 +37,7 @@ jobs:
       - name: Focused regression tests
         run: |
           make test-bridge
+          make test-ipc
           make test-renderer
           make test-gui
 
