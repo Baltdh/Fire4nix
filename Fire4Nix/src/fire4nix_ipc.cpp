@@ -34,7 +34,7 @@ bool CommandPipe::sendCommand(const std::string& cmd)
     std::error_code ec;
     constexpr std::uintmax_t kMaxCommandJournalBytes = 256 * 1024;
     const auto currentSize = std::filesystem::file_size(path_, ec);
-    if (!ec && currentSize > kMaxCommandJournalBytes)
+    if (!ec && currentSize + cmd.size() + 1 > kMaxCommandJournalBytes)
         return false;
     std::ofstream out(path_, std::ios::app);
     if (!out.is_open()) return false;
