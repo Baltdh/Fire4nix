@@ -19,7 +19,8 @@ bool dispatchCommand(const std::string& command)
     if (command.size() > 8192 || command.find_first_of("\r\n") != std::string::npos
         || command.find('\0') != std::string::npos || !commandHandler)
         return false;
-    return commandHandler(command);
+    const bool accepted = commandHandler(command);
+    return accepted;
 }
 
 std::string trimCopy(const std::string& text)
@@ -96,12 +97,18 @@ public:
         const auto target = trimCopy(url);
         if (target.rfind("https://", 0) != 0 && target.rfind("http://", 0) != 0
             && target != "about:home" && target != "about:blank") return false;
-        return dispatchCommand("load:" + target);
+        const std::string command = "load:" + target;
+        if (!dispatchCommand(command)) return false;
+        record(command);
+        return true;
     }
 
     bool reload() override
     {
-        return dispatchCommand("key:ctrl+r");
+        const std::string command = "key:ctrl+r";
+        if (!dispatchCommand(command)) return false;
+        record(command);
+        return true;
     }
 
     bool goHome() override
@@ -111,12 +118,18 @@ public:
 
     bool goBack() override
     {
-        return dispatchCommand("back");
+        const std::string command = "back";
+        if (!dispatchCommand(command)) return false;
+        record(command);
+        return true;
     }
 
     bool goForward() override
     {
-        return dispatchCommand("key:alt+Right");
+        const std::string command = "key:alt+Right";
+        if (!dispatchCommand(command)) return false;
+        record(command);
+        return true;
     }
 
     bool openTab(const std::string& title) override
