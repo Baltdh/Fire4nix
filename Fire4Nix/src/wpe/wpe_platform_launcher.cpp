@@ -35,6 +35,10 @@ struct LaunchOptions {
     bool headlessMode { false };
     bool maximize { false };
     bool fullscreen { false };
+    bool developerExtras { false };
+    bool webRtc { false };
+    bool mediaStream { false };
+    bool encryptedMedia { false };
 };
 
 struct FilterSaveData {
@@ -128,6 +132,10 @@ LaunchOptions parseOptions(int argc, char** argv)
     options.headlessMode = envEnabled("FIRE4NIX_HEADLESS_MODE", false);
     options.maximize = envEnabled("FIRE4NIX_MAXIMIZE", true);
     options.fullscreen = envEnabled("FIRE4NIX_FULLSCREEN", true);
+    options.developerExtras = envEnabled("FIRE4NIX_DEVELOPER_EXTRAS", false);
+    options.webRtc = envEnabled("FIRE4NIX_ENABLE_WEBRTC", false);
+    options.mediaStream = envEnabled("FIRE4NIX_ENABLE_MEDIA_STREAM", false);
+    options.encryptedMedia = envEnabled("FIRE4NIX_ENABLE_ENCRYPTED_MEDIA", false);
     options.backgroundColor = envOr("FIRE4NIX_BG_COLOR", envOr("FIRE4NIX_WPE_BG_COLOR", "white"));
     options.timeZone = envOr("FIRE4NIX_TIME_ZONE", envOr("FIRE4NIX_WPE_TIME_ZONE", ""));
     options.cookiesFile = envOr("FIRE4NIX_COOKIES_FILE", envOr("FIRE4NIX_WPE_COOKIES_FILE", ""));
@@ -363,13 +371,13 @@ void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
 {
     WebKitSettings* settings = webkit_settings_new_with_settings(
         "enable-javascript", TRUE,
-        "enable-developer-extras", TRUE,
-        "enable-write-console-messages-to-stdout", TRUE,
-        "enable-media-stream", TRUE,
+        "enable-developer-extras", options.developerExtras,
+        "enable-write-console-messages-to-stdout", options.developerExtras,
+        "enable-media-stream", options.mediaStream,
         "enable-mediasource", TRUE,
         "enable-webgl", TRUE,
-        "enable-webrtc", TRUE,
-        "enable-encrypted-media", TRUE,
+        "enable-webrtc", options.webRtc,
+        "enable-encrypted-media", options.encryptedMedia,
         "enable-back-forward-navigation-gestures", TRUE,
         nullptr);
 
@@ -603,6 +611,11 @@ int main(int argc, char** argv)
     g_signal_connect(view, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
     g_signal_connect(view, "notify::title", G_CALLBACK(onTitleNotify), nullptr);
 
+    g_message("Fire4Nix WPE optional features: devtools=%s webrtc=%s media-stream=%s encrypted-media=%s",
+              options.developerExtras ? "on" : "off",
+              options.webRtc ? "on" : "off",
+              options.mediaStream ? "on" : "off",
+              options.encryptedMedia ? "on" : "off");
     if (options.privateMode)
         g_message("Fire4Nix WPE private browsing enabled");
     if (options.automationMode)
