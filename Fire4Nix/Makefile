@@ -40,6 +40,16 @@ LDLIBS += $(SDL_LIBS) $(IMG_LIBS) $(TTF_LIBS) $(CURL_LIBS) $(LITEHTML_LIBS)
 
 all: $(TARGET)
 
+test-navigation: $(filter-out src/main.o,$(OBJS))
+	@mkdir -p build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -UNDEBUG tests/navigation_state_test.cpp $(filter-out src/main.o,$(OBJS)) $(LDFLAGS) $(LDLIBS) -o build/navigation-state-test
+	./build/navigation-state-test
+
+test-bridge:
+	@mkdir -p build
+	$(CXX) $(CPPFLAGS) -std=c++17 $(WARNFLAGS) -UNDEBUG tests/browser_bridge_test.cpp src/gui/browser_bridge.cpp -o build/browser-bridge-test
+	./build/browser-bridge-test
+
 test-renderer:
 	@mkdir -p build
 	$(CXX) $(CPPFLAGS) -std=c++17 $(WARNFLAGS) -UNDEBUG -DFIRE4NIX_FORCE_SDL_STUB tests/renderer_contract_test.cpp src/fire4nix_renderer.cpp -o build/renderer-contract-test
@@ -67,4 +77,4 @@ endif
 clean:
 	rm -f $(OBJS) $(TARGET)
 
-.PHONY: all clean wpe-platform-launcher test-gui test-renderer
+.PHONY: all clean wpe-platform-launcher test-gui test-renderer test-bridge test-navigation

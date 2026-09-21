@@ -956,15 +956,20 @@ void BrowserChrome::navigateTo(const std::string& url)
     const auto committedUrl = normalizeUrlInput(url);
     const bool bridged = bridge_ != nullptr && bridge_->loadUrl(committedUrl);
 
+    if (!bridged) {
+        setStatus("Navigation unavailable: backend disconnected or URL rejected");
+        return;
+    }
+
     pushHistory(committedUrl);
     syncLoadedUrl(committedUrl);
-    setProgress(100);
+    setProgress(0); // Submission is not confirmation of page loading.
     if (isHomeUrl(committedUrl)) {
-        setStatus(statusWithContext(std::string(bridged ? "Bridge home" : "Home ready") + " on " + FIRE4NIX_PLATFORM));
+        setStatus("Home requested; waiting for browser");
     } else if (isSearchUrl(committedUrl)) {
-        setStatus(statusWithContext(std::string(bridged ? "Bridge search" : "Search ready") + " • " + std::to_string(historyCount()) + " history entries"));
+        setStatus("Search requested; waiting for browser");
     } else {
-        setStatus(statusWithContext(std::string(bridged ? "Bridge load: " : "Loaded: ") + committedUrl));
+        setStatus("Navigation requested; waiting for browser");
     }
     markDirty();
 }
@@ -976,10 +981,11 @@ void BrowserChrome::goBack()
     }
 
     const bool bridged = bridge_ != nullptr && bridge_->goBack();
+    if (!bridged) { setStatus("Back unavailable"); return; }
     --historyIndex_;
     const auto& target = history_[historyIndex_];
     syncLoadedUrl(target);
-    setProgress(100);
+    setProgress(0);
     setStatus(statusWithContext(std::string(bridged ? "Bridge back: " : "Back: ") + target));
     markDirty();
 }
@@ -991,10 +997,11 @@ void BrowserChrome::goForward()
     }
 
     const bool bridged = bridge_ != nullptr && bridge_->goForward();
+    if (!bridged) { setStatus("Forward unavailable"); return; }
     ++historyIndex_;
     const auto& target = history_[historyIndex_];
     syncLoadedUrl(target);
-    setProgress(100);
+    setProgress(0);
     setStatus(statusWithContext(std::string(bridged ? "Bridge forward: " : "Forward: ") + target));
     markDirty();
 }
@@ -1003,7 +1010,8 @@ void BrowserChrome::reload()
 {
     const auto currentUrl = url().empty() ? normalizeUrlInput(envOr("FIRE4NIX_HOME_URL", "about:home")) : url();
     const bool bridged = bridge_ != nullptr && bridge_->reload();
-    setProgress(85);
+    if (!bridged) { setStatus("Reload unavailable"); return; }
+    setProgress(0);
     setStatus(statusWithContext(std::string(bridged ? "Bridge reload: " : "Reload requested: ") + currentUrl));
     markDirty();
 }
@@ -1011,11 +1019,7 @@ void BrowserChrome::reload()
 void BrowserChrome::goHome()
 {
     const auto homeUrl = normalizeUrlInput(envOr("FIRE4NIX_HOME_URL", "about:home"));
-    const bool bridged = bridge_ != nullptr && bridge_->goHome();
     navigateTo(homeUrl);
-    if (bridged) {
-        setStatus(statusWithContext(std::string("Bridge home: ") + homeUrl));
-    }
     markDirty();
 }
 
@@ -1171,6 +1175,7 @@ void BrowserChrome::openTab(const std::string& title)
 {
     const auto effectiveTitle = title.empty() ? std::string("New Tab") : title;
     const bool bridged = bridge_ != nullptr && bridge_->openTab(effectiveTitle);
+    if (!bridged) { setStatus("Multiple browser tabs are not available yet"); return; }
     tabStrip_.openTab(effectiveTitle);
     const auto currentTitle = tabStrip_.currentTitle().empty() ? std::string("New Tab") : tabStrip_.currentTitle();
     setStatus(statusWithContext(std::string(bridged ? "Bridge tab opened " : "Opened beta tab ") + std::to_string(tabStrip_.currentIndex() + 1) + ": " + currentTitle));
@@ -1194,6 +1199,7 @@ void BrowserChrome::closeCurrentTab()
     }
 
     const bool bridged = bridge_ != nullptr && bridge_->closeTab();
+    if (!bridged) { setStatus("Close tab unavailable"); return; }
     tabStrip_.closeCurrentTab();
     const auto currentTitle = tabStrip_.currentTitle().empty() ? std::string("ROCKNIX Home") : tabStrip_.currentTitle();
     setStatus(statusWithContext(std::string(bridged ? "Bridge tab closed, now on " : "Closed beta tab, now on ") + std::to_string(tabStrip_.currentIndex() + 1) + ": " + currentTitle));

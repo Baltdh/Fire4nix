@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <string>
+#include <functional>
 
 namespace fire4nix::gui {
 
@@ -26,6 +27,9 @@ public:
 };
 
 BrowserBridge& defaultBrowserBridge();
+// Main-thread callback. Clear before destroying the backend it captures.
+using BrowserCommandHandler = std::function<bool(const std::string&)>;
+void setBrowserCommandHandler(BrowserCommandHandler handler);
 
 std::string bridgeJournalSummary();
 std::size_t bridgeJournalCommandCount();
@@ -34,4 +38,3 @@ std::string bridgeJournalPath();
 std::string bridgeJournalStateSummary();
 
 } // namespace fire4nix::gui
-

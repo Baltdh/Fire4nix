@@ -1,5 +1,6 @@
 #include "sdl_compat.hpp"
 #include "fire4nix_renderer.hpp"
+#include "gui/browser_bridge.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1036,6 +1037,9 @@ public:
         }
 
         SDL_StartTextInput();
+        fire4nix::gui::setBrowserCommandHandler([this](const std::string& command) {
+            return backend_.sendCommand(command);
+        });
         updateTitle();
         return true;
     }
@@ -1207,6 +1211,7 @@ public:
 
     void shutdown() {
         SDL_StopTextInput();
+        fire4nix::gui::setBrowserCommandHandler({});
         fire4nix::renderer::detach();
         closeController();
         destroyUiTextures();

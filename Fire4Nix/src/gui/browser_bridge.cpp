@@ -12,6 +12,15 @@
 
 namespace fire4nix::gui {
 namespace {
+BrowserCommandHandler commandHandler;
+
+bool dispatchCommand(const std::string& command)
+{
+    if (command.size() > 8192 || command.find_first_of("\r\n") != std::string::npos
+        || command.find('\0') != std::string::npos || !commandHandler)
+        return false;
+    return commandHandler(command);
+}
 
 std::string trimCopy(const std::string& text)
 {
@@ -84,50 +93,46 @@ class ShellBrowserBridge final : public BrowserBridge {
 public:
     bool loadUrl(const std::string& url) override
     {
-        record("load " + trimCopy(url));
-        return true;
+        const auto target = trimCopy(url);
+        if (target.rfind("https://", 0) != 0 && target.rfind("http://", 0) != 0
+            && target != "about:home" && target != "about:blank") return false;
+        return dispatchCommand("load:" + target);
     }
 
     bool reload() override
     {
-        record("reload");
-        return true;
+        return dispatchCommand("key:ctrl+r");
     }
 
     bool goHome() override
     {
-        record("home");
-        return true;
+        return loadUrl(envOr("FIRE4NIX_HOME_URL", "about:home"));
     }
 
     bool goBack() override
     {
-        record("back");
-        return true;
+        return dispatchCommand("back");
     }
 
     bool goForward() override
     {
-        record("forward");
-        return true;
+        return dispatchCommand("key:alt+Right");
     }
 
     bool openTab(const std::string& title) override
     {
-        record("open-tab " + trimCopy(title));
-        return true;
+        (void)title;
+        return false; // Tab lifecycle is not yet synchronized with the backend.
     }
 
     bool closeTab() override
     {
-        record("close-tab");
-        return true;
+        return false;
     }
 
     bool toggleFullscreen() override
     {
-        record("fullscreen");
-        return true;
+        return false; // App owns the outer window; do not toggle Firefox alone.
     }
 
     std::string describe() const override
@@ -196,6 +201,11 @@ ShellBrowserBridge g_shellBridge;
 BrowserBridge& defaultBrowserBridge()
 {
     return g_shellBridge;
+}
+
+void setBrowserCommandHandler(BrowserCommandHandler handler)
+{
+    commandHandler = std::move(handler);
 }
 
 std::string bridgeJournalSummary()
