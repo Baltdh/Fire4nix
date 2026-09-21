@@ -489,38 +489,7 @@ class FirefoxFramebufferWrapper:
         env.pop("AUDIODEV", None)
         env["SDL_AUDIODRIVER"] = "alsa" # SDL (for our wrapper UI) still uses ALSA
         
-        # Explicitly clear PULSE_SERVER to force the apulse shim to use ALSA
-        env["PULSE_SERVER"] = ""
-        
-        # Force-kill pulseaudio and reclaim the sound device from zombies
-        try:
-            # Check if PulseAudio is active before trying to kill it
-            pa_check = subprocess.run(["pulseaudio", "--check"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            if pa_check.returncode == 0:
-                self.log("Audio: PulseAudio detected, requesting clean shutdown...")
-                subprocess.run(["pulseaudio", "--kill"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
-            
-            # Forcibly kick any zombies off the sound card
-            subprocess.run(["fuser", "-k", "/dev/snd/pcmC0D0p", "/dev/snd/controlC0"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=2)
-            
-            # Restore RK817/Handheld mixer to Speakers+HP and normalized volume
-            # Using 'unmute' explicitly to clear any driver-level silencers
-            subprocess.run(["amixer", "-c", "0", "sset", "Playback Path", "SPK_HP"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            subprocess.run(["amixer", "-c", "0", "sset", "Playback", "128", "unmute"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            subprocess.run(["amixer", "-c", "0", "sset", "Playback Volume", "128", "unmute"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            
-            # Deep Fix: Try to enable hidden DAC switches if they exist
-            subprocess.run(["amixer", "-c", "0", "sset", "Left DAC", "on"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            subprocess.run(["amixer", "-c", "0", "sset", "Right DAC", "on"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            subprocess.run(["amixer", "-c", "0", "sset", "DAC", "on"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            subprocess.run(["amixer", "-c", "0", "sset", "Speaker", "on"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            
-            # Diagnostic Audit: Log the state of the mixer for debugging
-            try:
-                mixer_state = subprocess.check_output(["amixer", "-c", "0", "scontents"], stderr=subprocess.DEVNULL).decode()
-                self.debug(f"Mixer Audit Snapshot:\n{mixer_state}")
-            except: pass
-        except: pass
+        # Preserve the host audio session and mixer; never kill other clients.
 
         # Enable deep media logging for /tmp/fire4nix_firefox.log
         env["MOZ_LOG"] = "cubeb:5,apulse:5,MediaPlayback:5"
@@ -549,11 +518,7 @@ class FirefoxFramebufferWrapper:
                 env["PULSE_LATENCY_MSEC"] = "200"
                 env["PULSE_SERVER"] = "localhost" 
                 env["PULSE_AUTOSPAWN"] = "0" # Block respawning during session
-                
-                # Refined Sandbox Disable - keep global sandbox but kill content/gmp/rdd
-                env["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
-                env["MOZ_DISABLE_GMP_SANDBOX"] = "1"
-                env["MOZ_DISABLE_RDD_SANDBOX"] = "1"
+
                 env["MOZ_SANDBOX_LOGGING"] = "1"
                 
                 if not hasattr(self, '_logged_audio_routing'):
@@ -574,9 +539,6 @@ class FirefoxFramebufferWrapper:
         env["MOZ_X11_EGL"] = os.environ.get("MOZ_X11_EGL", "1")
         env["GTK_USE_PORTAL"] = "0"
         env["MOZ_FORCE_DISABLE_E10S"] = "1"
-        env["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
-        env["MOZ_DISABLE_GMP_SANDBOX"] = "1"
-        env["MOZ_DISABLE_RDD_SANDBOX"] = "1"
         env["MOZ_SANDBOX_LOGGING"] = "1"
         # Use GLES2 for compositor — avoids full OpenGL driver stack on ARM
         env["MOZ_WEBRENDER"] = "0"        # WebRender needs a real GPU, disable for Xvfb
@@ -725,9 +687,7 @@ class FirefoxFramebufferWrapper:
             # "auto" or "alsa" -> let cubeb use its default (pulse)
             audio_backend_pref = ""
             selected_audio_backend = "pulse (auto)"
-            
-        # Disable cubeb sandbox to ensure PulseAudio/apulse can communicate without permission issues
-        audio_backend_pref += 'user_pref("media.cubeb.sandbox", false);\n'
+
 
         self.log(
             f"Scale config: display={self.display_width}x{self.display_height} "
@@ -793,10 +753,10 @@ user_pref("dom.ipc.processCount.webIsolated", 1);
 user_pref("extensions.pocket.enabled", false);
 user_pref("reader.parse-on-load.enabled", false);
 user_pref("browser.reader.detectedFirstRun", true);
-user_pref("browser.safebrowsing.malware.enabled", false);
-user_pref("browser.safebrowsing.phishing.enabled", false);
-user_pref("browser.safebrowsing.downloads.enabled", false);
-user_pref("browser.safebrowsing.downloads.remote.enabled", false);
+user_pref("browser.safebrowsing.malware.enabled", true);
+user_pref("browser.safebrowsing.phishing.enabled", true);
+user_pref("browser.safebrowsing.downloads.enabled", true);
+user_pref("browser.safebrowsing.downloads.remote.enabled", true);
 user_pref("network.http.speculative-parallel-limit", 0);
 user_pref("browser.pagethumbnails.capturing_disabled", true);
 
@@ -809,10 +769,6 @@ user_pref("browser.search.update", false);
 
 /* Audio: default to Firefox's backend selection unless explicitly overridden.
    On some devices ALSA is preferred; on desktop Linux Pulse/PipeWire often works better. */
-user_pref("media.cubeb.sandbox", false);
-user_pref("security.sandbox.content.level", 0);
-user_pref("security.sandbox.audio.main.enabled", false);
-user_pref("media.sandbox.content.level", 0);
 user_pref("media.audioipc.enabled", false);
 user_pref("media.cubeb.backend", "pulse");
 user_pref("media.cubeb.output_sample_rate", 48000);
@@ -1019,8 +975,6 @@ user_pref("browser.tabs.max_memory_usage_mb", {tabs_max_mem});
         policies_json = """{
   "policies": {
     "Preferences": {
-      "media.cubeb.sandbox": { "Value": false, "Status": "locked" },
-      "security.sandbox.content.level": { "Value": 0, "Status": "locked" },
       "media.audioipc.enabled": { "Value": false, "Status": "locked" },
       "media.cubeb.backend": { "Value": "pulse", "Status": "locked" }
     }
@@ -1077,11 +1031,7 @@ user_pref("browser.tabs.max_memory_usage_mb", {tabs_max_mem});
             env["PULSE_LATENCY_MSEC"] = "200"
             env["ALSA_CARD"] = "0"
             env["ALSA_PCM_CARD"] = "0"
-            # Ensure all sandboxes are totally off
-            env["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
-            env["MOZ_DISABLE_GMP_SANDBOX"] = "1"
-            env["MOZ_DISABLE_RDD_SANDBOX"] = "1"
-            env["security.sandbox.content.level"] = "0"
+
 
         self.log(f"Starting browser wrapper: {' '.join(cmd)}")
         

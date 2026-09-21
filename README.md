@@ -6,7 +6,9 @@ system's Wayland/Sway session and an ARM64 browser engine.
 
 ## Repository status
 
-The original uploads are preserved as ZIP backups in the repository root.
+The most complete original ZIP remains in the repository root. Three older
+ZIPs were removed from this branch; all originals remain recoverable at
+commit `93085fe77bbf83cbf15c7e843b1f1ee15d5d59e1` in Git history.
 Active source development lives in [`Fire4Nix/`](Fire4Nix/).
 
 The current source snapshot is `0.83-beta-rocknix-marco3-start`. It builds in

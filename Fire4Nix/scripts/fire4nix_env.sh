@@ -1090,7 +1090,8 @@ fire4nix_launch_engine() {
                 --app="$normalized_url"
             )
             if [ "$(id -u 2>/dev/null || echo 0)" -eq 0 ]; then
-                extra_args+=(--no-sandbox --disable-gpu-sandbox --disable-dev-shm-usage)
+                printf '%s\n' 'Fire4Nix: Chromium requires a non-root session; refusing to disable its sandbox.' >&2
+                return 1
             fi
             exec "$engine" "${extra_args[@]}" "$@"
             ;;

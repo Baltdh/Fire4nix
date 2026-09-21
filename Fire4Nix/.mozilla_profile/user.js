@@ -56,10 +56,10 @@ user_pref("dom.ipc.processCount.webIsolated", 1);
 user_pref("extensions.pocket.enabled", false);
 user_pref("reader.parse-on-load.enabled", false);
 user_pref("browser.reader.detectedFirstRun", true);
-user_pref("browser.safebrowsing.malware.enabled", false);
-user_pref("browser.safebrowsing.phishing.enabled", false);
-user_pref("browser.safebrowsing.downloads.enabled", false);
-user_pref("browser.safebrowsing.downloads.remote.enabled", false);
+user_pref("browser.safebrowsing.malware.enabled", true);
+user_pref("browser.safebrowsing.phishing.enabled", true);
+user_pref("browser.safebrowsing.downloads.enabled", true);
+user_pref("browser.safebrowsing.downloads.remote.enabled", true);
 user_pref("network.http.speculative-parallel-limit", 0);
 user_pref("browser.pagethumbnails.capturing_disabled", true);
 
@@ -72,10 +72,6 @@ user_pref("browser.search.update", false);
 
 /* Audio: default to Firefox's backend selection unless explicitly overridden.
    On some devices ALSA is preferred; on desktop Linux Pulse/PipeWire often works better. */
-user_pref("media.cubeb.sandbox", false);
-user_pref("security.sandbox.content.level", 0);
-user_pref("security.sandbox.audio.main.enabled", false);
-user_pref("media.sandbox.content.level", 0);
 user_pref("media.audioipc.enabled", false);
 user_pref("media.cubeb.backend", "pulse");
 user_pref("media.cubeb.output_sample_rate", 48000);
@@ -86,7 +82,6 @@ user_pref("media.volume_scale", "1.0");
 user_pref("media.autoplay.default", 0);
 user_pref("media.autoplay.blocking_policy", 0);
 user_pref("media.cubeb.logging", true);
-user_pref("media.cubeb.sandbox", false);
 
 
 /* UI Compactness and Scaling */
