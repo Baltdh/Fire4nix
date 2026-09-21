@@ -3,6 +3,9 @@
 #include <cstdint>
 
 namespace fire4nix::renderer {
+// Borrowed handles: App owns creation, event polling, presentation and deletion.
+bool attach(SDL_Window* window, SDL_Renderer* renderer);
+void detach();
 bool initialize();
 void beginFrame();
 void render();

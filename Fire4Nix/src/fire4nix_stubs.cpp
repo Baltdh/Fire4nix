@@ -7,28 +7,6 @@
 #include <string>
 #include <vector>
 
-namespace fire4nix::renderer {
-static SDL_Renderer* g_renderer = nullptr;
-static SDL_Window* g_window = nullptr;
-bool initialize(){ return true; }
-void beginFrame(){}
-void render(){}
-void renderBrowser(){}
-void beginBrowserRender(){}
-SDL_Renderer* nativeRenderer(){ return g_renderer; }
-SDL_Window* nativeWindow(){ return g_window; }
-bool outputSize(int& width, int& height){ width = 640; height = 480; return true; }
-void setClearColor(std::uint8_t, std::uint8_t, std::uint8_t, std::uint8_t){}
-bool resize(int, int){ return true; }
-bool pollEvents(){ return false; }
-void present(){}
-void resetViewport(){}
-void endFrame(){}
-void endBrowserRender(){}
-void shutdown(){}
-bool isInitialized(){ return true; }
-void renderPipeline(){}
-} // namespace fire4nix::renderer
 
 namespace fire4nix::ui {
 bool initialize(){ return true; }

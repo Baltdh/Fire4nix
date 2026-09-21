@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-#if defined(__has_include)
+#if defined(__has_include) && !defined(FIRE4NIX_FORCE_SDL_STUB)
 #  if __has_include(<SDL2/SDL.h>)
 #    include <SDL2/SDL.h>
 #    define FIRE4NIX_SDL_COMPAT_REAL 1

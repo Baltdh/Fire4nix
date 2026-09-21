@@ -1,4 +1,5 @@
 #include "sdl_compat.hpp"
+#include "fire4nix_renderer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1206,6 +1207,7 @@ public:
 
     void shutdown() {
         SDL_StopTextInput();
+        fire4nix::renderer::detach();
         closeController();
         destroyUiTextures();
         if (framebufferTexture_ != nullptr) {
@@ -1261,6 +1263,10 @@ private:
             return false;
         }
 
+        if (!fire4nix::renderer::attach(window_, renderer_)) {
+            logError("Real SDL renderer unavailable; audit builds cannot display the browser");
+            return false;
+        }
         logRendererInfo();
 
         int width = 0;

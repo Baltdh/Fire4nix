@@ -40,6 +40,11 @@ LDLIBS += $(SDL_LIBS) $(IMG_LIBS) $(TTF_LIBS) $(CURL_LIBS) $(LITEHTML_LIBS)
 
 all: $(TARGET)
 
+test-renderer:
+	@mkdir -p build
+	$(CXX) $(CPPFLAGS) -std=c++17 $(WARNFLAGS) -UNDEBUG -DFIRE4NIX_FORCE_SDL_STUB tests/renderer_contract_test.cpp src/fire4nix_renderer.cpp -o build/renderer-contract-test
+	./build/renderer-contract-test
+
 test-gui:
 	@mkdir -p build
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -UNDEBUG tests/gui_input_test.cpp src/fire4nix_input.cpp src/gui/event_dispatcher.cpp src/gui/widget_manager.cpp src/gui/layout_manager.cpp -o build/gui-input-test
@@ -62,4 +67,4 @@ endif
 clean:
 	rm -f $(OBJS) $(TARGET)
 
-.PHONY: all clean wpe-platform-launcher test-gui
+.PHONY: all clean wpe-platform-launcher test-gui test-renderer
