@@ -44,6 +44,36 @@ values are:
 
 ## Next milestone
 
+### GUI follow-up (2026-09-21)
+
+Fixed the modular GUI input adapter: previously every action and text read
+returned an empty value. `src/fire4nix_input.cpp` now consumes the actual
+dispatcher queues. Event dispatch is also available with SDL compatibility
+types, so the same mapping code can be tested without a display. This does
+not make the compatibility renderer a real renderer.
+
+Run `make test-gui` in `Fire4Nix/`. Regression assertions cover FIFO action
+delivery, controller activation, text and composition input, analog deadzone,
+focus wraparound, clearing focus, ignored quit events, and layout invalidation
+at 640x480 and on resize. These are logic tests, not screenshot tests.
+
+Additional blockers found by source inspection:
+
+- `main.cpp` starts the legacy `App`; it does not start `GuiBootstrap` or call
+  `initializeApplication`. Integrating modular chrome needs an explicit choice
+  of event/render ownership to avoid duplicate input and overlapping UI.
+- `fire4nix_stubs.cpp` still returns null native window/renderer handles and
+  reports successful initialization. The modular browser chrome cannot be
+  considered visually validated through that renderer.
+- This host has no SDL development package or pkg-config. No real SDL window
+  or on-device screenshot has been inspected in this follow-up.
+- The archived Firefox profile disables sandbox and Safe Browsing settings.
+  Review the profile and generated settings before any public browsing test;
+  this source baseline must not be advertised as a secure release.
+
+The legacy source was preserved apart from the input adapter fix. No final
+ARM64 binary or installable release was generated.
+
 Complete the real WPE runtime path:
 
 1. define a reproducible aarch64/ROCKNIX toolchain and dependency check;

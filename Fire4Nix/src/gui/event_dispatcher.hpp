@@ -1,11 +1,6 @@
 #pragma once
 
-#if defined(__has_include)
-#  if __has_include(<SDL2/SDL.h>)
-#    include "sdl_compat.hpp"
-#    define FIRE4NIX_HAS_SDL 1
-#  endif
-#endif
+#include "sdl_compat.hpp"
 
 #include <string>
 
@@ -31,9 +26,7 @@ enum class UiAction {
 
 DispatchResult dispatch_event(int event_type);
 
-#ifdef FIRE4NIX_HAS_SDL
 DispatchResult dispatch_event(const SDL_Event& event);
-#endif
 
 UiAction last_action();
 void clear_action();

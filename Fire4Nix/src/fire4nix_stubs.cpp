@@ -50,12 +50,3 @@ std::string defaultFont(){ return {}; }
 bool drawText(const std::string&,int,int){ return true; }
 std::string resolveUrl(const std::string&,const std::string& href){ return href; }
 } // namespace fire4nix::document_container
-
-namespace fire4nix::input {
-void update(){}
-bool is_ready(){ return true; }
-fire4nix::gui::UiAction pending_action(){ return fire4nix::gui::UiAction::None; }
-fire4nix::gui::UiAction consume_action(){ return fire4nix::gui::UiAction::None; }
-std::string consume_text_input(){ return {}; }
-std::string consume_text_editing(){ return {}; }
-} // namespace fire4nix::input

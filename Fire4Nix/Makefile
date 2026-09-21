@@ -40,6 +40,11 @@ LDLIBS += $(SDL_LIBS) $(IMG_LIBS) $(TTF_LIBS) $(CURL_LIBS) $(LITEHTML_LIBS)
 
 all: $(TARGET)
 
+test-gui:
+	@mkdir -p build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -UNDEBUG tests/gui_input_test.cpp src/fire4nix_input.cpp src/gui/event_dispatcher.cpp src/gui/widget_manager.cpp src/gui/layout_manager.cpp -o build/gui-input-test
+	./build/gui-input-test
+
 $(TARGET): $(OBJS)
 	$(CXX) $(OBJS) $(LDFLAGS) $(LDLIBS) -o $@
 
@@ -57,4 +62,4 @@ endif
 clean:
 	rm -f $(OBJS) $(TARGET)
 
-.PHONY: all clean wpe-platform-launcher
+.PHONY: all clean wpe-platform-launcher test-gui

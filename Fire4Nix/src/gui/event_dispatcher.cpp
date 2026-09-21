@@ -1,9 +1,3 @@
-#if defined(__has_include)
-#  if __has_include(<SDL2/SDL.h>)
-#    include "sdl_compat.hpp"
-#    define FIRE4NIX_HAS_SDL 1
-#  endif
-#endif
 
 #include "event_dispatcher.hpp"
 
@@ -39,7 +33,6 @@ void set_text_editing(const char* text)
     }
 }
 
-#ifdef FIRE4NIX_HAS_SDL
 UiAction map_key_action(const SDL_KeyboardEvent& key)
 {
     switch (key.keysym.sym) {
@@ -130,7 +123,6 @@ UiAction map_controller_axis_action(const SDL_ControllerAxisEvent& axis)
 
     return UiAction::None;
 }
-#endif
 
 } // namespace
 
@@ -144,7 +136,6 @@ DispatchResult dispatch_event(int event_type)
     }
 }
 
-#ifdef FIRE4NIX_HAS_SDL
 DispatchResult dispatch_event(const SDL_Event& event)
 {
     switch (event.type) {
@@ -182,7 +173,6 @@ DispatchResult dispatch_event(const SDL_Event& event)
         return DispatchResult::Ignored;
     }
 }
-#endif
 
 UiAction last_action()
 {
