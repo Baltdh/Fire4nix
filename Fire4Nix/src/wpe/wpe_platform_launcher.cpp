@@ -412,6 +412,10 @@ gboolean onUnixSignal(gpointer userData)
 void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
 {
     logLoadState(view, loadEvent);
+    const char* event = loadEvent == WEBKIT_LOAD_STARTED ? "load-started" :
+                        loadEvent == WEBKIT_LOAD_COMMITTED ? "load-committed" :
+                        loadEvent == WEBKIT_LOAD_FINISHED ? "load-finished" : "load-state";
+    publishBrowserState(view, event);
 }
 
 gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer)
@@ -419,7 +423,7 @@ gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failing
     g_warning("Fire4Nix WPE load failed for %s: %s",
               failingUri != nullptr ? failingUri : "(unknown)",
               error != nullptr && error->message != nullptr ? error->message : "unknown error");
-    (void)view;
+    publishBrowserState(view, "load-failed", error != nullptr ? error->message : "unknown error");
     return FALSE;
 }
 
@@ -428,7 +432,7 @@ gboolean onLoadFailedWithTlsErrors(WebKitWebView* view, gchar* failingUri, GTlsC
     g_warning("Fire4Nix WPE TLS error for %s (flags=0x%x)",
               failingUri != nullptr ? failingUri : "(unknown)",
               static_cast<unsigned>(errors));
-    (void)view;
+    publishBrowserState(view, "tls-error", "certificate validation failed");
     return FALSE;
 }
 
@@ -447,6 +451,7 @@ gboolean onWebProcessTerminated(WebKitWebView* view, WebKitWebProcessTermination
     }
 
     g_warning("Fire4Nix WPE web process terminated (%s)", reasonText);
+    publishBrowserState(view, "web-process-terminated", reasonText);
     if (view != nullptr)
         webkit_web_view_reload(view);
     return TRUE;
@@ -459,6 +464,37 @@ std::filesystem::path commandFilePath()
     if (const char* runtime = g_getenv("FIRE4NIX_RUNTIME_DIR"); runtime && *runtime)
         return std::filesystem::path(runtime) / "browser.cmd";
     return std::filesystem::path(".fire4nix") / "runtime" / "browser.cmd";
+}
+
+std::filesystem::path stateFilePath()
+{
+    if (const char* explicitPath = g_getenv("FIRE4NIX_BROWSER_STATE_FILE"); explicitPath && *explicitPath)
+        return explicitPath;
+    if (const char* runtime = g_getenv("FIRE4NIX_RUNTIME_DIR"); runtime && *runtime)
+        return std::filesystem::path(runtime) / "browser.state";
+    return std::filesystem::path(".fire4nix") / "runtime" / "browser.state";
+}
+
+void publishBrowserState(WebKitWebView* view, const char* event, const char* detail = nullptr)
+{
+    if (!view) return;
+    const auto path = stateFilePath();
+    std::error_code ec;
+    if (!path.parent_path().empty())
+        std::filesystem::create_directories(path.parent_path(), ec);
+    const auto temp = path.string() + ".tmp";
+    std::ofstream out(temp, std::ios::trunc);
+    if (!out.is_open()) return;
+    const char* uri = webkit_web_view_get_uri(view);
+    const char* title = webkit_web_view_get_title(view);
+    out << "event=" << (event ? event : "state") << '\n';
+    out << "uri=" << (uri ? uri : "") << '\n';
+    out << "title=" << (title ? title : "") << '\n';
+    out << "loading=" << (webkit_web_view_is_loading(view) ? "1" : "0") << '\n';
+    if (detail) out << "detail=" << detail << '\n';
+    out.close();
+    std::filesystem::rename(temp, path, ec);
+    if (ec) std::filesystem::remove(temp, ec);
 }
 
 struct CommandConsumer {
@@ -532,6 +568,7 @@ void onTitleNotify(GObject* object, GParamSpec*, gpointer)
     const char* title = webkit_web_view_get_title(view);
     if (title != nullptr && *title != '\0')
         g_message("Fire4Nix WPE title: %s", title);
+    publishBrowserState(view, "title-changed");
 }
 
 } // namespace
