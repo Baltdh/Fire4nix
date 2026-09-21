@@ -11,6 +11,8 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 fire4nix_bootstrap_environment "$APP_DIR"
 fire4nix_log_reference_summary "$FIRE4NIX_REFERENCE_ROOT"
 fire4nix_export_wpe_common_env
+# WPE Platform 2.x: use the Wayland display backend under ROCKNIX/Sway unless overridden.
+export WPE_DISPLAY="${WPE_DISPLAY:-wpe-display-wayland}"
 export FIRE4NIX_WPE_PLATFORM_BINARY="${FIRE4NIX_WPE_PLATFORM_BINARY:-$(fire4nix_wpe_platform_binary)}"
 
 target="${1:-${FIRE4NIX_START_PAGE:-${FIRE4NIX_HOME_URL:-$(fire4nix_default_home_url)}}}"
