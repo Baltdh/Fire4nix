@@ -1280,6 +1280,11 @@ void BrowserChrome::resetTabs(int index)
 void BrowserChrome::applyAction(UiAction action)
 {
     switch (action) {
+    case UiAction::DeleteBackward:
+        if (addressBar_.editing()) {
+            backspaceAddress();
+        }
+        break;
     case UiAction::Activate:
         if (addressBar_.editing()) {
             commitAddressEditing();
@@ -1593,6 +1598,16 @@ bool BrowserChrome::AddressBarWidget::handleTextInput(const std::string& text)
     }
 
     owner->appendAddressText(text);
+    return true;
+}
+
+bool BrowserChrome::AddressBarWidget::handleDeleteBackward()
+{
+    if (!owner || !owner->isAddressEditing()) {
+        return false;
+    }
+
+    owner->backspaceAddress();
     return true;
 }
 
