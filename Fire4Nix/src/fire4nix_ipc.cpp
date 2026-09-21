@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <system_error>
 
 namespace {
 std::filesystem::path commandPath(const std::string& baseName)
@@ -29,6 +30,11 @@ bool CommandPipe::sendCommand(const std::string& cmd)
 {
     if (path_.empty() || cmd.empty() || cmd.size() > 8192 ||
         cmd.find_first_of("\r\n") != std::string::npos || cmd.find('\0') != std::string::npos)
+        return false;
+    std::error_code ec;
+    constexpr std::uintmax_t kMaxCommandJournalBytes = 256 * 1024;
+    const auto currentSize = std::filesystem::file_size(path_, ec);
+    if (!ec && currentSize > kMaxCommandJournalBytes)
         return false;
     std::ofstream out(path_, std::ios::app);
     if (!out.is_open()) return false;
