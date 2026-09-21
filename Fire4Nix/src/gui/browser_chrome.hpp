@@ -91,6 +91,7 @@ private:
         void onFocusChanged(bool focused) override;
         bool handleAction(fire4nix::gui::UiAction action) override;
         bool handleTextInput(const std::string& text) override;
+        bool handleDeleteBackward() override;
     };
 
     struct BottomBarWidget : fire4nix::Widget {
