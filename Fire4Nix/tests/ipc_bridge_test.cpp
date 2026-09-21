@@ -38,6 +38,12 @@ int main()
     assert(first == "load:https://example.org/test");
     assert(second == "key:ctrl+r");
 
+    {
+        std::ofstream fill(runtime / "browser.cmd", std::ios::trunc);
+        fill << std::string(256 * 1024 - 2, 'x');
+    }
+    assert(!defaultBrowserBridge().reload());
+
     shutdownIPCBridge();
     assert(!ipcBridgeReady());
     assert(!defaultBrowserBridge().goBack());
