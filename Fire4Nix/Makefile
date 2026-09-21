@@ -76,7 +76,7 @@ wpe-platform-launcher: wpe-preflight src/wpe/wpe_platform_launcher.cpp
 	$(CXX) $(CPPFLAGS) $(WARNFLAGS) -std=c++17 -O2 $(WPE_CFLAGS) src/wpe/wpe_platform_launcher.cpp $(LDFLAGS) $(WPE_LIBS) -o $(WPE_TARGET)
 
 wpe-arm64:
-	@./scripts/build_wpe_arm64.sh
+	@sh ./scripts/build_wpe_arm64.sh
 
 clean:
 	rm -f $(OBJS) $(TARGET) $(WPE_TARGET)
