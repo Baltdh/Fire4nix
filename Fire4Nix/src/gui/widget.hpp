@@ -15,6 +15,7 @@ public:
     virtual void render() = 0;
     virtual bool handleAction(fire4nix::gui::UiAction) { return false; }
     virtual bool handleTextInput(const std::string&) { return false; }
+    virtual bool handleDeleteBackward() { return false; }
 
     virtual void setFocused(bool focused) {
         if (focused_ != focused) {
