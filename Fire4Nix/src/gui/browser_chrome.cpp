@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -928,6 +930,54 @@ void BrowserChrome::reset()
     historyIndex_ = 0;
 }
 
+void BrowserChrome::pollBrowserState()
+{
+    std::filesystem::path path;
+    if (const char* explicitPath = std::getenv("FIRE4NIX_BROWSER_STATE_FILE"); explicitPath && *explicitPath)
+        path = explicitPath;
+    else if (const char* runtime = std::getenv("FIRE4NIX_RUNTIME_DIR"); runtime && *runtime)
+        path = std::filesystem::path(runtime) / "browser.state";
+    else
+        path = std::filesystem::path(".fire4nix") / "runtime" / "browser.state";
+
+    std::ifstream input(path);
+    if (!input.is_open()) return;
+    std::string raw((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    if (raw.empty() || raw == lastBrowserState_) return;
+    lastBrowserState_ = raw;
+
+    std::string event, uri, title, detail;
+    bool loading = false;
+    std::istringstream stream(raw);
+    for (std::string line; std::getline(stream, line); ) {
+        const auto pos = line.find('=');
+        if (pos == std::string::npos) continue;
+        const auto key = line.substr(0, pos);
+        const auto value = line.substr(pos + 1);
+        if (key == "event") event = value;
+        else if (key == "uri") uri = value;
+        else if (key == "title") title = value;
+        else if (key == "detail") detail = value;
+        else if (key == "loading") loading = value == "1";
+    }
+
+    if (!uri.empty() && !addressBar_.editing()) {
+        addressBar_.setUrl(uri);
+        pushHistory(uri);
+    }
+    if (!title.empty()) setTabTitle(title);
+    if (event == "load-started") setProgress(10);
+    else if (event == "load-committed") setProgress(55);
+    else if (event == "load-finished") setProgress(100);
+    else if (loading) setProgress(std::max(10, std::min(90, progress())));
+
+    if (event == "load-failed" || event == "tls-error" || event == "web-process-terminated")
+        setStatus("Browser error: " + (detail.empty() ? event : detail));
+    else if (event == "load-finished")
+        setStatus(title.empty() ? (uri.empty() ? "Page loaded" : uri) : title);
+    markDirty();
+}
+
 void BrowserChrome::setUrl(const std::string& url)
 {
     syncLoadedUrl(url);
@@ -1426,6 +1476,7 @@ void BrowserChrome::initializeDefaultWidgets()
 void BrowserChrome::TopBarWidget::update(float dt)
 {
     (void)dt;
+    if (owner) owner->pollBrowserState();
 }
 
 void BrowserChrome::TopBarWidget::render()
