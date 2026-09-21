@@ -1,0 +1,10 @@
+# Local audit workspaces and generated output
+.audit-work/
+build/
+dist/
+*.log
+*.o
+__pycache__/
+*.py[cod]
+/Fire4Nix/fire4nix
+/Fire4Nix/.fire4nix/runtime/
