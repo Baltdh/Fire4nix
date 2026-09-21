@@ -13,6 +13,7 @@ enum class UiAction {
     FocusNext,
     FocusPrevious,
     Activate,
+    DeleteBackward,
     Back,
     Forward,
     Reload,
