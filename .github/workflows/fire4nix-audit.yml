@@ -42,3 +42,8 @@ jobs:
 
       - name: WPE ARM64 guard self-test
         run: sh tests/test_wpe_arm64_guard.sh
+
+      - name: Makefile WPE detection regression check
+        run: |
+          grep -F '$(PKG_CONFIG) --exists $pkg' Makefile
+          grep -F 'Compiler: $($(CXX) -dumpmachine' Makefile
