@@ -53,6 +53,11 @@ test-bridge:
 	$(CXX) $(CPPFLAGS) -std=c++17 $(WARNFLAGS) -UNDEBUG tests/browser_bridge_test.cpp src/gui/browser_bridge.cpp -o build/browser-bridge-test
 	./build/browser-bridge-test
 
+test-ipc:
+	@mkdir -p build
+	$(CXX) $(CPPFLAGS) -std=c++17 $(WARNFLAGS) -UNDEBUG tests/ipc_bridge_test.cpp src/fire4nix_ipc.cpp src/fire4nix_ipc_bridge.cpp src/gui/browser_bridge.cpp -o build/ipc-bridge-test
+	./build/ipc-bridge-test
+
 test-renderer:
 	@mkdir -p build
 	$(CXX) $(CPPFLAGS) -std=c++17 $(WARNFLAGS) -UNDEBUG -DFIRE4NIX_FORCE_SDL_STUB tests/renderer_contract_test.cpp src/fire4nix_renderer.cpp -o build/renderer-contract-test
@@ -86,4 +91,4 @@ wpe-arm64:
 clean:
 	rm -f $(OBJS) $(TARGET) $(WPE_TARGET)
 
-.PHONY: all clean wpe-preflight wpe-platform-launcher wpe-arm64 test-gui test-renderer test-bridge test-navigation
+.PHONY: all clean wpe-preflight wpe-platform-launcher wpe-arm64 test-gui test-renderer test-bridge test-ipc test-navigation
