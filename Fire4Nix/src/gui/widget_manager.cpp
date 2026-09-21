@@ -167,6 +167,11 @@ bool WidgetManager::dispatchAction(fire4nix::gui::UiAction action)
         focus_->previous();
         syncFocus();
         return true;
+    case fire4nix::gui::UiAction::DeleteBackward:
+        if (auto* w = focusedWidget()) {
+            return w->handleDeleteBackward();
+        }
+        return false;
     case fire4nix::gui::UiAction::Activate:
     case fire4nix::gui::UiAction::Back:
     case fire4nix::gui::UiAction::Forward:
