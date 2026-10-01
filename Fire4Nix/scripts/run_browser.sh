@@ -102,11 +102,16 @@ write_startup_snapshot() {
     } > "$snapshot" 2>/dev/null || true
 }
 
-write_startup_snapshot
-
 if [ -f "$APP_DIR/fire4nix.conf" ] && [ ! -f "$FIRE4NIX_CONFIG_DIR/fire4nix.conf" ]; then
     cp -f "$APP_DIR/fire4nix.conf" "$FIRE4NIX_CONFIG_DIR/fire4nix.conf" 2>/dev/null || true
 fi
+
+if [ -f "$FIRE4NIX_CONFIG_DIR/fire4nix.conf" ]; then
+    fire4nix_load_key_value_config "$FIRE4NIX_CONFIG_DIR/fire4nix.conf"
+    fire4nix_sync_progress_context
+fi
+
+write_startup_snapshot
 
 is_wrapper_candidate() {
     local candidate="${1:-}"
