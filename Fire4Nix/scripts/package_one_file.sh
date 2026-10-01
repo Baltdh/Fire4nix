@@ -19,6 +19,12 @@ DESC=$(file -b "$NATIVE" 2>/dev/null || true)
 printf '%s' "$DESC" | grep -Eiq 'ELF 64-bit.*(ARM aarch64|ARM64|aarch64)' ||
     fail "bin/fire4nix-wpe-platform is not an ARM64 ELF ($DESC)"
 
+RUNTIME_ROOT="$ROOT_DIR/runtime/aarch64"
+[ -x "$ROOT_DIR/scripts/verify_wpe_runtime.sh" ] ||
+    chmod +x "$ROOT_DIR/scripts/verify_wpe_runtime.sh" 2>/dev/null || true
+sh "$ROOT_DIR/scripts/verify_wpe_runtime.sh" "$RUNTIME_ROOT" ||
+    fail "bundled WPE runtime is incomplete; One File must be self-contained on ROCKNIX"
+
 VERSION=$(sed -n '1s/^Fire4Nix[[:space:]]*//p' VERSION 2>/dev/null | tr -c '[:alnum:]._-\n' '-' | tr -d '\n')
 [ -n "$VERSION" ] || VERSION="dev"
 OUT_DIR="${FIRE4NIX_DIST_DIR:-$ROOT_DIR/dist}"
@@ -54,6 +60,7 @@ required = [
     "scripts/engine_manager.sh",
     "scripts/theme_manager.sh",
     "scripts/rocknix_wpe_smoke_test.sh",
+    "scripts/verify_wpe_runtime.sh",
 ]
 
 for rel in required:
@@ -64,6 +71,7 @@ for rel in required:
 optional_trees = [
     root / ".mozilla_profile",
     root / "theme",
+    root / "runtime",
 ]
 
 root_launcher = """#!/bin/sh
@@ -86,8 +94,10 @@ readme = """Fire4Nix One File Edition
 4. No root installer is required for this portable package.
 
 This package is emitted only when bin/fire4nix-wpe-platform is a real
-ARM64/aarch64 ELF binary. Runtime logs and user data are created outside the
-ZIP contents through the Fire4Nix configuration/runtime resolver.
+ARM64/aarch64 ELF binary AND runtime/aarch64 contains the validated WPE WebKit
+library plus WPEWebProcess, WPENetworkProcess and WPEGPUProcess. Runtime logs
+and user data are created outside the ZIP contents through the Fire4Nix
+configuration/runtime resolver.
 """
 
 def zip_info(name: str, executable: bool = False):
@@ -102,6 +112,7 @@ def is_executable_runtime(rel: str) -> bool:
     return (
         rel.endswith(".sh")
         or rel.startswith("bin/")
+        or "/libexec/" in rel
         or rel.endswith(".py")
     )
 
