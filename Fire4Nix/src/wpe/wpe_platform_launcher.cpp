@@ -361,14 +361,26 @@ void loadContentFilterIfRequested(WebKitWebView* view, const LaunchOptions& opti
         g_object_unref(store);
 }
 
-WebKitWebsiteDataManager* createWebsiteDataManager(const LaunchOptions& options)
+WebKitNetworkSession* createNetworkSession(const LaunchOptions& options)
 {
-    WebKitWebsiteDataManager* manager = (options.privateMode || options.automationMode)
-        ? webkit_website_data_manager_new_ephemeral()
-        : webkit_website_data_manager_new(nullptr);
+    if (options.networkMemoryLimitMb > 0) {
+        WebKitMemoryPressureSettings* networkMemory = webkit_memory_pressure_settings_new();
+        webkit_memory_pressure_settings_set_memory_limit(networkMemory, options.networkMemoryLimitMb);
+        webkit_network_session_set_memory_pressure_settings(networkMemory);
+        webkit_memory_pressure_settings_free(networkMemory);
+        g_message("Fire4Nix WPE network-process memory limit: %u MB", options.networkMemoryLimitMb);
+    }
 
-    if (options.enableItp)
-        webkit_website_data_manager_set_itp_enabled(manager, TRUE);
+    if (options.automationMode)
+        return nullptr;
+
+    WebKitNetworkSession* session = options.privateMode
+        ? webkit_network_session_new_ephemeral()
+        : webkit_network_session_new(nullptr, nullptr);
+    if (session == nullptr)
+        return nullptr;
+
+    webkit_network_session_set_itp_enabled(session, options.enableItp);
 
     if (!options.proxy.empty()) {
         std::vector<const gchar*> ignoreHosts;
@@ -379,23 +391,36 @@ WebKitWebsiteDataManager* createWebsiteDataManager(const LaunchOptions& options)
 
         WebKitNetworkProxySettings* proxySettings = webkit_network_proxy_settings_new(options.proxy.c_str(), ignoreHosts.data());
         if (proxySettings != nullptr) {
-            webkit_website_data_manager_set_network_proxy_settings(manager, WEBKIT_NETWORK_PROXY_MODE_CUSTOM, proxySettings);
+            webkit_network_session_set_proxy_settings(session, WEBKIT_NETWORK_PROXY_MODE_CUSTOM, proxySettings);
             webkit_network_proxy_settings_free(proxySettings);
         }
     }
 
     if (options.ignoreTlsErrors)
-        webkit_website_data_manager_set_tls_errors_policy(manager, WEBKIT_TLS_ERRORS_POLICY_IGNORE);
+        webkit_network_session_set_tls_errors_policy(session, WEBKIT_TLS_ERRORS_POLICY_IGNORE);
 
-    return manager;
+    if (!options.cookiesPolicy.empty()) {
+        auto* enumClass = static_cast<GEnumClass*>(g_type_class_ref(WEBKIT_TYPE_COOKIE_ACCEPT_POLICY));
+        const GEnumValue* enumValue = g_enum_get_value_by_nick(enumClass, options.cookiesPolicy.c_str());
+        if (enumValue != nullptr) {
+            auto* cookieManager = webkit_network_session_get_cookie_manager(session);
+            webkit_cookie_manager_set_accept_policy(cookieManager, static_cast<WebKitCookieAcceptPolicy>(enumValue->value));
+        }
+        g_type_class_unref(enumClass);
+    }
+
+    if (!options.cookiesFile.empty() && !webkit_network_session_is_ephemeral(session)) {
+        auto* cookieManager = webkit_network_session_get_cookie_manager(session);
+        const gboolean isText = g_str_has_suffix(options.cookiesFile.c_str(), ".txt");
+        const auto storageType = isText ? WEBKIT_COOKIE_PERSISTENT_STORAGE_TEXT : WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE;
+        webkit_cookie_manager_set_persistent_storage(cookieManager, options.cookiesFile.c_str(), storageType);
+    }
+
+    return session;
 }
 
 WebKitWebContext* createWebContext(const LaunchOptions& options)
 {
-    WebKitWebsiteDataManager* manager = createWebsiteDataManager(options);
-    if (manager == nullptr)
-        return nullptr;
-
     WebKitMemoryPressureSettings* webMemory = nullptr;
     if (options.memoryLimitMb > 0) {
         webMemory = webkit_memory_pressure_settings_new();
@@ -403,57 +428,25 @@ WebKitWebContext* createWebContext(const LaunchOptions& options)
         g_message("Fire4Nix WPE web-process memory limit: %u MB", options.memoryLimitMb);
     }
 
-    WebKitMemoryPressureSettings* networkMemory = nullptr;
-    if (options.networkMemoryLimitMb > 0) {
-        networkMemory = webkit_memory_pressure_settings_new();
-        webkit_memory_pressure_settings_set_memory_limit(networkMemory, options.networkMemoryLimitMb);
-        webkit_network_session_set_memory_pressure_settings(networkMemory);
-        g_message("Fire4Nix WPE network-process memory limit: %u MB", options.networkMemoryLimitMb);
-    }
-
     WebKitWebContext* webContext = nullptr;
     if (!options.timeZone.empty()) {
         webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
-                                         "website-data-manager", manager,
                                          "memory-pressure-settings", webMemory,
                                          "time-zone-override", options.timeZone.c_str(),
                                          nullptr));
     } else {
         webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
-                                         "website-data-manager", manager,
                                          "memory-pressure-settings", webMemory,
                                          nullptr));
     }
 
     if (webMemory != nullptr)
         webkit_memory_pressure_settings_free(webMemory);
-    if (networkMemory != nullptr)
-        webkit_memory_pressure_settings_free(networkMemory);
-    g_object_unref(manager);
+
+    if (webContext != nullptr)
+        webkit_web_context_set_automation_allowed(webContext, options.automationMode);
+
     return webContext;
-}
-
-void applyCookieSettings(WebKitWebContext* webContext, const LaunchOptions& options)
-{
-    if (webContext == nullptr)
-        return;
-
-    if (!options.cookiesPolicy.empty()) {
-        auto* enumClass = static_cast<GEnumClass*>(g_type_class_ref(WEBKIT_TYPE_COOKIE_ACCEPT_POLICY));
-        const GEnumValue* enumValue = g_enum_get_value_by_nick(enumClass, options.cookiesPolicy.c_str());
-        if (enumValue != nullptr) {
-            auto* cookieManager = webkit_web_context_get_cookie_manager(webContext);
-            webkit_cookie_manager_set_accept_policy(cookieManager, static_cast<WebKitCookieAcceptPolicy>(enumValue->value));
-        }
-        g_type_class_unref(enumClass);
-    }
-
-    if (!options.cookiesFile.empty() && !webkit_web_context_is_ephemeral(webContext)) {
-        auto* cookieManager = webkit_web_context_get_cookie_manager(webContext);
-        const gboolean isText = g_str_has_suffix(options.cookiesFile.c_str(), ".txt");
-        const auto storageType = isText ? WEBKIT_COOKIE_PERSISTENT_STORAGE_TEXT : WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE;
-        webkit_cookie_manager_set_persistent_storage(cookieManager, options.cookiesFile.c_str(), storageType);
-    }
 }
 
 void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
@@ -727,19 +720,35 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    WebKitWebView* view = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(webContext));
-    if (view == nullptr) {
-        g_printerr("Fire4Nix WPE: failed to create WebKitWebView\n");
+    WebKitNetworkSession* networkSession = createNetworkSession(options);
+    if (!options.automationMode && networkSession == nullptr) {
+        g_printerr("Fire4Nix WPE: failed to create WebKitNetworkSession\n");
+        g_object_unref(webContext);
+        g_main_loop_unref(loop);
         return EXIT_FAILURE;
     }
 
-    applyCookieSettings(webContext, options);
+    WebKitWebView* view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+        "web-context", webContext,
+        "network-session", networkSession,
+        nullptr));
+    if (view == nullptr) {
+        g_printerr("Fire4Nix WPE: failed to create WebKitWebView\n");
+        if (networkSession != nullptr)
+            g_object_unref(networkSession);
+        g_object_unref(webContext);
+        g_main_loop_unref(loop);
+        return EXIT_FAILURE;
+    }
+
     applyBrowserDefaults(view, options);
     loadContentFilterIfRequested(view, options);
 
     if (!configurePlatformWindow(view, options)) {
         g_printerr("Fire4Nix WPE: failed to configure the WPEPlatform surface\n");
         g_object_unref(view);
+        if (networkSession != nullptr)
+            g_object_unref(networkSession);
         g_object_unref(webContext);
         g_main_loop_unref(loop);
         return EXIT_FAILURE;
@@ -785,6 +794,8 @@ int main(int argc, char** argv)
 
     if (view != nullptr)
         g_object_unref(view);
+    if (networkSession != nullptr)
+        g_object_unref(networkSession);
     if (webContext != nullptr)
         g_object_unref(webContext);
     if (loop != nullptr)
