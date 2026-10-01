@@ -18,7 +18,7 @@ jobs:
           printf '%s\n' 'deb-src http://deb.debian.org/debian sid main' > /etc/apt/sources.list.d/fire4nix-source.list
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git devscripts dpkg-dev python3 file
-          DEBIAN_FRONTEND=noninteractive apt-get build-dep -y --no-install-recommends wpewebkit
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev
       - uses: actions/checkout@v4
       - name: Fetch and patch release library source
         run: |
@@ -52,23 +52,23 @@ jobs:
           test -n "$source_dir"
           cd "$source_dir"
           test "$(dpkg --print-architecture)" = arm64
-          export DEB_BUILD_OPTIONS="nocheck noautodbgsym parallel=2"
-          export DEB_CFLAGS_MAINT_APPEND="-g0"
-          export DEB_CXXFLAGS_MAINT_APPEND="-g0"
-          dpkg-buildpackage -b -uc -us > ../library-build.log 2>&1 || { tail -n 120 ../library-build.log; exit 1; }
+          cmake -S . -B build-fire4nix -G Ninja -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_VIDEO=OFF -DENABLE_WEB_AUDIO=OFF -DENABLE_WEB_RTC=OFF -DENABLE_SPEECH_SYNTHESIS=OFF -DENABLE_INTROSPECTION=OFF -DENABLE_DOCUMENTATION=OFF -DENABLE_MINIBROWSER=OFF > ../library-configure.log 2>&1 || { tail -n 120 ../library-configure.log; exit 1; }
+          cmake --build build-fire4nix --parallel 2 > ../library-build.log 2>&1 || { tail -n 120 ../library-build.log; exit 1; }
+          DESTDIR="$PWD/../stage" cmake --install build-fire4nix
+          tar -C ../stage -czf ../Fire4Nix-WPE-ARM64-library.tar.gz usr
       - name: Record experimental library provenance
         run: |
           printf '%s\n' "$GITHUB_SHA" > library-build/COMMIT.txt
-          printf '%s\n' 'Experimental ARM64 WPE library rebuilt from Debian sid source.' 'Patched release process resolver accepts absolute WEBKIT_EXEC_PATH.' 'Not validated against the ROCKNIX sysroot or device ABI.' 'DEB files are build artifacts; do not install them into ROCKNIX.' > library-build/README.txt
+          printf '%s\n' 'Experimental ARM64 WPE library rebuilt from Debian sid source.' 'Patched release process resolver accepts absolute WEBKIT_EXEC_PATH.' 'Not validated against the ROCKNIX sysroot or device ABI.' 'Initial build disables video, WebAudio, WebRTC and speech synthesis.' 'Library prefix is experimental; do not copy over ROCKNIX system libraries.' > library-build/README.txt
           cd library-build
-          sha256sum ./*.deb > SHA256SUMS
+          sha256sum ./*.tar.gz > SHA256SUMS
       - name: Save library artifacts and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-WPE-ARM64-library-experimental
           path: |
-            library-build/*.deb
+            library-build/*.tar.gz
             library-build/*.buildinfo
             library-build/*.changes
             library-build/*.log
