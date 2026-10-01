@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Fire4Nix Project <fire4nix@local>
+Subject: [PATCH] WPE: allow relocatable helper process path in release builds
+
+Fire4Nix is distributed as a portable ROCKNIX port and cannot rely on a
+compile-time /usr/libexec prefix. Keep the existing developer-mode lookup, but
+also honor WEBKIT_EXEC_PATH in normal WPE builds.
+
+The Fire4Nix launcher sets WEBKIT_EXEC_PATH to an absolute path inside its own
+resolved runtime directory before loading untrusted web content.
+
+---
+ Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp b/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp
+index 000000000000..111111111111 100644
+--- a/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp
++++ b/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp
+@@ -39,15 +39,16 @@ static String getExecutablePath()
+ 
+ static String findWebKitProcess(const ASCIILiteral processName)
+ {
+-#if ENABLE(DEVELOPER_MODE)
+     static const char* execDirectory = g_getenv("WEBKIT_EXEC_PATH");
+     if (execDirectory) {
+         String processPath = FileSystem::pathByAppendingComponent(FileSystem::stringFromFileSystemRepresentation(execDirectory), processName);
+         if (FileSystem::fileExists(processPath))
+             return processPath;
+     }
+ 
++#if ENABLE(DEVELOPER_MODE)
+     static String executablePath = getExecutablePath();
+     if (!executablePath.isNull()) {
+         String processPath = FileSystem::pathByAppendingComponent(executablePath, processName);
+         if (FileSystem::fileExists(processPath))
+             return processPath;
+     }
+ #endif
+ 
+     return FileSystem::pathByAppendingComponent(FileSystem::stringFromFileSystemRepresentation(PKGLIBEXECDIR), processName);
+ }
