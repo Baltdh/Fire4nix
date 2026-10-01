@@ -41,6 +41,8 @@ struct LaunchOptions {
     bool encryptedMedia { false };
     unsigned width { 640 };
     unsigned height { 480 };
+    unsigned memoryLimitMb { 0 };
+    unsigned networkMemoryLimitMb { 0 };
     unsigned commandPollMs { 100 };
 };
 
@@ -101,6 +103,19 @@ unsigned parseDimension(const std::string& value, unsigned fallback)
     if (end == value.c_str() || *end != '\0')
         return fallback;
     return static_cast<unsigned>(std::clamp<unsigned long>(parsed, 240, 4096));
+}
+
+unsigned parseUnsignedRange(const std::string& value, unsigned fallback, unsigned minimum, unsigned maximum)
+{
+    if (value.empty())
+        return fallback;
+    char* end = nullptr;
+    const auto parsed = std::strtoul(value.c_str(), &end, 10);
+    if (end == value.c_str() || *end != '\0')
+        return fallback;
+    if (parsed == 0)
+        return 0;
+    return static_cast<unsigned>(std::clamp<unsigned long>(parsed, minimum, maximum));
 }
 
 bool parseSize(const std::string& value, unsigned& width, unsigned& height)
@@ -168,6 +183,8 @@ LaunchOptions parseOptions(int argc, char** argv)
     options.encryptedMedia = envEnabled("FIRE4NIX_ENABLE_ENCRYPTED_MEDIA", false);
     options.width = parseDimension(envOr("FIRE4NIX_DISPLAY_WIDTH", "640"), 640);
     options.height = parseDimension(envOr("FIRE4NIX_DISPLAY_HEIGHT", "480"), 480);
+    options.memoryLimitMb = parseUnsignedRange(envOr("FIRE4NIX_WPE_MEMORY_LIMIT_MB", "0"), 0, 128, 2048);
+    options.networkMemoryLimitMb = parseUnsignedRange(envOr("FIRE4NIX_WPE_NETWORK_MEMORY_LIMIT_MB", "0"), 0, 64, 1024);
     {
         const auto pollText = envOr("FIRE4NIX_COMMAND_POLL_MS", "100");
         char* end = nullptr;
@@ -379,18 +396,39 @@ WebKitWebContext* createWebContext(const LaunchOptions& options)
     if (manager == nullptr)
         return nullptr;
 
+    WebKitMemoryPressureSettings* webMemory = nullptr;
+    if (options.memoryLimitMb > 0) {
+        webMemory = webkit_memory_pressure_settings_new();
+        webkit_memory_pressure_settings_set_memory_limit(webMemory, options.memoryLimitMb);
+        g_message("Fire4Nix WPE web-process memory limit: %u MB", options.memoryLimitMb);
+    }
+
+    WebKitMemoryPressureSettings* networkMemory = nullptr;
+    if (options.networkMemoryLimitMb > 0) {
+        networkMemory = webkit_memory_pressure_settings_new();
+        webkit_memory_pressure_settings_set_memory_limit(networkMemory, options.networkMemoryLimitMb);
+        webkit_network_session_set_memory_pressure_settings(networkMemory);
+        g_message("Fire4Nix WPE network-process memory limit: %u MB", options.networkMemoryLimitMb);
+    }
+
     WebKitWebContext* webContext = nullptr;
     if (!options.timeZone.empty()) {
         webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
                                          "website-data-manager", manager,
+                                         "memory-pressure-settings", webMemory,
                                          "time-zone-override", options.timeZone.c_str(),
                                          nullptr));
     } else {
         webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
                                          "website-data-manager", manager,
+                                         "memory-pressure-settings", webMemory,
                                          nullptr));
     }
 
+    if (webMemory != nullptr)
+        webkit_memory_pressure_settings_free(webMemory);
+    if (networkMemory != nullptr)
+        webkit_memory_pressure_settings_free(networkMemory);
     g_object_unref(manager);
     return webContext;
 }
