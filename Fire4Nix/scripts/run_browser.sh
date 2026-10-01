@@ -33,7 +33,7 @@ export LOG_FILE
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-about:home}"
 export FIRE4NIX_SEARCH_URL="${FIRE4NIX_SEARCH_URL:-https://duckduckgo.com/?q=%s}"
 export FIRE4NIX_SESSION_LABEL="${FIRE4NIX_SESSION_LABEL:-Fire4Nix ROCKNIX beta WPE runtime}"
-export FIRE4NIX_VERSION="${FIRE4NIX_VERSION:-0.83-beta-rocknix-wpe-runtime}"
+export FIRE4NIX_VERSION="${FIRE4NIX_VERSION:-0.84-beta-rocknix-wpe-runtime}"
 export FIRE4NIX_BETA="${FIRE4NIX_BETA:-1}"
 export FIRE4NIX_BROWSER_MODE="${FIRE4NIX_BROWSER_MODE:-beta}"
 export FIRE4NIX_UI_PROFILE="${FIRE4NIX_UI_PROFILE:-compact}"
