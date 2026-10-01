@@ -532,6 +532,7 @@ fire4nix_load_key_value_config() {
                     cog_platform) export FIRE4NIX_COG_PLATFORM="$value" ;;
                     cog_platform_params) export FIRE4NIX_COG_PLATFORM_PARAMS="$value" ;;
                     wpe_display) export FIRE4NIX_WPE_DISPLAY="$value" ;;
+                    wpe_platform) export FIRE4NIX_WPE_PLATFORM="$value" ;;
                     cog_allow_file_access) export FIRE4NIX_COG_ALLOW_FILE_ACCESS="$value" ;;
                     cog_allow_permissions) export FIRE4NIX_COG_ALLOW_PERMISSIONS="$value" ;;
                     cog_enable_media) export FIRE4NIX_COG_ENABLE_MEDIA="$value" ;;
@@ -613,35 +614,49 @@ fire4nix_is_legacy_engine_label() {
     esac
     return 1
 }
-fire4nix_wpe_display_name() {
-    case "${FIRE4NIX_WPE_DISPLAY:-auto}" in
+fire4nix_wpe_platform_name() {
+    local requested="${FIRE4NIX_WPE_PLATFORM:-}"
+    if [ -z "$requested" ] || [ "$requested" = "auto" ]; then
+        requested="${WPE_PLATFORM:-${FIRE4NIX_WPE_DISPLAY:-auto}}"
+    fi
+
+    case "$requested" in
         wpe-display-wayland|wayland|wl)
-            printf '%s\n' "wpe-display-wayland"
+            printf '%s\n' "wayland"
             return 0
             ;;
         wpe-display-drm|drm|kms)
-            printf '%s\n' "wpe-display-drm"
+            printf '%s\n' "drm"
             return 0
             ;;
         wpe-display-headless|headless)
-            printf '%s\n' "wpe-display-headless"
+            printf '%s\n' "headless"
             return 0
             ;;
-        auto)
+        auto|"")
             if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
-                printf '%s\n' "wpe-display-wayland"
+                printf '%s\n' "wayland"
                 return 0
             fi
             if [ -e /dev/dri/card0 ] || [ -e /dev/dri/renderD128 ] || [ -d /dev/dri ]; then
-                printf '%s\n' "wpe-display-drm"
+                printf '%s\n' "drm"
                 return 0
             fi
-            printf '%s\n' "wpe-display-headless"
+            printf '%s\n' "headless"
             return 0
             ;;
     esac
 
-    printf '%s\n' "wpe-display-wayland"
+    printf '%s\n' "wayland"
+}
+
+fire4nix_wpe_display_name() {
+    case "$(fire4nix_wpe_platform_name)" in
+        wayland) printf '%s\n' "wpe-display-wayland" ;;
+        drm) printf '%s\n' "wpe-display-drm" ;;
+        headless) printf '%s\n' "wpe-display-headless" ;;
+        *) printf '%s\n' "wpe-display-wayland" ;;
+    esac
 }
 
 fire4nix_cog_platform_name() {
@@ -672,14 +687,16 @@ fire4nix_cog_platform_name() {
 }
 
 fire4nix_wpe_runtime_env() {
-    local display="$(fire4nix_wpe_display_name)"
-    local platform="$(fire4nix_cog_platform_name)"
+    local wpe_platform="$(fire4nix_wpe_platform_name)"
+    local legacy_display="$(fire4nix_wpe_display_name)"
+    local cog_platform="$(fire4nix_cog_platform_name)"
     local width="${FIRE4NIX_DISPLAY_WIDTH:-640}"
     local height="${FIRE4NIX_DISPLAY_HEIGHT:-480}"
 
-    export WPE_DISPLAY="$display"
-    export FIRE4NIX_WPE_PLATFORM_MODE="$display"
-    export COG_PLATFORM_NAME="$platform"
+    export WPE_PLATFORM="${WPE_PLATFORM:-$wpe_platform}"
+    export WPE_DISPLAY="${WPE_DISPLAY:-$legacy_display}"
+    export FIRE4NIX_WPE_PLATFORM_MODE="$wpe_platform"
+    export COG_PLATFORM_NAME="$cog_platform"
     export COG_PLATFORM_PARAMS="${COG_PLATFORM_PARAMS:-${FIRE4NIX_COG_PLATFORM_PARAMS:-}}"
     export COG_PLATFORM_WL_VIEW_FULLSCREEN="${COG_PLATFORM_WL_VIEW_FULLSCREEN:-1}"
     export COG_PLATFORM_WL_VIEW_MAXIMIZE="${COG_PLATFORM_WL_VIEW_MAXIMIZE:-1}"
@@ -1453,6 +1470,7 @@ fire4nix_bootstrap_environment() {
     export FIRE4NIX_COG_PLATFORM="${FIRE4NIX_COG_PLATFORM:-auto}"
     export FIRE4NIX_COG_PLATFORM_PARAMS="${FIRE4NIX_COG_PLATFORM_PARAMS:-}"
     export FIRE4NIX_WPE_DISPLAY="${FIRE4NIX_WPE_DISPLAY:-auto}"
+    export FIRE4NIX_WPE_PLATFORM="${FIRE4NIX_WPE_PLATFORM:-auto}"
     export FIRE4NIX_COG_ALLOW_FILE_ACCESS="${FIRE4NIX_COG_ALLOW_FILE_ACCESS:-1}"
     export FIRE4NIX_COG_ALLOW_PERMISSIONS="${FIRE4NIX_COG_ALLOW_PERMISSIONS:-1}"
     export FIRE4NIX_COG_ENABLE_MEDIA="${FIRE4NIX_COG_ENABLE_MEDIA:-1}"
