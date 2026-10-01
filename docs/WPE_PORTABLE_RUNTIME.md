@@ -68,3 +68,24 @@ Bubblewrap sandbox support, GL/EGL/GBM/Wayland behavior, GIO TLS modules,
 GStreamer plugins, audio coexistence, memory use and controller input. The
 runtime gate prevents a known-incomplete ZIP, but it is not a replacement for
 that hardware acceptance test.
+
+## ARM64 library construction — 2026-10-01
+
+`.github/workflows/fire4nix-wpe-library.yml` now rebuilds the WPE library
+from Debian sid source on a native ARM64 runner. It applies a guarded source
+transformation to permit an absolute WEBKIT_EXEC_PATH in release builds,
+keeps the WebKit sandbox enabled, and installs into an isolated DESTDIR.
+Initial options disable video, WebAudio, WebRTC and speech synthesis.
+Mandatory GStreamer base development components remain installed; the bad
+plugin development package is avoided because its current dependency chain
+could not be resolved. ATK, DRM and udev headers are explicit build inputs.
+
+The job uploads build/configuration logs on failure. A successful build also
+produces a library-prefix tarball and SHA256SUMS. Log-only artifacts do not
+mean a library was built. This is a moving Debian build environment, not a
+reproducible ROCKNIX sysroot build. No device ABI compatibility is claimed.
+
+The One File packager now preserves execute permission for files in the
+bundled libexec directory, so WebKit subprocesses remain executable after
+extraction. Dependency closure, runtime data, relocation under sandboxing,
+and the ROCKNIX acceptance checks above remain required.
