@@ -28,7 +28,8 @@ Ja estao implementados nesta linha:
 
 O arquivo atualmente versionado em `bin/fire4nix-wpe-platform` ainda e um
 launcher de compatibilidade. A One File Edition final so sera produzida depois
-que ele for substituido por um ELF ARM64 WPE real e aprovado no R36H.
+que ele for substituido por um ELF ARM64 WPE real, o runtime WPE autocontido
+for montado em `runtime/aarch64/` e todo o conjunto for aprovado no R36H.
 
 Para compilar/testar:
 
@@ -43,4 +44,5 @@ make test-renderer
 
 Para o caminho ARM64 e o pacote final, veja
 [`Fire4Nix/BUILD_ON_ROCKNIX.md`](Fire4Nix/BUILD_ON_ROCKNIX.md) e
-[`docs/WPE_RK3326_2026.md`](docs/WPE_RK3326_2026.md).
+[`docs/WPE_RK3326_2026.md`](docs/WPE_RK3326_2026.md) e
+[`docs/WPE_PORTABLE_RUNTIME.md`](docs/WPE_PORTABLE_RUNTIME.md).
