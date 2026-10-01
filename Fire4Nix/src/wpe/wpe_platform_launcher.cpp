@@ -52,8 +52,10 @@ struct FilterSaveData {
     GError* error { nullptr };
 };
 
-static void filterSavedCallback(WebKitUserContentFilterStore* store, GAsyncResult* result, FilterSaveData* data)
+static void filterSavedCallback(GObject* sourceObject, GAsyncResult* result, gpointer userData)
 {
+    auto* store = WEBKIT_USER_CONTENT_FILTER_STORE(sourceObject);
+    auto* data = static_cast<FilterSaveData*>(userData);
     data->filter = webkit_user_content_filter_store_save_finish(store, result, &data->error);
     g_main_loop_quit(data->mainLoop);
 }
@@ -151,11 +153,6 @@ std::vector<std::string> splitList(const std::string& text)
     if (!current.empty())
         items.push_back(trimCopy(current));
     return items;
-}
-
-const char* maybeCString(const std::string& value)
-{
-    return value.empty() ? nullptr : value.c_str();
 }
 
 void appendHostList(std::vector<std::string>& dst, const std::string& text)
@@ -340,7 +337,7 @@ void loadContentFilterIfRequested(WebKitWebView* view, const LaunchOptions& opti
 
     saveData.mainLoop = g_main_loop_new(nullptr, FALSE);
     webkit_user_content_filter_store_save_from_file(store, "Fire4NixFilter", contentFilterFile, nullptr,
-        G_CALLBACK(filterSavedCallback),
+        filterSavedCallback,
         &saveData);
     g_main_loop_run(saveData.mainLoop);
 
@@ -507,6 +504,8 @@ bool configurePlatformWindow(WebKitWebView* view, const LaunchOptions& options)
     return true;
 }
 
+void publishBrowserState(WebKitWebView* view, const char* event, const char* detail = nullptr);
+
 void logLoadState(WebKitWebView* view, WebKitLoadEvent loadEvent)
 {
     const char* uri = webkit_web_view_get_uri(view);
@@ -599,7 +598,7 @@ std::filesystem::path stateFilePath()
     return std::filesystem::path(".fire4nix") / "runtime" / "browser.state";
 }
 
-void publishBrowserState(WebKitWebView* view, const char* event, const char* detail = nullptr)
+void publishBrowserState(WebKitWebView* view, const char* event, const char* detail)
 {
     if (!view) return;
     const auto path = stateFilePath();
@@ -690,7 +689,10 @@ gboolean pollBrowserCommands(gpointer userData)
             g_warning("Fire4Nix WPE rejected IPC command: %s", command.c_str());
     }
     const auto pos = input.tellg();
-    consumer->offset = pos >= 0 ? pos : static_cast<std::streamoff>(size);
+    if (pos != std::streampos(-1))
+        consumer->offset = static_cast<std::streamoff>(pos);
+    else
+        consumer->offset = static_cast<std::streamoff>(size);
     return G_SOURCE_CONTINUE;
 }
 
