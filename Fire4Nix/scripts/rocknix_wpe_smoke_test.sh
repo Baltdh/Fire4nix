@@ -138,6 +138,23 @@ else
     warn "/dev/dri is missing; accelerated WPE rendering may be unavailable"
 fi
 
+bundled_root="$(fire4nix_bundled_wpe_root)"
+if [ -d "$bundled_root" ]; then
+    if sh "$APP_DIR/scripts/verify_wpe_runtime.sh" "$bundled_root" >> "$REPORT" 2>&1; then
+        pass "bundled WPE runtime passed integrity checks"
+    else
+        fail "bundled WPE runtime failed integrity checks"
+    fi
+else
+    warn "bundled WPE runtime is not staged yet"
+fi
+
+if command -v bwrap >/dev/null 2>&1; then
+    pass "Bubblewrap executable is available for the WebKit sandbox"
+else
+    warn "bwrap is not in PATH; verify WebKit sandbox behavior before release"
+fi
+
 say "failures=$failures"
 say "warnings=$warnings"
 say "report=$REPORT"
