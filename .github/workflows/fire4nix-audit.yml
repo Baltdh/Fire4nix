@@ -60,6 +60,8 @@ jobs:
           grep -F 'FIRE4NIX_WPE_FULLSCREEN' src/wpe/wpe_platform_launcher.cpp
           grep -F 'FIRE4NIX_DISPLAY_WIDTH' src/wpe/wpe_platform_launcher.cpp
           grep -F 'FIRE4NIX_DISPLAY_HEIGHT' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'FIRE4NIX_WPE_MEMORY_LIMIT_MB' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'webkit_memory_pressure_settings_set_memory_limit' src/wpe/wpe_platform_launcher.cpp
           grep -F 'WPE_PLATFORM' scripts/fire4nix_env.sh
           grep -F 'fire4nix_wpe_platform_name' scripts/fire4nix_env.sh
           bash -n scripts/rocknix_wpe_smoke_test.sh
