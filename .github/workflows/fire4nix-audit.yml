@@ -97,3 +97,38 @@ jobs:
           assert "Compiler: $$($(CXX) -dumpmachine" in text
           print("Makefile WPE escaping: PASS")
           PY
+
+  wpe-254-api-build:
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:sid-slim
+    defaults:
+      run:
+        working-directory: Fire4Nix
+    steps:
+      - name: Prepare Debian sid container
+        working-directory: /
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git build-essential pkg-config libwpewebkit-2.0-dev file
+
+      - uses: actions/checkout@v4
+
+      - name: Confirm current WPE 2.0 API
+        run: |
+          pkg-config --exists wpe-webkit-2.0
+          pkg-config --exists wpe-platform-2.0
+          pkg-config --atleast-version=2.54.0 wpe-webkit-2.0
+          echo "WPE WebKit $(pkg-config --modversion wpe-webkit-2.0)"
+
+      - name: Compile native launcher against WPE 2.54 API
+        run: |
+          c++ -std=c++17 -O0 -g0 -Wall -Wextra \
+            $(pkg-config --cflags wpe-webkit-2.0 wpe-platform-2.0) \
+            src/wpe/wpe_platform_launcher.cpp \
+            -o /tmp/fire4nix-wpe-api-check \
+            $(pkg-config --libs wpe-webkit-2.0 wpe-platform-2.0)
+          file /tmp/fire4nix-wpe-api-check
+          /tmp/fire4nix-wpe-api-check --version
+
