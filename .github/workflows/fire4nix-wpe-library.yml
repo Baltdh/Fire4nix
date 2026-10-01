@@ -18,7 +18,7 @@ jobs:
           printf '%s\n' 'deb-src http://deb.debian.org/debian sid main' > /etc/apt/sources.list.d/fire4nix-source.list
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git devscripts dpkg-dev python3 file
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev libatk1.0-dev libatk-bridge2.0-dev libwoff-dev libseccomp-dev libpsl-dev libbrotli-dev bubblewrap xdg-dbus-proxy
       - uses: actions/checkout@v4
       - name: Fetch and patch release library source
         run: |
