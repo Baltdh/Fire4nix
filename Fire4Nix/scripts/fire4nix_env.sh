@@ -473,7 +473,7 @@ EOF
 }
 
 fire4nix_sync_progress_context() {
-    export FIRE4NIX_PROGRESS_STAGE="${FIRE4NIX_PROGRESS_STAGE:-marco3-start}"
+    export FIRE4NIX_PROGRESS_STAGE="${FIRE4NIX_PROGRESS_STAGE:-phase3-wpe-runtime}"
     export FIRE4NIX_PROGRESS_STAGE_NAME="${FIRE4NIX_PROGRESS_STAGE_NAME:-$(fire4nix_progress_stage_name)}"
     export FIRE4NIX_PROGRESS_FOCUS="${FIRE4NIX_PROGRESS_FOCUS:-$(fire4nix_progress_focus)}"
     export FIRE4NIX_PROGRESS_STAGE_SUMMARY="${FIRE4NIX_PROGRESS_STAGE_SUMMARY:-$(fire4nix_progress_stage_summary)}"
@@ -522,10 +522,13 @@ fire4nix_load_key_value_config() {
                     session_label) export FIRE4NIX_SESSION_LABEL="$value" ;;
                     startup_hint) export FIRE4NIX_STARTUP_HINT="$value" ;;
                     beta_ready) export FIRE4NIX_BETA_READY="$value" ;;
+                    progress_stage) export FIRE4NIX_PROGRESS_STAGE="$value" ;;
                     wayland_preferred) export FIRE4NIX_WAYLAND_PREFERRED="$value" ;;
                     runtime_env_preflight) export FIRE4NIX_RUNTIME_ENV_PREFLIGHT="$value" ;;
                     display_width) export FIRE4NIX_DISPLAY_WIDTH="$value" ;;
                     display_height) export FIRE4NIX_DISPLAY_HEIGHT="$value" ;;
+                    wpe_fullscreen) export FIRE4NIX_WPE_FULLSCREEN="$value" ;;
+                    wpe_maximize) export FIRE4NIX_WPE_MAXIMIZE="$value" ;;
                     cog_platform) export FIRE4NIX_COG_PLATFORM="$value" ;;
                     cog_platform_params) export FIRE4NIX_COG_PLATFORM_PARAMS="$value" ;;
                     wpe_display) export FIRE4NIX_WPE_DISPLAY="$value" ;;
