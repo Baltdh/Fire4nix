@@ -529,6 +529,8 @@ fire4nix_load_key_value_config() {
                     display_height) export FIRE4NIX_DISPLAY_HEIGHT="$value" ;;
                     wpe_fullscreen) export FIRE4NIX_WPE_FULLSCREEN="$value" ;;
                     wpe_maximize) export FIRE4NIX_WPE_MAXIMIZE="$value" ;;
+                    wpe_memory_limit_mb) export FIRE4NIX_WPE_MEMORY_LIMIT_MB="$value" ;;
+                    wpe_network_memory_limit_mb) export FIRE4NIX_WPE_NETWORK_MEMORY_LIMIT_MB="$value" ;;
                     cog_platform) export FIRE4NIX_COG_PLATFORM="$value" ;;
                     cog_platform_params) export FIRE4NIX_COG_PLATFORM_PARAMS="$value" ;;
                     wpe_display) export FIRE4NIX_WPE_DISPLAY="$value" ;;
