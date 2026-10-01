@@ -185,7 +185,7 @@ fire4nix_read_trimmed_file() {
 
 fire4nix_progress_stage_label() {
     printf '%s
-' "${FIRE4NIX_PROGRESS_STAGE:-marco3-start}"
+' "${FIRE4NIX_PROGRESS_STAGE:-phase3-wpe-runtime}"
 }
 
 fire4nix_progress_stage_name() {
@@ -1457,7 +1457,7 @@ fire4nix_bootstrap_environment() {
     export FIRE4NIX_COG_ALLOW_PERMISSIONS="${FIRE4NIX_COG_ALLOW_PERMISSIONS:-1}"
     export FIRE4NIX_COG_ENABLE_MEDIA="${FIRE4NIX_COG_ENABLE_MEDIA:-1}"
     export FIRE4NIX_COG_CONSOLE="${FIRE4NIX_COG_CONSOLE:-1}"
-    export FIRE4NIX_PROGRESS_STAGE="${FIRE4NIX_PROGRESS_STAGE:-marco3-start}"
+    export FIRE4NIX_PROGRESS_STAGE="${FIRE4NIX_PROGRESS_STAGE:-phase3-wpe-runtime}"
     export FIRE4NIX_BRIDGE_JOURNAL="${FIRE4NIX_BRIDGE_JOURNAL:-$FIRE4NIX_RUNTIME_DIR/bridge-journal.log}"
     export FIRE4NIX_PROGRESS_NEXT="${FIRE4NIX_PROGRESS_NEXT:-$(fire4nix_progress_next_action)}"
     export FIRE4NIX_PROGRESS_ACCEPTANCE="${FIRE4NIX_PROGRESS_ACCEPTANCE:-$(fire4nix_progress_acceptance)}"
