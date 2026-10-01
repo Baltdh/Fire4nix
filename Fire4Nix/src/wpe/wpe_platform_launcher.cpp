@@ -39,6 +39,8 @@ struct LaunchOptions {
     bool webRtc { false };
     bool mediaStream { false };
     bool encryptedMedia { false };
+    unsigned width { 640 };
+    unsigned height { 480 };
     unsigned commandPollMs { 100 };
 };
 
@@ -90,6 +92,33 @@ std::string defaultStartUrl()
                         envOr("FIRE4NIX_DEFAULT_HOME_URL", "https://lite.duckduckgo.com/lite/")));
 }
 
+unsigned parseDimension(const std::string& value, unsigned fallback)
+{
+    if (value.empty())
+        return fallback;
+    char* end = nullptr;
+    const auto parsed = std::strtoul(value.c_str(), &end, 10);
+    if (end == value.c_str() || *end != '\0')
+        return fallback;
+    return static_cast<unsigned>(std::clamp<unsigned long>(parsed, 240, 4096));
+}
+
+bool parseSize(const std::string& value, unsigned& width, unsigned& height)
+{
+    const auto separator = value.find_first_of("xX");
+    if (separator == std::string::npos)
+        return false;
+
+    const auto parsedWidth = parseDimension(trimCopy(value.substr(0, separator)), 0);
+    const auto parsedHeight = parseDimension(trimCopy(value.substr(separator + 1)), 0);
+    if (parsedWidth == 0 || parsedHeight == 0)
+        return false;
+
+    width = parsedWidth;
+    height = parsedHeight;
+    return true;
+}
+
 std::vector<std::string> splitList(const std::string& text)
 {
     std::vector<std::string> items;
@@ -126,17 +155,19 @@ LaunchOptions parseOptions(int argc, char** argv)
 {
     LaunchOptions options;
     options.url = defaultStartUrl();
-    options.privateMode = envEnabled("FIRE4NIX_PRIVATE_MODE", false);
-    options.automationMode = envEnabled("FIRE4NIX_AUTOMATION_MODE", false);
-    options.ignoreTlsErrors = envEnabled("FIRE4NIX_IGNORE_TLS_ERRORS", false);
-    options.enableItp = envEnabled("FIRE4NIX_ENABLE_ITP", false);
-    options.headlessMode = envEnabled("FIRE4NIX_HEADLESS_MODE", false);
-    options.maximize = envEnabled("FIRE4NIX_MAXIMIZE", true);
-    options.fullscreen = envEnabled("FIRE4NIX_FULLSCREEN", true);
+    options.privateMode = envEnabled("FIRE4NIX_WPE_PRIVATE_MODE", envEnabled("FIRE4NIX_PRIVATE_MODE", false));
+    options.automationMode = envEnabled("FIRE4NIX_WPE_AUTOMATION_MODE", envEnabled("FIRE4NIX_AUTOMATION_MODE", false));
+    options.ignoreTlsErrors = envEnabled("FIRE4NIX_WPE_IGNORE_TLS_ERRORS", envEnabled("FIRE4NIX_IGNORE_TLS_ERRORS", false));
+    options.enableItp = envEnabled("FIRE4NIX_WPE_ENABLE_ITP", envEnabled("FIRE4NIX_ENABLE_ITP", false));
+    options.headlessMode = envEnabled("FIRE4NIX_WPE_HEADLESS_MODE", envEnabled("FIRE4NIX_HEADLESS_MODE", false));
+    options.maximize = envEnabled("FIRE4NIX_WPE_MAXIMIZE", envEnabled("FIRE4NIX_MAXIMIZE", true));
+    options.fullscreen = envEnabled("FIRE4NIX_WPE_FULLSCREEN", envEnabled("FIRE4NIX_FULLSCREEN", true));
     options.developerExtras = envEnabled("FIRE4NIX_DEVELOPER_EXTRAS", false);
     options.webRtc = envEnabled("FIRE4NIX_ENABLE_WEBRTC", false);
     options.mediaStream = envEnabled("FIRE4NIX_ENABLE_MEDIA_STREAM", false);
     options.encryptedMedia = envEnabled("FIRE4NIX_ENABLE_ENCRYPTED_MEDIA", false);
+    options.width = parseDimension(envOr("FIRE4NIX_DISPLAY_WIDTH", "640"), 640);
+    options.height = parseDimension(envOr("FIRE4NIX_DISPLAY_HEIGHT", "480"), 480);
     {
         const auto pollText = envOr("FIRE4NIX_COMMAND_POLL_MS", "100");
         char* end = nullptr;
@@ -166,7 +197,7 @@ LaunchOptions parseOptions(int argc, char** argv)
             g_print("Options: --private --automation --ignore-tls-errors --enable-itp --headless\n");
             g_print("         --cookies-file=PATH --cookies-policy=always|never|no-third-party\n");
             g_print("         --proxy=URL --ignore-host=HOST[,HOST...] --content-filter=PATH\n");
-            g_print("         --time-zone=ZONE --bg-color=COLOR --fullscreen --maximized\n");
+            g_print("         --time-zone=ZONE --bg-color=COLOR --size=WIDTHxHEIGHT --fullscreen --maximized\n");
             std::exit(EXIT_SUCCESS);
         }
 
@@ -246,9 +277,21 @@ LaunchOptions parseOptions(int argc, char** argv)
         }
 
         if (arg == "--size" || arg.rfind("--size=", 0) == 0) {
-            // The launcher accepts the option for parity with the official WPE
-            // MiniBrowser, but the native platform decides the actual surface
-            // size. Keep the argument so the beta first-test flow remains simple.
+            std::string value;
+            if (arg == "--size") {
+                if (i + 1 < argc && argv[i + 1] != nullptr) {
+                    value = trimCopy(argv[++i]);
+                } else {
+                    g_printerr("Missing value for --size\n");
+                    std::exit(EXIT_FAILURE);
+                }
+            } else {
+                value = trimCopy(arg.substr(std::strlen("--size=")));
+            }
+            if (!parseSize(value, options.width, options.height)) {
+                g_printerr("Invalid --size '%s'; expected WIDTHxHEIGHT\n", value.c_str());
+                std::exit(EXIT_FAILURE);
+            }
             continue;
         }
 
@@ -397,6 +440,40 @@ void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
         if (webkit_color_parse(&color, options.backgroundColor.c_str()))
             webkit_web_view_set_background_color(view, &color);
     }
+}
+
+bool configurePlatformWindow(WebKitWebView* view, const LaunchOptions& options)
+{
+    if (view == nullptr)
+        return false;
+
+    WPEView* wpeView = webkit_web_view_get_wpe_view(view);
+    if (wpeView == nullptr) {
+        if (!options.headlessMode)
+            g_warning("Fire4Nix WPE: WPEPlatform view unavailable; no visible surface can be configured");
+        return options.headlessMode;
+    }
+
+    WPEToplevel* toplevel = wpe_view_get_toplevel(wpeView);
+    if (toplevel == nullptr) {
+        if (!options.headlessMode)
+            g_warning("Fire4Nix WPE: WPEPlatform toplevel unavailable");
+        return options.headlessMode;
+    }
+
+    wpe_toplevel_resize(toplevel, options.width, options.height);
+    wpe_toplevel_set_title(toplevel, "Fire4Nix");
+    if (options.maximize)
+        wpe_toplevel_maximize(toplevel);
+    if (options.fullscreen)
+        wpe_toplevel_fullscreen(toplevel);
+
+    g_message("Fire4Nix WPE surface: %ux%u maximize=%s fullscreen=%s",
+              options.width,
+              options.height,
+              options.maximize ? "yes" : "no",
+              options.fullscreen ? "yes" : "no");
+    return true;
 }
 
 void logLoadState(WebKitWebView* view, WebKitLoadEvent loadEvent)
@@ -603,6 +680,7 @@ int main(int argc, char** argv)
 
     g_message("Fire4Nix WPE launcher starting");
     g_message("Fire4Nix WPE start URL: %s", options.url.c_str());
+    g_message("Fire4Nix WPE target size: %ux%u", options.width, options.height);
 
     GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
     WebKitWebContext* webContext = createWebContext(options);
@@ -620,6 +698,14 @@ int main(int argc, char** argv)
     applyCookieSettings(webContext, options);
     applyBrowserDefaults(view, options);
     loadContentFilterIfRequested(view, options);
+
+    if (!configurePlatformWindow(view, options)) {
+        g_printerr("Fire4Nix WPE: failed to configure the WPEPlatform surface\n");
+        g_object_unref(view);
+        g_object_unref(webContext);
+        g_main_loop_unref(loop);
+        return EXIT_FAILURE;
+    }
 
     g_signal_connect(view, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
     g_signal_connect(view, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
