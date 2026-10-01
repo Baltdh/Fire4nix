@@ -1,0 +1,80 @@
+name: Fire4Nix WPE ARM64 library
+on:
+  push:
+    branches: [codex/fire4nix-preparation]
+    paths: ['.github/workflows/fire4nix-wpe-library.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  patched-library:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 330
+    container:
+      image: debian:sid-slim
+    steps:
+      - name: Prepare source build
+        run: |
+          printf '%s\n' 'deb-src http://deb.debian.org/debian sid main' > /etc/apt/sources.list.d/fire4nix-source.list
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git devscripts dpkg-dev python3 file
+          DEBIAN_FRONTEND=noninteractive apt-get build-dep -y --no-install-recommends wpewebkit
+      - uses: actions/checkout@v4
+      - name: Fetch and patch release library source
+        run: |
+          mkdir -p library-build
+          cd library-build
+          apt-get source wpewebkit
+          python3 - <<'PY'
+          from pathlib import Path
+          roots = list(Path('.').glob('wpewebkit-*/Source/WebKit/Shared/glib/ProcessExecutablePathGLib.cpp'))
+          if len(roots) != 1:
+              raise SystemExit('Expected exactly one WPE source tree')
+          path = roots[0]
+          text = path.read_text()
+          old = 'static String findWebKitProcess(const ASCIILiteral processName)\n{\n#if ENABLE(DEVELOPER_MODE)\n'
+          new = 'static String findWebKitProcess(const ASCIILiteral processName)\n{\n'
+          if text.count(old) != 1:
+              raise SystemExit('Upstream process resolver changed; refusing an unverified patch')
+          text = text.replace(old, new, 1)
+          old = '    static String executablePath = getExecutablePath();'
+          if text.count(old) != 1:
+              raise SystemExit('Developer-mode resolver anchor changed')
+          text = text.replace(old, '#if ENABLE(DEVELOPER_MODE)\n' + old, 1)
+          text = text.replace('if (execDirectory) {', "if (execDirectory && g_path_is_absolute(execDirectory)) {", 1)
+          path.write_text(text)
+          Path('patched-process-resolver.cpp').write_text(text)
+          PY
+      - name: Compile patched WPE library and subprocesses
+        run: |
+          cd library-build
+          source_dir=$(find . -maxdepth 1 -type d -name 'wpewebkit-*' | head -n 1)
+          test -n "$source_dir"
+          cd "$source_dir"
+          test "$(dpkg --print-architecture)" = arm64
+          export DEB_BUILD_OPTIONS="nocheck noautodbgsym parallel=2"
+          export DEB_CFLAGS_MAINT_APPEND="-g0"
+          export DEB_CXXFLAGS_MAINT_APPEND="-g0"
+          dpkg-buildpackage -b -uc -us > ../library-build.log 2>&1 || { tail -n 120 ../library-build.log; exit 1; }
+      - name: Record experimental library provenance
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > library-build/COMMIT.txt
+          printf '%s\n' 'Experimental ARM64 WPE library rebuilt from Debian sid source.' 'Patched release process resolver accepts absolute WEBKIT_EXEC_PATH.' 'Not validated against the ROCKNIX sysroot or device ABI.' 'DEB files are build artifacts; do not install them into ROCKNIX.' > library-build/README.txt
+          cd library-build
+          sha256sum ./*.deb > SHA256SUMS
+      - name: Save library artifacts and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-library-experimental
+          path: |
+            library-build/*.deb
+            library-build/*.buildinfo
+            library-build/*.changes
+            library-build/*.log
+            library-build/patched-process-resolver.cpp
+            library-build/README.txt
+            library-build/COMMIT.txt
+            library-build/SHA256SUMS
+          if-no-files-found: warn
+          retention-days: 30
