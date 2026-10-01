@@ -686,7 +686,54 @@ fire4nix_cog_platform_name() {
     printf '%s\n' "${FIRE4NIX_COG_PLATFORM:-wl}"
 }
 
+fire4nix_bundled_wpe_root() {
+    local app_dir="${FIRE4NIX_HOME:-${APP_DIR:-$(fire4nix_resolve_app_dir)}}"
+    printf '%s\n' "${FIRE4NIX_BUNDLED_WPE_ROOT:-$app_dir/runtime/aarch64}"
+}
+
+fire4nix_prepare_bundled_wpe_runtime() {
+    local root libdir libexec
+    root="$(fire4nix_bundled_wpe_root)"
+    libdir="$root/lib"
+    libexec="$root/libexec/wpe-webkit-2.0"
+
+    [ -d "$libdir" ] || return 1
+    [ -x "$libexec/WPEWebProcess" ] || return 1
+    [ -x "$libexec/WPENetworkProcess" ] || return 1
+
+    local wpe_lib=""
+    for candidate in "$libdir"/libWPEWebKit-2.0.so "$libdir"/libWPEWebKit-2.0.so.*; do
+        if [ -f "$candidate" ]; then
+            wpe_lib="$candidate"
+            break
+        fi
+    done
+    [ -n "$wpe_lib" ] || return 1
+
+    export FIRE4NIX_BUNDLED_WPE_ROOT="$root"
+    export FIRE4NIX_BUNDLED_WPE_READY=1
+    fire4nix_prepend_path_unique LD_LIBRARY_PATH "$libdir"
+
+    # Fire4Nix's WPE runtime build carries a tiny upstream patch that allows
+    # WEBKIT_EXEC_PATH in non-developer builds. Always pin it to our resolved
+    # package path instead of inheriting an arbitrary external value.
+    export WEBKIT_EXEC_PATH="$libexec"
+
+    if [ -d "$libdir/gio/modules" ]; then
+        fire4nix_prepend_path_unique GIO_EXTRA_MODULES "$libdir/gio/modules"
+    fi
+    if [ -d "$libdir/girepository-1.0" ]; then
+        fire4nix_prepend_path_unique GI_TYPELIB_PATH "$libdir/girepository-1.0"
+    fi
+    if [ -d "$libdir/gstreamer-1.0" ]; then
+        fire4nix_prepend_path_unique GST_PLUGIN_PATH "$libdir/gstreamer-1.0"
+    fi
+
+    return 0
+}
+
 fire4nix_wpe_runtime_env() {
+    fire4nix_prepare_bundled_wpe_runtime 2>/dev/null || true
     local wpe_platform="$(fire4nix_wpe_platform_name)"
     local legacy_display="$(fire4nix_wpe_display_name)"
     local cog_platform="$(fire4nix_cog_platform_name)"
@@ -1481,6 +1528,7 @@ fire4nix_bootstrap_environment() {
     export FIRE4NIX_PROGRESS_ACCEPTANCE="${FIRE4NIX_PROGRESS_ACCEPTANCE:-$(fire4nix_progress_acceptance)}"
 
     fire4nix_prepare_directories "$FIRE4NIX_CONFIG_DIR" "$FIRE4NIX_RUNTIME_DIR"
+    fire4nix_prepare_bundled_wpe_runtime 2>/dev/null || true
     if [ -f "$FIRE4NIX_CONF" ]; then
         fire4nix_load_key_value_config "$FIRE4NIX_CONF"
     fi
