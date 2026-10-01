@@ -841,13 +841,13 @@ fire4nix_cog_launch_args() {
             ;;
     esac
 
-    case "${FIRE4NIX_COG_ALLOW_PERMISSIONS:-1}" in
+    case "${FIRE4NIX_COG_ALLOW_PERMISSIONS:-0}" in
         1|true|yes|on)
             args+=(--set-permissions=all)
             ;;
     esac
 
-    case "${FIRE4NIX_COG_ALLOW_FILE_ACCESS:-1}" in
+    case "${FIRE4NIX_COG_ALLOW_FILE_ACCESS:-0}" in
         1|true|yes|on)
             args+=(--allow-file-access-from-file-urls=true --allow-universal-access-from-file-urls=true)
             ;;
@@ -859,7 +859,7 @@ fire4nix_cog_launch_args() {
             ;;
     esac
 
-    case "${FIRE4NIX_COG_CONSOLE:-1}" in
+    case "${FIRE4NIX_COG_CONSOLE:-0}" in
         1|true|yes|on)
             args+=(--enable-write-console-messages-to-stdout=true)
             ;;
@@ -1471,10 +1471,10 @@ fire4nix_bootstrap_environment() {
     export FIRE4NIX_COG_PLATFORM_PARAMS="${FIRE4NIX_COG_PLATFORM_PARAMS:-}"
     export FIRE4NIX_WPE_DISPLAY="${FIRE4NIX_WPE_DISPLAY:-auto}"
     export FIRE4NIX_WPE_PLATFORM="${FIRE4NIX_WPE_PLATFORM:-auto}"
-    export FIRE4NIX_COG_ALLOW_FILE_ACCESS="${FIRE4NIX_COG_ALLOW_FILE_ACCESS:-1}"
-    export FIRE4NIX_COG_ALLOW_PERMISSIONS="${FIRE4NIX_COG_ALLOW_PERMISSIONS:-1}"
+    export FIRE4NIX_COG_ALLOW_FILE_ACCESS="${FIRE4NIX_COG_ALLOW_FILE_ACCESS:-0}"
+    export FIRE4NIX_COG_ALLOW_PERMISSIONS="${FIRE4NIX_COG_ALLOW_PERMISSIONS:-0}"
     export FIRE4NIX_COG_ENABLE_MEDIA="${FIRE4NIX_COG_ENABLE_MEDIA:-1}"
-    export FIRE4NIX_COG_CONSOLE="${FIRE4NIX_COG_CONSOLE:-1}"
+    export FIRE4NIX_COG_CONSOLE="${FIRE4NIX_COG_CONSOLE:-0}"
     export FIRE4NIX_PROGRESS_STAGE="${FIRE4NIX_PROGRESS_STAGE:-phase3-wpe-runtime}"
     export FIRE4NIX_BRIDGE_JOURNAL="${FIRE4NIX_BRIDGE_JOURNAL:-$FIRE4NIX_RUNTIME_DIR/bridge-journal.log}"
     export FIRE4NIX_PROGRESS_NEXT="${FIRE4NIX_PROGRESS_NEXT:-$(fire4nix_progress_next_action)}"
