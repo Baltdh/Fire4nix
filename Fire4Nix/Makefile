@@ -6,6 +6,7 @@ USE_SYSTEM_LITEHTML ?= 1
 
 PKG_CONFIG ?= pkg-config
 CXX ?= g++
+FIRE4NIX_SYSROOT ?=
 
 CURL_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags libcurl 2>/dev/null)
 CURL_LIBS ?= $(shell $(PKG_CONFIG) --libs libcurl 2>/dev/null)
@@ -39,6 +40,11 @@ OBJS := $(SRCS:.cpp=.o)
 CPPFLAGS += -I. -Isrc -Isrc/gui
 CXXFLAGS += $(WARNFLAGS) $(CURL_CFLAGS) $(LITEHTML_CFLAGS) -std=c++17 -O2 $(SDL_CFLAGS) -DRK3326_BUILD
 LDFLAGS +=
+
+ifneq ($(strip $(FIRE4NIX_SYSROOT)),)
+CPPFLAGS += --sysroot=$(FIRE4NIX_SYSROOT)
+LDFLAGS += --sysroot=$(FIRE4NIX_SYSROOT)
+endif
 LDLIBS += $(SDL_LIBS) $(IMG_LIBS) $(TTF_LIBS) $(CURL_LIBS) $(LITEHTML_LIBS)
 
 all: $(TARGET)
