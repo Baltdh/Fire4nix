@@ -49,9 +49,16 @@ case "$TRIPLE" in
     *) fail "compiler target '$TRIPLE' is not ARM64/aarch64; refusing to label a host binary as ROCKNIX ARM64" ;;
 esac
 
-printf 'Fire4Nix WPE package: %s %s\n' "$WPE_PKG" "$("$PKG_CONFIG_BIN" --modversion "$WPE_PKG")"
+WPE_VERSION="$("$PKG_CONFIG_BIN" --modversion "$WPE_PKG")"
+printf 'Fire4Nix WPE package: %s %s\n' "$WPE_PKG" "$WPE_VERSION"
 printf 'Fire4Nix WPE platform package: %s\n' "${WPE_PLATFORM_PKG:-legacy/not-found}"
 printf 'Fire4Nix compiler target: %s\n' "$TRIPLE"
+
+if "$PKG_CONFIG_BIN" --atleast-version=2.54.0 "$WPE_PKG" >/dev/null 2>&1; then
+    printf '%s\n' 'Fire4Nix WPE note: 2.54+ uses the Skia web-process compositor; benchmark frame time and memory on RK3326 before release.' >&2
+else
+    printf '%s\n' 'Fire4Nix WPE note: using the 2.52.x compatibility/security baseline; keep Wayland as the preferred first device test.' >&2
+fi
 
 make PKG_CONFIG="$PKG_CONFIG_BIN" CXX="$CXX_BIN" WPE_PKG_NAME="$WPE_PKG" WPE_PLATFORM_PKG_NAME="$WPE_PLATFORM_PKG" WPE_TARGET="$OUT" wpe-platform-launcher
 
