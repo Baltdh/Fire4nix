@@ -132,7 +132,7 @@ with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compressleve
         for src in sorted(p for p in tree.rglob("*") if p.is_file()):
             rel = src.relative_to(root).as_posix()
             arc = f"Fire4Nix/{rel}"
-            zf.writestr(zip_info(arc, False), src.read_bytes())
+            zf.writestr(zip_info(arc, is_executable_runtime(rel)), src.read_bytes())
 
 digest = hashlib.sha256(output.read_bytes()).hexdigest()
 (output.parent / f"{output.name}.sha256").write_text(f"{digest}  {output.name}\n")
