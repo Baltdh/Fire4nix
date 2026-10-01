@@ -8,3 +8,6 @@ __pycache__/
 *.py[cod]
 /Fire4Nix/fire4nix
 /Fire4Nix/.fire4nix/runtime/
+
+# Generated portable WPE runtime (large binary bundle)
+/Fire4Nix/runtime/aarch64/
