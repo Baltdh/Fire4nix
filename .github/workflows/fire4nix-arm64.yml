@@ -1,0 +1,56 @@
+name: Fire4Nix ARM64 build
+on:
+  push:
+    branches: [codex/fire4nix-preparation]
+    paths:
+      - 'Fire4Nix/src/wpe/**'
+      - 'Fire4Nix/scripts/build_wpe_arm64.sh'
+      - 'Fire4Nix/Makefile'
+      - '.github/workflows/fire4nix-arm64.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arm64-launcher:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    container:
+      image: debian:sid-slim
+    defaults:
+      run:
+        working-directory: Fire4Nix
+    steps:
+      - name: Install ARM64 build dependencies
+        working-directory: /
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git build-essential pkg-config libwpewebkit-2.0-dev file binutils
+      - uses: actions/checkout@v4
+      - name: Build real ARM64 launcher
+        run: |
+          test "$(uname -m)" = aarch64
+          pkg-config --atleast-version=2.54.0 wpe-webkit-2.0
+          sh scripts/build_wpe_arm64.sh
+          ./bin/fire4nix-wpe-platform --version
+      - name: Package experimental launcher and dependency report
+        run: |
+          mkdir -p dist/Fire4Nix-ARM64-experimental/bin
+          cp bin/fire4nix-wpe-platform dist/Fire4Nix-ARM64-experimental/bin/
+          file bin/fire4nix-wpe-platform > dist/Fire4Nix-ARM64-experimental/ELF.txt
+          readelf -l -d -V bin/fire4nix-wpe-platform > dist/Fire4Nix-ARM64-experimental/ABI.txt
+          ldd bin/fire4nix-wpe-platform > dist/Fire4Nix-ARM64-experimental/dependencies.txt
+          if grep -q 'not found' dist/Fire4Nix-ARM64-experimental/dependencies.txt; then exit 1; fi
+          dpkg-query -W > dist/Fire4Nix-ARM64-experimental/build-packages.txt
+          printf '%s\n' "$GITHUB_SHA" > dist/Fire4Nix-ARM64-experimental/COMMIT.txt
+          printf '%s\n' 'Experimental ARM64 launcher built on Debian sid.' 'This is not the self-contained ROCKNIX One File package.' 'Requires compatible WPE 2.0 runtime, WebKit subprocesses and system ABI.' 'Do not overwrite ROCKNIX system libraries. Device validation is pending.' > dist/Fire4Nix-ARM64-experimental/README.txt
+          tar -C dist -czf dist/Fire4Nix-ARM64-experimental.tar.gz Fire4Nix-ARM64-experimental
+          cd dist
+          sha256sum Fire4Nix-ARM64-experimental.tar.gz > Fire4Nix-ARM64-experimental.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ARM64-experimental
+          path: |
+            Fire4Nix/dist/Fire4Nix-ARM64-experimental.tar.gz
+            Fire4Nix/dist/Fire4Nix-ARM64-experimental.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
