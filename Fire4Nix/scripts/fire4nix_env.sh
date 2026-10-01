@@ -616,6 +616,25 @@ fire4nix_is_legacy_engine_label() {
     esac
     return 1
 }
+# Follow libwayland socket naming: absolute paths bypass XDG_RUNTIME_DIR;
+# an unset WAYLAND_DISPLAY means wayland-0. This checks presence, not connectivity.
+fire4nix_wayland_socket_path() {
+    local display="${WAYLAND_DISPLAY:-wayland-0}"
+    case "$display" in
+        /*) printf '%s\n' "$display" ;;
+        *)
+            [ -n "${XDG_RUNTIME_DIR:-}" ] || return 1
+            printf '%s/%s\n' "${XDG_RUNTIME_DIR%/}" "$display"
+            ;;
+    esac
+}
+
+fire4nix_wayland_socket_available() {
+    local socket_path
+    socket_path="$(fire4nix_wayland_socket_path)" || return 1
+    [ -S "$socket_path" ]
+}
+
 fire4nix_wpe_platform_name() {
     local requested="${FIRE4NIX_WPE_PLATFORM:-}"
     if [ -z "$requested" ] || [ "$requested" = "auto" ]; then
@@ -636,7 +655,7 @@ fire4nix_wpe_platform_name() {
             return 0
             ;;
         auto|"")
-            if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+            if fire4nix_wayland_socket_available; then
                 printf '%s\n' "wayland"
                 return 0
             fi
@@ -672,7 +691,7 @@ fire4nix_cog_platform_name() {
             return 0
             ;;
         auto)
-            if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+            if fire4nix_wayland_socket_available; then
                 printf '%s\n' "wl"
                 return 0
             fi

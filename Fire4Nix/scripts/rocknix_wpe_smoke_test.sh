@@ -65,7 +65,8 @@ case "$(uname -m 2>/dev/null || true)" in
 esac
 
 if [ "${WPE_PLATFORM:-}" = "wayland" ] || [ "${WPE_DISPLAY:-}" = "wpe-display-wayland" ]; then
-    if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+    if fire4nix_wayland_socket_available; then
+        say "wayland_socket=$(fire4nix_wayland_socket_path)"
         pass "Wayland socket is available"
     else
         fail "WPE selected Wayland but the Wayland socket is not available"
