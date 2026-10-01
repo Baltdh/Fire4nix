@@ -173,6 +173,23 @@ resolve_config_root() {
     printf '%s\n' "$SCRIPT_DIR/.fire4nix"
 }
 
+resolve_runtime_dir() {
+    if [ -n "${FIRE4NIX_RUNTIME_DIR:-}" ]; then
+        printf '%s\n' "$FIRE4NIX_RUNTIME_DIR"
+        return 0
+    fi
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ] && [ -w "$XDG_RUNTIME_DIR" ]; then
+        printf '%s\n' "$XDG_RUNTIME_DIR"
+        return 0
+    fi
+    candidate="/run/user/$(id -u 2>/dev/null || echo 0)"
+    if [ -d "$candidate" ] && [ -w "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+    printf '%s\n' "$DEFAULT_CONFIG_DIR/runtime"
+}
+
 DEFAULT_CONFIG_DIR="$(resolve_config_root)"
 if ! mkdir -p "$DEFAULT_CONFIG_DIR/cache" "$DEFAULT_CONFIG_DIR/logs" 2>/dev/null; then
     DEFAULT_CONFIG_DIR="$SCRIPT_DIR/.fire4nix"
@@ -312,8 +329,21 @@ verify_install() {
     printf 'wpe_link=%s\n' "$WPE_LINK"
     printf 'wayland_hint=%s\n' "MOZ_ENABLE_WAYLAND=1"
     [ -x "$INSTALL_DIR/scripts/run_browser.sh" ] || warn "launcher script is not executable"
-    [ -f "$INSTALL_DIR/bin/browser.arm64" ] || warn "browser binary is missing"
-    [ -x "$INSTALL_DIR/bin/browser.arm64" ] || warn "browser binary exists but lost execute permission; installer will try to recover it"
+    local native_wpe="$INSTALL_DIR/bin/fire4nix-wpe-platform"
+    if [ -f "$native_wpe" ]; then
+        [ -x "$native_wpe" ] || warn "native WPE launcher lost execute permission; installer will try to recover it"
+        if command -v file >/dev/null 2>&1; then
+            local desc
+            desc="$(file -b "$native_wpe" 2>/dev/null || true)"
+            printf 'native_wpe=%s\n' "$desc"
+            printf '%s' "$desc" | grep -Eiq 'ELF 64-bit.*(ARM aarch64|ARM64|aarch64)' ||
+                warn "native WPE launcher is not an ARM64 ELF; Cog/fallback engine may be used"
+        fi
+    else
+        warn "native WPE launcher is missing; Cog/fallback engine will be required"
+    fi
+    [ -f "$INSTALL_DIR/bin/browser.arm64" ] || warn "legacy browser launcher is missing"
+    [ -x "$INSTALL_DIR/bin/browser.arm64" ] || warn "legacy browser launcher exists but lost execute permission; installer will try to recover it"
     [ -x "$LAUNCHER_PATH" ] || warn "launcher file exists but is not executable"
 }
 
@@ -343,7 +373,7 @@ for arg in "$@"; do
 done
 
 mkdir -p "$CONFIG_ROOT/cache" "$CONFIG_ROOT/logs" 2>/dev/null || true
-ensure_exec "$INSTALL_DIR/scripts/run_browser.sh" "$INSTALL_DIR/scripts/browser_manager.sh" "$INSTALL_DIR/scripts/engine_manager.sh" "$INSTALL_DIR/scripts/theme_manager.sh" "$INSTALL_DIR/scripts/install-es-system.py" "$INSTALL_DIR/scripts/firefox-framebuffer-wrapper.py" "$INSTALL_DIR/scripts/wpe_platform_launch.sh" "$INSTALL_DIR/fire4nix" "$INSTALL_DIR/bin/browser.arm64"
+ensure_exec "$INSTALL_DIR/scripts/run_browser.sh" "$INSTALL_DIR/scripts/browser_manager.sh" "$INSTALL_DIR/scripts/engine_manager.sh" "$INSTALL_DIR/scripts/theme_manager.sh" "$INSTALL_DIR/scripts/install-es-system.py" "$INSTALL_DIR/scripts/firefox-framebuffer-wrapper.py" "$INSTALL_DIR/scripts/wpe_platform_launch.sh" "$INSTALL_DIR/scripts/rocknix_wpe_smoke_test.sh" "$INSTALL_DIR/fire4nix" "$INSTALL_DIR/bin/browser.arm64" "$INSTALL_DIR/bin/fire4nix-wpe-platform"
 
 if [ "$mode" = "uninstall" ]; then
     log "Removing $APP_NAME beta files from the system..."
