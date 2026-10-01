@@ -52,6 +52,16 @@ jobs:
           make test-renderer
           make test-gui
 
+      - name: WPEPlatform window contract
+        run: |
+          grep -F 'webkit_web_view_get_wpe_view' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'wpe_toplevel_resize' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'wpe_toplevel_fullscreen' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'FIRE4NIX_WPE_FULLSCREEN' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'FIRE4NIX_DISPLAY_WIDTH' src/wpe/wpe_platform_launcher.cpp
+          grep -F 'FIRE4NIX_DISPLAY_HEIGHT' src/wpe/wpe_platform_launcher.cpp
+          bash -n scripts/rocknix_wpe_smoke_test.sh
+
       - name: WPE ARM64 guard self-test
         run: sh tests/test_wpe_arm64_guard.sh
 
