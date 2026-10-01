@@ -241,7 +241,7 @@ EOF
 
 install_links() {
     mkdir -p /usr/local/bin 2>/dev/null || true
-    ln -sf "$INSTALL_DIR/fire4nix" "$BIN_LINK"
+    ln -sf "$INSTALL_DIR/Fire4Nix.sh" "$BIN_LINK"
     ln -sf "$INSTALL_DIR/scripts/run_browser.sh" "$RUNNER_LINK"
     ln -sf "$INSTALL_DIR/scripts/wpe_platform_launch.sh" "$WPE_LINK"
 }
@@ -373,7 +373,7 @@ for arg in "$@"; do
 done
 
 mkdir -p "$CONFIG_ROOT/cache" "$CONFIG_ROOT/logs" 2>/dev/null || true
-ensure_exec "$INSTALL_DIR/scripts/run_browser.sh" "$INSTALL_DIR/scripts/browser_manager.sh" "$INSTALL_DIR/scripts/engine_manager.sh" "$INSTALL_DIR/scripts/theme_manager.sh" "$INSTALL_DIR/scripts/install-es-system.py" "$INSTALL_DIR/scripts/firefox-framebuffer-wrapper.py" "$INSTALL_DIR/scripts/wpe_platform_launch.sh" "$INSTALL_DIR/scripts/rocknix_wpe_smoke_test.sh" "$INSTALL_DIR/fire4nix" "$INSTALL_DIR/bin/browser.arm64" "$INSTALL_DIR/bin/fire4nix-wpe-platform"
+ensure_exec "$INSTALL_DIR/scripts/run_browser.sh" "$INSTALL_DIR/scripts/browser_manager.sh" "$INSTALL_DIR/scripts/engine_manager.sh" "$INSTALL_DIR/scripts/theme_manager.sh" "$INSTALL_DIR/scripts/install-es-system.py" "$INSTALL_DIR/scripts/firefox-framebuffer-wrapper.py" "$INSTALL_DIR/scripts/wpe_platform_launch.sh" "$INSTALL_DIR/scripts/rocknix_wpe_smoke_test.sh" "$INSTALL_DIR/Fire4Nix.sh" "$INSTALL_DIR/bin/browser.arm64" "$INSTALL_DIR/bin/fire4nix-wpe-platform"
 
 if [ "$mode" = "uninstall" ]; then
     log "Removing $APP_NAME beta files from the system..."
