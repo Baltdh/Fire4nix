@@ -18,7 +18,7 @@ jobs:
           printf '%s\n' 'deb-src http://deb.debian.org/debian sid main' > /etc/apt/sources.list.d/fire4nix-source.list
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git devscripts dpkg-dev python3 file
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev libatk1.0-dev libatk-bridge2.0-dev libwoff-dev libseccomp-dev libpsl-dev libbrotli-dev bubblewrap xdg-dbus-proxy
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev libatk1.0-dev libatk-bridge2.0-dev libwoff-dev libseccomp-dev libpsl-dev libbrotli-dev libdrm-dev libudev-dev libsecret-1-dev bubblewrap xdg-dbus-proxy
       - uses: actions/checkout@v4
       - name: Fetch and patch release library source
         run: |
@@ -52,7 +52,7 @@ jobs:
           test -n "$source_dir"
           cd "$source_dir"
           test "$(dpkg --print-architecture)" = arm64
-          cmake -S . -B build-fire4nix -G Ninja -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_VIDEO=OFF -DENABLE_WEB_AUDIO=OFF -DENABLE_WEB_RTC=OFF -DENABLE_SPEECH_SYNTHESIS=OFF -DENABLE_INTROSPECTION=OFF -DENABLE_DOCUMENTATION=OFF -DENABLE_MINIBROWSER=OFF > ../library-configure.log 2>&1 || { tail -n 120 ../library-configure.log; exit 1; }
+          cmake -S . -B build-fire4nix -G Ninja -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_VIDEO=OFF -DENABLE_WEB_AUDIO=OFF -DENABLE_WEB_RTC=OFF -DENABLE_SPEECH_SYNTHESIS=OFF -DENABLE_INTROSPECTION=OFF -DENABLE_DOCUMENTATION=OFF -DENABLE_MINIBROWSER=OFF -DUSE_LIBBACKTRACE=OFF > ../library-configure.log 2>&1 || { tail -n 120 ../library-configure.log; exit 1; }
           cmake --build build-fire4nix --parallel 2 > ../library-build.log 2>&1 || { tail -n 120 ../library-build.log; exit 1; }
           DESTDIR="$PWD/../stage" cmake --install build-fire4nix
           tar -C ../stage -czf ../Fire4Nix-WPE-ARM64-library.tar.gz usr
