@@ -64,12 +64,18 @@ jobs:
           grep -F 'fire4nix_wpe_platform_name' scripts/fire4nix_env.sh
           bash -n scripts/rocknix_wpe_smoke_test.sh
           sh -n scripts/build_wpe_cross.sh
+          sh -n scripts/stage_wpe_runtime.sh
+          sh -n scripts/verify_wpe_runtime.sh
           sh -n scripts/package_one_file.sh
           sh -n Fire4Nix.sh
           bash -n Install-Fire4Nix.sh
           grep -F "ELF 64-bit" scripts/package_one_file.sh
+          grep -F 'verify_wpe_runtime.sh' scripts/package_one_file.sh
+          grep -F 'WPEWebProcess' scripts/verify_wpe_runtime.sh
+          grep -F 'WEBKIT_EXEC_PATH' scripts/fire4nix_env.sh
           grep -F 'ROCKNIX_SYSROOT' scripts/build_wpe_cross.sh
           grep -F 'Fire4Nix.sh" "$BIN_LINK' Install-Fire4Nix.sh
+          grep -F 'WEBKIT_EXEC_PATH' patches/wpewebkit/0001-fire4nix-relocatable-process-path.patch
 
       - name: WPE ARM64 guard self-test
         run: sh tests/test_wpe_arm64_guard.sh
