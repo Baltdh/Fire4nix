@@ -52,14 +52,18 @@ substitui o teste visual e de controles no aparelho.
 
 ## One File Edition
 
-O empacotador portatil e:
+Antes do empacotamento, o runtime WPE preparado precisa ser colocado no layout
+portatil:
 
 ```sh
+sh scripts/stage_wpe_runtime.sh /caminho/para/runtime-wpe-preparado
+sh scripts/verify_wpe_runtime.sh
 sh scripts/package_one_file.sh
 ```
 
-Ele **recusa gerar o ZIP final** se
-`bin/fire4nix-wpe-platform` nao for um ELF ARM64 real. Quando a verificacao
+O empacotador **recusa gerar o ZIP final** se
+`bin/fire4nix-wpe-platform` nao for um ELF ARM64 real ou se o runtime nao
+contiver a biblioteca WPE WebKit e os processos Web/Network/GPU ARM64. Quando a verificacao
 passar, o resultado vai para `dist/Fire4Nix-OneFile-<versao>.zip`, junto de
 um SHA-256.
 
