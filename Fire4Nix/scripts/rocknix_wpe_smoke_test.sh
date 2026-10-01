@@ -49,7 +49,8 @@ say "timestamp=$(date -Iseconds 2>/dev/null || date 2>/dev/null || echo unknown)
 say "app_dir=$APP_DIR"
 say "arch=$(uname -m 2>/dev/null || echo unknown)"
 say "kernel=$(uname -r 2>/dev/null || echo unknown)"
-say "wpe_display=${WPE_DISPLAY:-unset}"
+say "wpe_platform=${WPE_PLATFORM:-unset}"
+say "wpe_display_legacy=${WPE_DISPLAY:-unset}"
 say "wayland_display=${WAYLAND_DISPLAY:-unset}"
 say "xdg_runtime_dir=${XDG_RUNTIME_DIR:-unset}"
 say "target_size=${FIRE4NIX_DISPLAY_WIDTH:-640}x${FIRE4NIX_DISPLAY_HEIGHT:-480}"
@@ -63,14 +64,14 @@ case "$(uname -m 2>/dev/null || true)" in
         ;;
 esac
 
-if [ "${WPE_DISPLAY:-}" = "wpe-display-wayland" ]; then
+if [ "${WPE_PLATFORM:-}" = "wayland" ] || [ "${WPE_DISPLAY:-}" = "wpe-display-wayland" ]; then
     if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
         pass "Wayland socket is available"
     else
         fail "WPE selected Wayland but the Wayland socket is not available"
     fi
 else
-    warn "WPE display is ${WPE_DISPLAY:-unset}; Wayland is the preferred R36H path"
+    warn "WPE platform is ${WPE_PLATFORM:-unset}; Wayland is the preferred R36H path"
 fi
 
 native_binary="$(fire4nix_wpe_platform_binary)"
