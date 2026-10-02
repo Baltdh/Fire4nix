@@ -84,7 +84,12 @@ if [ -f "$RUNTIME_ROOT/runtime.manifest" ]; then
             grep -Fq "  $required" "$CHECKSUMS" || fail "manifest does not cover $required"
         done
         if [ -n "$wpe_lib" ]; then
-            relative_lib="lib/$(basename "$wpe_lib")"
+            resolved_lib=$(readlink -f "$wpe_lib" 2>/dev/null || printf '%s' "$wpe_lib")
+            resolved_root=$(CDPATH= cd -- "$RUNTIME_ROOT" && pwd -P)
+            case "$resolved_lib" in
+                "$resolved_root"/lib/*) relative_lib="${resolved_lib#"$resolved_root"/}" ;;
+                *) relative_lib=""; fail "WPE library resolves outside the bundled lib directory" ;;
+            esac
             grep -Fq "  $relative_lib" "$CHECKSUMS" || fail "manifest does not cover WPE library"
         fi
         if (cd "$RUNTIME_ROOT" && sha256sum -c "$CHECKSUMS"); then
