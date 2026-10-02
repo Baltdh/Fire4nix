@@ -86,7 +86,9 @@ jobs:
           grep -F 'WEBKIT_EXEC_PATH' patches/wpewebkit/0001-fire4nix-relocatable-process-path.patch
 
       - name: Wayland socket selection regression tests
-        run: python3 tests/test_wayland_socket.py
+        run: |
+          python3 tests/test_wayland_socket.py
+          python3 tests/test_runtime_integrity.py
 
       - name: WPE ARM64 guard self-test
         run: sh tests/test_wpe_arm64_guard.sh
