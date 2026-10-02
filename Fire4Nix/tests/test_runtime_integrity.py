@@ -38,6 +38,10 @@ class RuntimeIntegrityTest(unittest.TestCase):
     def test_valid_runtime(self):
         self.assertEqual(self.check_runtime(), 0)
 
+    def test_library_symlink(self):
+        (self.root / "lib/libWPEWebKit-2.0.so").symlink_to(self.paths[0].name)
+        self.assertEqual(self.check_runtime(), 0)
+
     def test_corrupted_library(self):
         with self.paths[0].open("ab") as out:
             out.write(b"corruption")
