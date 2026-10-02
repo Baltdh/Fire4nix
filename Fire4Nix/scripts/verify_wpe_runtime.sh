@@ -28,6 +28,7 @@ for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
         fail "missing $process"
         continue
     fi
+    [ -x "$path" ] || fail "$process is not executable"
     desc=$(file -b "$path" 2>/dev/null || true)
     if printf '%s' "$desc" | grep -Eiq 'ELF 64-bit.*(ARM aarch64|ARM64|aarch64)'; then
         pass "$process is ARM64 ELF"
@@ -58,6 +59,43 @@ fi
 [ -f "$RUNTIME_ROOT/runtime.manifest" ] &&
     pass "runtime manifest present" ||
     fail "runtime.manifest is missing"
+
+# Verify the checksums emitted by stage_wpe_runtime.sh, without accepting
+# absolute paths or parent traversal from a malformed manifest.
+if [ -f "$RUNTIME_ROOT/runtime.manifest" ]; then
+    command -v sha256sum >/dev/null 2>&1 || {
+        say "FAIL: sha256sum is required to validate runtime integrity"
+        exit 2
+    }
+    CHECKSUMS=$(mktemp)
+    trap 'rm -f "$CHECKSUMS"' EXIT HUP INT TERM
+    if awk '
+        /^\[sha256\]$/ { hashes=1; next }
+        hashes && NF {
+            hash=substr($0,1,64); path=substr($0,67);
+            if (length(hash)!=64 || hash ~ /[^0-9a-f]/ ||
+                substr($0,65,2)!="  " || path !~ /^(lib|libexec|share)\// ||
+                path ~ /(^|\/)\.\.(\/|$)/ || path ~ /\\/) { bad=1; next }
+            print; count++
+        }
+        END { if (bad || !count) exit 1 }
+    ' "$RUNTIME_ROOT/runtime.manifest" > "$CHECKSUMS"; then
+        for required in "libexec/wpe-webkit-2.0/WPEWebProcess" "libexec/wpe-webkit-2.0/WPENetworkProcess" "libexec/wpe-webkit-2.0/WPEGPUProcess"; do
+            grep -Fq "  $required" "$CHECKSUMS" || fail "manifest does not cover $required"
+        done
+        if [ -n "$wpe_lib" ]; then
+            relative_lib="lib/$(basename "$wpe_lib")"
+            grep -Fq "  $relative_lib" "$CHECKSUMS" || fail "manifest does not cover WPE library"
+        fi
+        if (cd "$RUNTIME_ROOT" && sha256sum -c "$CHECKSUMS"); then
+            pass "runtime SHA-256 integrity checks passed"
+        else
+            fail "runtime checksum mismatch or missing file"
+        fi
+    else
+        fail "runtime checksum section is empty or malformed"
+    fi
+fi
 
 if [ "$failures" -ne 0 ]; then
     say "Fire4Nix bundled runtime validation failed: $failures issue(s)"
