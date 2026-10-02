@@ -42,6 +42,32 @@ class RuntimeIntegrityTest(unittest.TestCase):
         (self.root / "lib/libWPEWebKit-2.0.so").symlink_to(self.paths[0].name)
         self.assertEqual(self.check_runtime(), 0)
 
+    def test_multiarch_staging(self):
+        lib = self.root / "lib"
+        multi = lib / "aarch64-linux-gnu"
+        multi.mkdir()
+        self.paths[0].rename(multi / self.paths[0].name)
+        with tempfile.TemporaryDirectory() as output:
+            env = os.environ.copy()
+            env["FIRE4NIX_WPE_RUNTIME_DEST"] = str(Path(output) / "runtime")
+            result = subprocess.run(["sh", str(VERIFY.parent / "stage_wpe_runtime.sh"),
+                                     str(self.root)], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((Path(output) / "runtime/lib/libWPEWebKit-2.0.so.1").exists())
+
+    def test_failed_staging_preserves_previous_runtime(self):
+        self.paths[0].write_text("invalid library")
+        with tempfile.TemporaryDirectory() as output:
+            dest = Path(output) / "runtime"
+            dest.mkdir()
+            (dest / "previous").write_text("keep")
+            env = os.environ.copy()
+            env["FIRE4NIX_WPE_RUNTIME_DEST"] = str(dest)
+            result = subprocess.run(["sh", str(VERIFY.parent / "stage_wpe_runtime.sh"),
+                                     str(self.root)], env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual((dest / "previous").read_text(), "keep")
+
     def test_corrupted_library(self):
         with self.paths[0].open("ab") as out:
             out.write(b"corruption")
