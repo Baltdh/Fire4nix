@@ -45,6 +45,7 @@ fail() {
 }
 
 say "Fire4Nix ROCKNIX/WPE smoke report"
+say "scope=preflight; page rendering and controller behavior require device observation"
 say "timestamp=$(date -Iseconds 2>/dev/null || date 2>/dev/null || echo unknown)"
 say "app_dir=$APP_DIR"
 say "arch=$(uname -m 2>/dev/null || echo unknown)"
@@ -97,6 +98,22 @@ else
     else
         fail "native launcher is not executable"
     fi
+fi
+
+# --version exercises the dynamic loader without opening a display or URL.
+# Only execute the packaged ARM64 binary after independent ELF identification.
+if [ -n "$native_binary" ] && [ -x "$native_binary" ] &&
+   command -v timeout >/dev/null 2>&1 &&
+   command -v file >/dev/null 2>&1 &&
+   file -b "$native_binary" | grep -Eiq 'ELF 64-bit.*(ARM aarch64|ARM64|aarch64)' &&
+   [ "$(uname -m)" = "aarch64" ]; then
+    if timeout 15 "$native_binary" --version >> "$REPORT" 2>&1; then
+        pass "native launcher loads with the current runtime ABI"
+    else
+        fail "native launcher failed its loader/ABI test; inspect report for missing libraries or symbol versions"
+    fi
+else
+    warn "loader/ABI execution test was not performed"
 fi
 
 wpe_pkg=""
