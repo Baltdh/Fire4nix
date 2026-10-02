@@ -72,7 +72,9 @@ that hardware acceptance test.
 ## ARM64 library construction — 2026-10-01
 
 `.github/workflows/fire4nix-wpe-library.yml` now rebuilds the WPE library
-from Debian sid source on a native ARM64 runner. It applies a guarded source
+from Debian sid source on a native ARM64 runner with Debian trixie build
+dependencies. The earlier sid dependency installation failed due to incompatible
+package transitions; the stable dependency base avoids that specific failure. It applies a guarded source
 transformation to permit an absolute WEBKIT_EXEC_PATH in release builds,
 keeps the WebKit sandbox enabled, and installs into an isolated DESTDIR.
 Initial options disable video, WebAudio, WebRTC and speech synthesis.
