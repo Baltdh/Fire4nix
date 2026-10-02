@@ -77,10 +77,12 @@ dependencies. The earlier sid dependency installation failed due to incompatible
 package transitions; the stable dependency base avoids that specific failure. It applies a guarded source
 transformation to permit an absolute WEBKIT_EXEC_PATH in release builds,
 keeps the WebKit sandbox enabled, and installs into an isolated DESTDIR.
-Initial options disable video, WebAudio, WebRTC and speech synthesis.
-Mandatory GStreamer base development components remain installed; the bad
-plugin development package is avoided because its current dependency chain
-could not be resolved. ATK, DRM and udev headers are explicit build inputs.
+The initial video-disabled build failed in JSHTMLMediaElementCustom bindings.
+Current build options enable video/GStreamer and disable WebAudio, WebRTC,
+WebCodecs and speech synthesis.
+GStreamer base and bad-plugin development components are now installed from
+the stable trixie dependency base. The earlier bad-plugin dependency conflict
+occurred with sid and is no longer avoided by disabling video. ATK, DRM and udev headers are explicit build inputs.
 
 The job uploads build/configuration logs on failure. A successful build also
 produces a library-prefix tarball and SHA256SUMS. Log-only artifacts do not
@@ -101,3 +103,11 @@ DT_NEEDED, SONAME, interpreters and GLIBC/GLIBCXX/CXXABI version requirements,
 and exits nonzero for missing providers or foreign ELF architecture. It does
 not execute binaries, validate symbol compatibility, or cover libraries loaded
 with dlopen. Success is not an on-device acceptance result.
+
+## Build result — 2026-10-02
+
+Run 36961421415 failed at tasks 7953/8898 in JSHTMLMediaElementCustom.cpp,
+with JSHTMLMediaElement undeclared under the video-disabled configuration.
+It did not produce a library tarball. Its log artifact is not an installable
+runtime. Compiler cache was successfully retained. The next build enables
+video/GStreamer instead of modifying upstream media binding code.
