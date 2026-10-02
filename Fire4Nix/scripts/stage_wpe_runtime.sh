@@ -17,7 +17,16 @@ if [ -d "$SOURCE/usr/libexec/wpe-webkit-2.0" ]; then
     SOURCE="$SOURCE/usr"
 fi
 
-[ -d "$SOURCE/lib" ] || fail "source must contain lib/"
+SOURCE=$(CDPATH= cd -- "$SOURCE" && pwd -P)
+LIB_SOURCE=""
+for candidate in "$SOURCE/lib/aarch64-linux-gnu" "$SOURCE/lib64" "$SOURCE/lib"; do
+    if [ -f "$candidate/libWPEWebKit-2.0.so" ] ||
+       ls "$candidate"/libWPEWebKit-2.0.so.* >/dev/null 2>&1; then
+        LIB_SOURCE="$candidate"
+        break
+    fi
+done
+[ -n "$LIB_SOURCE" ] || fail "WPE library not found in lib/, lib64/ or ARM64 multiarch directory"
 [ -d "$SOURCE/libexec/wpe-webkit-2.0" ] ||
     fail "source must contain libexec/wpe-webkit-2.0/"
 
@@ -27,7 +36,7 @@ for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
 done
 
 wpe_lib=""
-for candidate in "$SOURCE"/lib/libWPEWebKit-2.0.so "$SOURCE"/lib/libWPEWebKit-2.0.so.*; do
+for candidate in "$LIB_SOURCE"/libWPEWebKit-2.0.so "$LIB_SOURCE"/libWPEWebKit-2.0.so.*; do
     if [ -f "$candidate" ]; then
         wpe_lib="$candidate"
         break
@@ -35,9 +44,17 @@ for candidate in "$SOURCE"/lib/libWPEWebKit-2.0.so "$SOURCE"/lib/libWPEWebKit-2.
 done
 [ -n "$wpe_lib" ] || fail "source runtime is missing libWPEWebKit-2.0.so"
 
-rm -rf "$DEST"
-mkdir -p "$DEST"
-cp -a "$SOURCE/lib" "$DEST/lib"
+# Build and validate in a sibling directory before replacing a staged runtime.
+DEST="${DEST%/}"
+[ -n "$DEST" ] && [ "$DEST" != "/" ] || fail "invalid runtime destination"
+mkdir -p "$(dirname "$DEST")"
+DEST_PARENT=$(CDPATH= cd -- "$(dirname "$DEST")" && pwd -P)
+FINAL_DEST="$DEST_PARENT/$(basename "$DEST")"
+[ "$FINAL_DEST" != "$SOURCE" ] || fail "source and destination must differ"
+DEST=$(mktemp -d "$DEST_PARENT/.fire4nix-stage.XXXXXX")
+trap 'rm -rf "$DEST"' EXIT HUP INT TERM
+mkdir -p "$DEST/lib"
+cp -a "$LIB_SOURCE/." "$DEST/lib/"
 mkdir -p "$DEST/libexec"
 cp -a "$SOURCE/libexec/wpe-webkit-2.0" "$DEST/libexec/wpe-webkit-2.0"
 
@@ -66,4 +83,15 @@ MANIFEST="$DEST/runtime.manifest"
 } > "$MANIFEST"
 
 sh "$ROOT_DIR/scripts/verify_wpe_runtime.sh" "$DEST"
-printf 'Fire4Nix WPE runtime staged at %s\n' "$DEST"
+BACKUP=""
+if [ -e "$FINAL_DEST" ]; then
+    BACKUP=$(mktemp -d "$DEST_PARENT/.fire4nix-previous.XXXXXX")
+    rmdir "$BACKUP"
+    mv "$FINAL_DEST" "$BACKUP"
+fi
+if ! mv "$DEST" "$FINAL_DEST"; then
+    [ -z "$BACKUP" ] || mv "$BACKUP" "$FINAL_DEST"
+    fail "could not promote validated runtime"
+fi
+[ -z "$BACKUP" ] || rm -rf "$BACKUP"
+printf 'Fire4Nix WPE runtime staged at %s\n' "$FINAL_DEST"
