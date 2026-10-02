@@ -85,13 +85,26 @@ APP="$HERE/Fire4Nix"
 exec sh "$APP/Fire4Nix.sh" "$@"
 """
 
+diagnostic_launcher = """#!/bin/sh
+set -eu
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+APP="$HERE/Fire4Nix"
+REPORT="$HERE/Fire4Nix-test-report.log"
+[ -f "$APP/scripts/rocknix_wpe_smoke_test.sh" ] || {
+    echo "Fire4Nix diagnostic script not found." >&2
+    exit 1
+}
+export FIRE4NIX_SMOKE_REPORT="$REPORT"
+exec bash "$APP/scripts/rocknix_wpe_smoke_test.sh"
+"""
+
 readme = """Fire4Nix One File Edition
 
 1. Extract this ZIP directly into the ROCKNIX ports directory.
    Common layouts use /roms/ports/ or /storage/roms/ports/.
 2. Keep Fire4Nix.sh next to the Fire4Nix/ directory.
 3. Launch Fire4Nix.sh from Ports/EmulationStation.
-4. No root installer is required for this portable package.
+4. Launch Teste-Fire4Nix.sh from Ports to run the preflight checks.\n   It writes Fire4Nix-test-report.log beside the launcher.\n5. No root installer is required for this portable package.\n\nPreflight success does not prove page rendering, controller input or stability.
 
 This package is emitted only when bin/fire4nix-wpe-platform is a real
 ARM64/aarch64 ELF binary AND runtime/aarch64 contains the validated WPE WebKit
@@ -119,6 +132,7 @@ def is_executable_runtime(rel: str) -> bool:
 with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
     zf.writestr(zip_info("Fire4Nix.sh", True), root_launcher)
     zf.writestr(zip_info("Fire4Nix-README.txt", False), readme)
+    zf.writestr(zip_info("Teste-Fire4Nix.sh", True), diagnostic_launcher)
 
     for rel in required:
         src = root / rel
