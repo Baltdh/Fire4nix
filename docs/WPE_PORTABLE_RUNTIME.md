@@ -91,3 +91,13 @@ The One File packager now preserves execute permission for files in the
 bundled libexec directory, so WebKit subprocesses remain executable after
 extraction. Dependency closure, runtime data, relocation under sandboxing,
 and the ROCKNIX acceptance checks above remain required.
+
+## Static dependency gate
+
+Run `python3 Fire4Nix/scripts/audit_runtime_dependencies.py Fire4Nix/runtime/aarch64`
+after staging. An optional `--sysroot /path/to/rocknix-root` resolves system
+libraries only from an explicit AArch64 target sysroot. The tool records
+DT_NEEDED, SONAME, interpreters and GLIBC/GLIBCXX/CXXABI version requirements,
+and exits nonzero for missing providers or foreign ELF architecture. It does
+not execute binaries, validate symbol compatibility, or cover libraries loaded
+with dlopen. Success is not an on-device acceptance result.
