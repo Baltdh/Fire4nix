@@ -48,7 +48,7 @@ done
 if [ -z "$wpe_lib" ]; then
     fail "missing libWPEWebKit-2.0.so runtime library"
 else
-    desc=$(file -b "$wpe_lib" 2>/dev/null || true)
+    desc=$(file -L -b "$wpe_lib" 2>/dev/null || true)
     if printf '%s' "$desc" | grep -Eiq 'ELF 64-bit.*(ARM aarch64|ARM64|aarch64)'; then
         pass "WPE WebKit runtime library is ARM64 ELF"
     else
