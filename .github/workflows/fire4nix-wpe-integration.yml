@@ -1,0 +1,66 @@
+name: Fire4Nix WPE ARM64 integration
+on:
+  push:
+    branches: [codex/fire4nix-preparation]
+    paths: ['.github/workflows/fire4nix-wpe-integration.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  integrate-launcher:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    container:
+      image: debian:trixie-slim
+    steps:
+      - name: Install compatible build dependencies
+        run: |
+          apt-get -o Acquire::Retries=3 update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git python3 file binutils
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential ccache cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev libatk1.0-dev libatk-bridge2.0-dev libwoff-dev libseccomp-dev libpsl-dev libbrotli-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libdrm-dev libudev-dev libsecret-1-dev bubblewrap xdg-dbus-proxy
+      - uses: actions/checkout@v4
+      - name: Download verified successful WPE build
+        uses: actions/download-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-library-experimental
+          run-id: 36968610673
+          github-token: ${{ github.token }}
+          path: library-artifact
+      - name: Verify and install library in isolated build container
+        run: |
+          test "$(uname -m)" = aarch64
+          cd library-artifact
+          sha256sum -c SHA256SUMS
+          tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
+          ldconfig
+      - name: Compile launcher against the patched library
+        working-directory: Fire4Nix
+        run: |
+          pkg-config --atleast-version=2.54.0 wpe-webkit-2.0
+          sh scripts/build_wpe_arm64.sh
+          ./bin/fire4nix-wpe-platform --version
+      - name: Stage runtime and record system dependency closure
+        working-directory: Fire4Nix
+        run: |
+          mkdir -p dist/Fire4Nix-WPE-integration/bin
+          mkdir -p /tmp/fire4nix-library-stage
+          tar -xzf ../library-artifact/Fire4Nix-WPE-ARM64-library.tar.gz -C /tmp/fire4nix-library-stage
+          sh scripts/stage_wpe_runtime.sh /tmp/fire4nix-library-stage
+          cp bin/fire4nix-wpe-platform dist/Fire4Nix-WPE-integration/bin/
+          cp -a runtime/aarch64 dist/Fire4Nix-WPE-integration/runtime
+          python3 scripts/audit_runtime_dependencies.py runtime/aarch64 --launcher bin/fire4nix-wpe-platform --sysroot / > dist/Fire4Nix-WPE-integration/build-system-dependencies.json
+          dpkg-query -W > dist/Fire4Nix-WPE-integration/build-packages.txt
+          printf '%s\n' "$GITHUB_SHA" > dist/Fire4Nix-WPE-integration/COMMIT.txt
+          printf '%s\n' 'Experimental matched ARM64 launcher and patched WPE runtime.' 'Built and linked on Debian trixie; system dependencies are described in the report.' 'This is not the ROCKNIX One File package and is not device validated.' 'Do not replace ROCKNIX system libraries.' > dist/Fire4Nix-WPE-integration/README.txt
+          tar -C dist -czf dist/Fire4Nix-WPE-ARM64-integration.tar.gz Fire4Nix-WPE-integration
+          cd dist
+          sha256sum Fire4Nix-WPE-ARM64-integration.tar.gz > Fire4Nix-WPE-ARM64-integration.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-integration-experimental
+          path: |
+            Fire4Nix/dist/Fire4Nix-WPE-ARM64-integration.tar.gz
+            Fire4Nix/dist/Fire4Nix-WPE-ARM64-integration.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
