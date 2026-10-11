@@ -54,6 +54,30 @@ def inspect(path):
     }
 
 
+def resolve_target_path(path, sysroot):
+    """Resolve target absolute symlinks within the image, never on the host."""
+    base = sysroot.resolve()
+    pending = list(path.relative_to(sysroot).parts)
+    current = base
+    links = 0
+    while pending:
+        part = pending.pop(0)
+        if part == "..":
+            current = current.parent
+            if not current.is_relative_to(base):
+                raise ValueError("symlink escapes target root")
+            continue
+        current = current / part
+        if current.is_symlink():
+            links += 1
+            if links > 40:
+                raise ValueError("target symlink loop")
+            target = current.readlink()
+            current = base if target.is_absolute() else current.parent
+            pending = list(target.parts[1:] if target.is_absolute() else target.parts) + pending
+    return current
+
+
 def audit(root, sysroot=None, extra_elfs=()):
     errors, entries, providers = [], [], {}
     inspected = {}
@@ -89,10 +113,11 @@ def audit(root, sysroot=None, extra_elfs=()):
             if not directory.is_dir():
                 continue
             for path in sorted(directory.rglob("*.so*")):
-                if not path.is_file():
+                try:
+                    resolved = resolve_target_path(path, sysroot)
+                except ValueError:
                     continue
-                resolved = path.resolve()
-                if not resolved.is_relative_to(sysroot.resolve()):
+                if not resolved.is_file():
                     continue
                 try:
                     entry = inspect(resolved)

@@ -51,6 +51,28 @@ Version needs section '.gnu.version_r':
             self.assertEqual(report["missing"], [])
             self.assertEqual(report["incompatible_versions"][0]["missing_versions"], ["GLIBC_2.38"])
 
+    def test_target_absolute_symlink_stays_inside_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "usr/lib").mkdir(parents=True)
+            target = root / "usr/lib/libc-real.so"
+            target.write_bytes(b"\x7fELF")
+            link = root / "usr/lib/libc.so.6"
+            link.symlink_to("/usr/lib/libc-real.so")
+            self.assertEqual(module.resolve_target_path(link, root), target)
+
+    def test_target_symlink_escape_and_loop_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            link = root / "escape"
+            link.symlink_to("../outside")
+            with self.assertRaises(ValueError):
+                module.resolve_target_path(link, root)
+            link.unlink()
+            link.symlink_to("escape")
+            with self.assertRaises(ValueError):
+                module.resolve_target_path(link, root)
+
     def test_missing_launcher_is_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
