@@ -1,7 +1,11 @@
 #include "fire4nix_app.hpp"
 #include "fire4nix_build.hpp"
+
 namespace fire4nix {
-bool initializeApplication(){
+
+bool initializeApplication()
+{
     return initializeModules();
 }
-}
+
+} // namespace fire4nix

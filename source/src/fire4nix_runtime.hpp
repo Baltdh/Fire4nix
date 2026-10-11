@@ -1,2 +1,6 @@
 #pragma once
-namespace fire4nix{bool startup(); void shutdown();}
+
+namespace fire4nix {
+bool startup();
+void shutdown();
+}
