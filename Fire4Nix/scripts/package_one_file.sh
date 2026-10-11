@@ -36,7 +36,7 @@ if [ -n "${ROCKNIX_SYSROOT:-}" ]; then
 fi
 if ! python3 "$ROOT_DIR/scripts/audit_runtime_dependencies.py" "$@" > "$DEPENDENCY_REPORT"; then
     cat "$DEPENDENCY_REPORT" >&2
-    fail "unresolved ARM64 dependencies; bundle them or supply the target ROCKNIX_SYSROOT"
+    fail "unresolved ARM64 dependencies or incompatible version requirements; bundle them or supply the target ROCKNIX_SYSROOT"
 fi
 export FIRE4NIX_DEPENDENCY_REPORT="$DEPENDENCY_REPORT"
 
@@ -125,8 +125,8 @@ This package is emitted only when bin/fire4nix-wpe-platform is a real
 ARM64/aarch64 ELF binary AND runtime/aarch64 contains the validated WPE WebKit
 library plus WPEWebProcess, WPENetworkProcess and WPEGPUProcess, and their
 static dependencies (including the launcher) resolve within the bundle or an
-explicit target ROCKNIX sysroot. This is not a symbol-version or graphics
-compatibility guarantee. Runtime logs
+explicit target ROCKNIX sysroot. Required ELF version nodes are checked; individual symbols, dynamically loaded
+plugins and graphics compatibility still need device validation. Runtime logs
 and user data are created outside the ZIP contents through the Fire4Nix
 configuration/runtime resolver.
 """

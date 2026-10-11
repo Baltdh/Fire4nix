@@ -8,12 +8,39 @@ import subprocess
 import sys
 
 
+def version_sections(text):
+    needs, definitions = {}, set()
+    section, library = None, None
+    for line in text.splitlines():
+        if line.startswith("Version needs section"):
+            section, library = "needs", None
+        elif line.startswith("Version definition section"):
+            section, library = "definitions", None
+        elif line.startswith("Version symbols section"):
+            section, library = None, None
+        if section == "needs":
+            match = re.search(r"File: (\S+)", line)
+            if match:
+                library = match.group(1)
+                needs.setdefault(library, [])
+            name = re.search(r"Name: (\S+).*Flags: (\S+)", line)
+            # Weak requirements are optional according to the ELF version flags.
+            if library and name and name.group(2) != "WEAK":
+                needs[library].append(name.group(1))
+        elif section == "definitions":
+            name = re.search(r"Name: (\S+)", line)
+            if name:
+                definitions.add(name.group(1))
+    return {key: sorted(set(value)) for key, value in needs.items()}, sorted(definitions)
+
+
 def inspect(path):
     result = subprocess.run(["readelf", "-h", "-d", "-V", "-l", str(path)],
                             capture_output=True, text=True, check=False)
     if result.returncode:
         raise ValueError("readelf rejected file: " + result.stderr.strip())
     text = result.stdout
+    needs, definitions = version_sections(text)
     machine = re.search(r"Machine:\s*(.+)", text)
     return {
         "path": str(path),
@@ -21,12 +48,15 @@ def inspect(path):
         "needed": sorted(set(re.findall(r"\(NEEDED\).*?\[(.*?)\]", text))),
         "soname": re.findall(r"\(SONAME\).*?\[(.*?)\]", text),
         "symbol_versions": sorted(set(re.findall(r"Name: ((?:GLIBC|GLIBCXX|CXXABI)_[\w.]+)", text))),
+        "version_needs": needs,
+        "version_definitions": definitions,
         "interpreter": re.findall(r"Requesting program interpreter: (.*?)\]", text),
     }
 
 
 def audit(root, sysroot=None, extra_elfs=()):
     errors, entries, providers = [], [], {}
+    inspected = {}
     if not root.is_dir():
         return {"errors": ["runtime directory does not exist"], "elfs": [], "missing": []}
     for path in sorted(set(root.rglob("*")) | set(extra_elfs)):
@@ -45,6 +75,7 @@ def audit(root, sysroot=None, extra_elfs=()):
             errors.append(str(error))
             continue
         entries.append(entry)
+        inspected[str(path)] = entry
         if entry["machine"] != "AArch64":
             errors.append("not AArch64: " + str(path))
         for name in [path.name] + entry["soname"]:
@@ -68,9 +99,10 @@ def audit(root, sysroot=None, extra_elfs=()):
                 except ValueError:
                     continue
                 if entry["machine"] == "AArch64":
+                    inspected[str(path)] = entry
                     for name in [path.name] + entry["soname"]:
                         system[name] = str(path)
-    missing = []
+    missing, incompatible = [], []
     for entry in entries:
         entry["dependencies"] = {}
         for name in entry["needed"]:
@@ -78,10 +110,17 @@ def audit(root, sysroot=None, extra_elfs=()):
             entry["dependencies"][name] = provider
             if not provider:
                 missing.append({"binary": entry["path"], "library": name})
+            else:
+                required = set(entry.get("version_needs", {}).get(name, []))
+                available = set(inspected[provider].get("version_definitions", []))
+                absent = sorted(required - available)
+                if absent:
+                    incompatible.append({"binary": entry["path"], "library": name,
+                                         "provider": provider, "missing_versions": absent})
     if not entries:
         errors.append("no ELF files found")
-    return {"scope": "static ELF inventory; dlopen modules, symbols and graphics behavior need separate checks",
-            "errors": errors, "missing": missing, "elfs": entries}
+    return {"scope": "static ELF dependencies and required version nodes; individual symbols, dlopen modules and graphics need separate checks",
+            "errors": errors, "missing": missing, "incompatible_versions": incompatible, "elfs": entries}
 
 
 def main():
@@ -94,7 +133,7 @@ def main():
         parser.error("target sysroot does not exist")
     report = audit(args.runtime.resolve(), args.sysroot, (args.launcher.resolve(),) if args.launcher else ())
     print(json.dumps(report, indent=2))
-    return 1 if report["errors"] or report["missing"] else 0
+    return 1 if report["errors"] or report["missing"] or report.get("incompatible_versions") else 0
 
 
 if __name__ == "__main__":

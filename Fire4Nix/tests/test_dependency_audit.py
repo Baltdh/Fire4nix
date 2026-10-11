@@ -25,6 +25,32 @@ class DependencyAuditTest(unittest.TestCase):
             self.assertEqual(report["missing"], [{"binary": str(launcher), "library": "libMissing.so"}])
             self.assertEqual(len(report["elfs"]), 2)
 
+    def test_version_parser_distinguishes_definitions_from_requirements(self):
+        needs, definitions = module.version_sections("""Version definition section '.gnu.version_d':
+  Name: GLIBC_2.17
+Version needs section '.gnu.version_r':
+  File: libc.so.6 Cnt: 2
+  Name: GLIBC_2.38 Flags: none Version: 2
+  Name: OPTIONAL Flags: WEAK Version: 3
+""")
+        self.assertEqual(needs, {"libc.so.6": ["GLIBC_2.38"]})
+        self.assertEqual(definitions, ["GLIBC_2.17"])
+
+    def test_existing_library_with_older_abi_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("browser", "libc.so.6"):
+                (root / name).write_bytes(b"\x7fELF")
+            def inspect(path):
+                browser = path.name == "browser"
+                return {"path": str(path), "machine": "AArch64", "needed": ["libc.so.6"] if browser else [], "soname": [], "symbol_versions": [], "interpreter": [],
+                        "version_needs": {"libc.so.6": ["GLIBC_2.38"]} if browser else {},
+                        "version_definitions": [] if browser else ["GLIBC_2.17"]}
+            with patch.object(module, "inspect", side_effect=inspect):
+                report = module.audit(root)
+            self.assertEqual(report["missing"], [])
+            self.assertEqual(report["incompatible_versions"][0]["missing_versions"], ["GLIBC_2.38"])
+
     def test_missing_launcher_is_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
