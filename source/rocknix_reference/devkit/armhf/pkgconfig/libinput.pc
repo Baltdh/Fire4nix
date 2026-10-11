@@ -1,0 +1,9 @@
+prefix=/usr
+includedir=${prefix}/include
+libdir=${prefix}/lib32
+
+Name: Libinput
+Description: Input device library
+Version: 1.26.2
+Libs: -L${libdir} -linput
+Cflags: -I${includedir}

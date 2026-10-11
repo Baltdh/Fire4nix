@@ -1,0 +1,9 @@
+prefix=/usr
+includedir=${prefix}/include
+libdir=${prefix}/lib32
+
+Name: jsoncpp
+Description: A C++ library for interacting with JSON
+Version: 1.9.6
+Libs: -L${libdir} -ljsoncpp
+Cflags: -I${includedir}

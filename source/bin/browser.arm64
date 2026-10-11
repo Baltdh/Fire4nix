@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ -x "$APP_DIR/scripts/run_browser.sh" ]; then
+    exec "$APP_DIR/scripts/run_browser.sh" "$@"
+fi
+
+if [ -x "$APP_DIR/fire4nix" ]; then
+    exec "$APP_DIR/fire4nix" "$@"
+fi
+
+exec "$APP_DIR/scripts/wpe_cog_launch.sh" "$@"

@@ -1,0 +1,33 @@
+# systemd-tmpfiles snapshot
+
+These files were extracted from the uploaded `tmpfiles.d.zip` archive and kept here as reference material for the Fire4Nix / ROCKNIX beta pass.
+
+They are reference-only. The useful part of this snapshot is the expanded set of tmpfiles rules, which helps cross-check:
+- cleanup and cache directories;
+- network and accessibility defaults;
+- X11 / Xorg helper cleanup;
+- BlueZ / systemd / provision rules.
+
+## Captured files
+
+- `README`
+- `connectivity.conf`
+- `credstore.conf`
+- `dbus.conf`
+- `journal-nocow.conf`
+- `legacy.conf`
+- `provision.conf`
+- `retroarch-userdirs.conf`
+- `static-nodes-permissions.conf`
+- `systemd-pstore.conf`
+- `systemd-resolve.conf`
+- `systemd-tmp.conf`
+- `systemd.conf`
+- `tmp.conf`
+- `var.conf`
+- `x11.conf`
+- `z_01_rocknix.conf`
+- `z_05_bluez.conf`
+- `z_90_xorg-server.conf`
+
+The files live under `rocknix_reference/etc/tmpfiles.d/` so the project stays self-contained.

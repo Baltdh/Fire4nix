@@ -1,0 +1,7 @@
+prefix=/usr
+includedir=${prefix}/include
+
+Name: tllist
+Description: A C header file only implementation of a typed linked list
+Version: 1.1.0
+Cflags: -I${includedir}

@@ -1,0 +1,25 @@
+prefix=/usr
+
+exec_prefix=${prefix}
+xwayland=/usr/bin/Xwayland
+have_glamor=true
+have_glamor_api=true
+have_eglstream=false
+have_initfd=true
+have_listenfd=true
+have_verbose=true
+have_terminate_delay=true
+have_no_touch_pointer_emulation=true
+have_force_xrandr_emulation=true
+have_geometry=true
+have_fullscreen=true
+have_host_grab=true
+have_decorate=false
+have_enable_ei_portal=false
+have_byteswappedclients=true
+have_hidpi=true
+
+Name: Xwayland
+Description: X Server for Wayland
+URL: https://gitlab.freedesktop.org/xorg/xserver/
+Version: 24.1.8

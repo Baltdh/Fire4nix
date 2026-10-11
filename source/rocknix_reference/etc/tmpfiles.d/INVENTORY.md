@@ -1,0 +1,21 @@
+# tmpfiles.d inventory
+
+- `README`
+- `connectivity.conf`
+- `credstore.conf`
+- `dbus.conf`
+- `journal-nocow.conf`
+- `legacy.conf`
+- `provision.conf`
+- `retroarch-userdirs.conf`
+- `static-nodes-permissions.conf`
+- `systemd-pstore.conf`
+- `systemd-resolve.conf`
+- `systemd-tmp.conf`
+- `systemd.conf`
+- `tmp.conf`
+- `var.conf`
+- `x11.conf`
+- `z_01_rocknix.conf`
+- `z_05_bluez.conf`
+- `z_90_xorg-server.conf`
