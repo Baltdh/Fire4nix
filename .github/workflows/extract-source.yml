@@ -1,0 +1,67 @@
+name: Extract Fire4NIX source for audit
+
+on:
+  push:
+    branches:
+      - feature/extracted-source-audit
+    paths:
+      - .github/workflows/extract-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Extract owned source without vendor references
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          source = Path("Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip")
+          root = Path("source")
+          if not source.is_file():
+              raise SystemExit(f"Archive not found: {source}")
+          count = 0
+          with zipfile.ZipFile(source) as z:
+              for entry in z.infolist():
+                  if entry.is_dir():
+                      continue
+                  path = Path(entry.filename)
+                  if not path.parts or path.parts[0] != "Fire4Nix":
+                      continue
+                  relative = Path(*path.parts[1:])
+                  if not relative.parts or ".." in relative.parts or relative.is_absolute():
+                      continue
+                  if relative.parts[0] == "third_party_reference":
+                      continue
+                  if relative.suffix.lower() in (".zip", ".tar", ".gz", ".xz", ".7z"):
+                      continue
+                  if entry.file_size > 2_000_000:
+                      continue
+                  target = root / relative
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(entry))
+                  count += 1
+          if count == 0:
+              raise SystemExit("No project files extracted")
+          print(f"Extracted {count} project files")
+          PY
+      - name: Commit extracted sources to audit branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/
+          if git diff --cached --quiet; then
+            echo "No source changes"
+          else
+            git commit -m "Extract Fire4NIX source for code audit"
+            git push origin HEAD:feature/extracted-source-audit
+          fi
