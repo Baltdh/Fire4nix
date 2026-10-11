@@ -25,6 +25,21 @@ RUNTIME_ROOT="$ROOT_DIR/runtime/aarch64"
 sh "$ROOT_DIR/scripts/verify_wpe_runtime.sh" "$RUNTIME_ROOT" ||
     fail "bundled WPE runtime is incomplete; One File must be self-contained on ROCKNIX"
 
+# Structural runtime checks do not establish dependency closure. Audit the
+# library, subprocesses and native launcher without executing ARM64 code.
+command -v readelf >/dev/null 2>&1 || fail "readelf is required for dependency verification"
+DEPENDENCY_REPORT=$(mktemp)
+trap 'rm -f "$DEPENDENCY_REPORT"' EXIT HUP INT TERM
+set -- "$RUNTIME_ROOT" --launcher "$NATIVE"
+if [ -n "${ROCKNIX_SYSROOT:-}" ]; then
+    set -- "$@" --sysroot "$ROCKNIX_SYSROOT"
+fi
+if ! python3 "$ROOT_DIR/scripts/audit_runtime_dependencies.py" "$@" > "$DEPENDENCY_REPORT"; then
+    cat "$DEPENDENCY_REPORT" >&2
+    fail "unresolved ARM64 dependencies; bundle them or supply the target ROCKNIX_SYSROOT"
+fi
+export FIRE4NIX_DEPENDENCY_REPORT="$DEPENDENCY_REPORT"
+
 VERSION=$(sed -n '1s/^Fire4Nix[[:space:]]*//p' VERSION 2>/dev/null | tr -c '[:alnum:]._-\n' '-' | tr -d '\n')
 [ -n "$VERSION" ] || VERSION="dev"
 OUT_DIR="${FIRE4NIX_DIST_DIR:-$ROOT_DIR/dist}"
@@ -108,7 +123,10 @@ readme = """Fire4Nix One File Edition
 
 This package is emitted only when bin/fire4nix-wpe-platform is a real
 ARM64/aarch64 ELF binary AND runtime/aarch64 contains the validated WPE WebKit
-library plus WPEWebProcess, WPENetworkProcess and WPEGPUProcess. Runtime logs
+library plus WPEWebProcess, WPENetworkProcess and WPEGPUProcess, and their
+static dependencies (including the launcher) resolve within the bundle or an
+explicit target ROCKNIX sysroot. This is not a symbol-version or graphics
+compatibility guarantee. Runtime logs
 and user data are created outside the ZIP contents through the Fire4Nix
 configuration/runtime resolver.
 """
@@ -133,6 +151,8 @@ with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compressleve
     zf.writestr(zip_info("Fire4Nix.sh", True), root_launcher)
     zf.writestr(zip_info("Fire4Nix-README.txt", False), readme)
     zf.writestr(zip_info("Teste-Fire4Nix.sh", True), diagnostic_launcher)
+    zf.writestr(zip_info("Fire4Nix/dependency-report.json"),
+                Path(os.environ["FIRE4NIX_DEPENDENCY_REPORT"]).read_bytes())
 
     for rel in required:
         src = root / rel

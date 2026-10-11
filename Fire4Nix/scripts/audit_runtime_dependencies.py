@@ -25,15 +25,19 @@ def inspect(path):
     }
 
 
-def audit(root, sysroot=None):
+def audit(root, sysroot=None, extra_elfs=()):
     errors, entries, providers = [], [], {}
     if not root.is_dir():
         return {"errors": ["runtime directory does not exist"], "elfs": [], "missing": []}
-    for path in sorted(root.rglob("*")):
+    for path in sorted(set(root.rglob("*")) | set(extra_elfs)):
         if not path.is_file() or path.is_symlink():
+            if path in extra_elfs:
+                errors.append("launcher must be a regular ELF file: " + str(path))
             continue
         with path.open("rb") as stream:
             if stream.read(4) != b"\x7fELF":
+                if path in extra_elfs:
+                    errors.append("launcher is not ELF: " + str(path))
                 continue
         try:
             entry = inspect(path)
@@ -84,10 +88,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("runtime", type=Path)
     parser.add_argument("--sysroot", type=Path)
+    parser.add_argument("--launcher", type=Path, help="include native launcher dependencies")
     args = parser.parse_args()
     if args.sysroot and not args.sysroot.is_dir():
         parser.error("target sysroot does not exist")
-    report = audit(args.runtime.resolve(), args.sysroot)
+    report = audit(args.runtime.resolve(), args.sysroot, (args.launcher.resolve(),) if args.launcher else ())
     print(json.dumps(report, indent=2))
     return 1 if report["errors"] or report["missing"] else 0
 

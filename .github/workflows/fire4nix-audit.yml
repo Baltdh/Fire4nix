@@ -89,6 +89,7 @@ jobs:
         run: |
           python3 tests/test_wayland_socket.py
           python3 tests/test_runtime_integrity.py
+          python3 tests/test_dependency_audit.py
 
       - name: WPE ARM64 guard self-test
         run: sh tests/test_wpe_arm64_guard.sh
