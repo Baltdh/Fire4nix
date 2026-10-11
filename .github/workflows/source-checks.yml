@@ -1,0 +1,65 @@
+name: Fire4NIX source checks
+
+on:
+  push:
+    branches: [feature/extracted-source-audit]
+    paths:
+      - "source/**"
+      - ".github/workflows/source-checks.yml"
+  pull_request:
+    paths:
+      - "source/**"
+      - ".github/workflows/source-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config \
+            libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
+            libsdl2-net-dev libcurl4-openssl-dev
+      - name: Check shell script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find source -type f -name '*.sh' -print0 | while IFS= read -r -d '' script; do
+            bash -n "$script"
+          done
+      - name: Check Python syntax without writing cache
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in Path('source').rglob('*.py'):
+              ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path))
+          print('Python syntax checks passed')
+          PY
+      - name: Check required libraries
+        run: bash source/scripts/check_dependencies.sh --strict
+      - name: Build host smoke binary
+        working-directory: source
+        run: |
+          make clean
+          make -j2
+      - name: Inspect host binary
+        working-directory: source
+        run: |
+          file fire4nix
+          readelf -h fire4nix
+          sha256sum fire4nix
+      - name: Upload host test binary (not R36H package)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4NIX-linux-x86_64-smoke-NOT-R36H
+          path: source/fire4nix
+          if-no-files-found: error
