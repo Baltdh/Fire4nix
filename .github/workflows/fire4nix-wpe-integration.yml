@@ -95,7 +95,13 @@ jobs:
           r = json.loads(Path('dist/bundled-dependencies.json').read_text())['audit']
           assert not (r['errors'] or r['missing'] or r['incompatible_versions']), 'Bundled candidate remains blocked'
           PYGATE
-          cp -a /tmp/fire4nix-bundled-candidate/lib/. /tmp/fire4nix-library-stage/usr/lib/
+          python3 - <<'PYCOPY'
+          from pathlib import Path
+          import shutil
+          base = Path('/tmp/fire4nix-library-stage/usr')
+          destination = next(folder for folder in (base / 'lib/aarch64-linux-gnu', base / 'lib64', base / 'lib') if list(folder.glob('libWPEWebKit-2.0.so*')))
+          shutil.copytree('/tmp/fire4nix-bundled-candidate/lib', destination, dirs_exist_ok=True, symlinks=True)
+          PYCOPY
           sh scripts/stage_wpe_runtime.sh /tmp/fire4nix-library-stage
           ROCKNIX_SYSROOT=/tmp/rocknix-sysroot FIRE4NIX_ONE_FILE_OUTPUT="$PWD/dist/Fire4Nix-RK3326-test.zip" sh scripts/package_one_file.sh
       - uses: actions/upload-artifact@v4
