@@ -2,7 +2,7 @@ name: Fire4Nix WPE ARM64 integration
 on:
   push:
     branches: [codex/fire4nix-preparation]
-    paths: ['.github/workflows/fire4nix-wpe-integration.yml']
+    paths: ['.github/workflows/fire4nix-wpe-integration.yml', 'Fire4Nix/scripts/**', 'Fire4Nix/src/**', 'Fire4Nix/tests/**']
   workflow_dispatch:
 permissions:
   contents: read

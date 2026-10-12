@@ -2,8 +2,8 @@
 set -u
 
 # Fire4Nix WPE startup validation
-# Validates launcher path resolution, certificate chains, Wayland/Sway detection,
-# and dynamic module loading without executing the binary on host.
+# Inspects launcher identity, certificate paths, Wayland and module presence.
+# Does not validate certificate chains or execute dynamic module loading.
 # Device-specific rendering, button input and network access remain untested.
 #
 # Exit codes:
@@ -16,11 +16,11 @@ SCRIPT_DIR="$(cd "$(dirname "$REAL_SCRIPT_PATH")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=/dev/null
-. "$APP_DIR/scripts/fire4nix_env.sh" 2>/dev/null || true
+. "$APP_DIR/scripts/fire4nix_env.sh" || exit 2
 
-fire4nix_bootstrap_environment "$APP_DIR" 2>/dev/null || true
-fire4nix_export_wpe_common_env 2>/dev/null || true
-fire4nix_wpe_runtime_env 2>/dev/null || true
+fire4nix_bootstrap_environment "$APP_DIR" || exit 2
+fire4nix_export_wpe_common_env || exit 2
+fire4nix_wpe_runtime_env || exit 2
 
 CONFIG_DIR="${FIRE4NIX_CONFIG_DIR:-$(fire4nix_resolve_config_root "$APP_DIR" 2>/dev/null || echo "$APP_DIR/.fire4nix")}"
 LOG_DIR="$CONFIG_DIR/logs"
@@ -102,7 +102,7 @@ else
     if [ -x "$native_binary" ]; then
         pass "launcher is executable"
     else
-        warn "launcher is not executable (will need chmod +x post-extraction)"
+        fail "launcher is not executable"
     fi
 fi
 
@@ -113,7 +113,7 @@ if [ -n "$native_binary" ] && command -v readelf >/dev/null 2>&1; then
     if readelf -d "$native_binary" 2>/dev/null | grep -q "NEEDED"; then
         needed=$(readelf -d "$native_binary" 2>/dev/null | grep NEEDED | wc -l)
         say "launcher_direct_dependencies=$needed"
-        readelf -d "$native_binary" 2>/dev/null | grep NEEDED | sed 's/^/  /'
+        readelf -d "$native_binary" 2>/dev/null | grep NEEDED | while IFS= read -r line; do say "  $line"; done
         
         # Check for dlopen indicators
         if readelf -s "$native_binary" 2>/dev/null | grep -q "dlopen\|dlsym"; then
@@ -138,16 +138,16 @@ if [ -d "$bundled_root" ]; then
         say "bundled_libraries=$lib_count"
         pass "bundled lib directory present"
     else
-        warn "bundled lib directory not found"
+        fail "bundled lib directory not found"
     fi
     
     if [ -d "$bundled_root/libexec/wpe-webkit-2.0" ]; then
         pass "bundled libexec/wpe-webkit-2.0 present"
         for proc in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-            if [ -f "$bundled_root/libexec/wpe-webkit-2.0/$proc" ]; then
+            if [ -x "$bundled_root/libexec/wpe-webkit-2.0/$proc" ]; then
                 pass "  $proc present"
             else
-                fail "  $proc missing"
+                fail "  $proc missing or not executable"
             fi
         done
     else
@@ -194,7 +194,15 @@ if [ -n "$gio_libs" ]; then
         fi
     done
 else
-    warn "GIO TLS module path not available; pkg-config not found or gio-2.0 not installed"
+    found_tls=0
+    for module_dir in "$bundled_root/lib/gio/modules" /usr/lib/gio/modules /usr/lib/aarch64-linux-gnu/gio/modules; do
+        for module in "$module_dir"/libgio*; do
+            [ -f "$module" ] || continue
+            say "gio_module=$module"
+            found_tls=1
+        done
+    done
+    [ "$found_tls" -eq 1 ] || warn "GIO modules not located; TLS backend requires runtime validation"
 fi
 
 say ""
@@ -214,7 +222,11 @@ if fire4nix_wayland_socket_available 2>/dev/null; then
     say "wayland_socket=$socket_path"
     pass "Wayland socket is available"
 else
-    warn "Wayland socket not available; falling back to alternative display"
+    if [ "${WPE_PLATFORM:-wayland}" = wayland ]; then
+        fail "Wayland socket unavailable for selected wayland platform"
+    else
+        warn "Wayland socket unavailable; selected platform=${WPE_PLATFORM:-unset}"
+    fi
 fi
 
 # Check for Sway detection
@@ -241,7 +253,7 @@ say ""
 say "=== Critical WPE Libraries ==="
 for lib in "${wpe_needed_libs[@]}"; do
     found=0
-    for search_dir in /usr/lib /usr/lib64 /usr/lib/aarch64-linux-gnu /lib /lib64 ${bundled_root}/lib; do
+    for search_dir in /usr/lib /usr/lib64 /usr/lib/aarch64-linux-gnu /lib /lib64 "$bundled_root/lib"; do
         if [ -d "$search_dir" ] && find "$search_dir" -name "$lib*" -type f 2>/dev/null | grep -q .; then
             found=1
             break

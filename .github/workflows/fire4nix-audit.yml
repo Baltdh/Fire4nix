@@ -26,6 +26,9 @@ jobs:
       - name: Shell and project audit
         run: bash scripts/project_audit.sh
 
+      - name: Startup validation regression tests
+        run: python3 -m unittest discover -s tests -p test_startup_validation.py
+
       - name: Python syntax
         run: |
           python3 -m py_compile firefox-framebuffer-wrapper.py install-es-system.py

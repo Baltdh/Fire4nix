@@ -111,7 +111,16 @@ REPORT="$HERE/Fire4Nix-test-report.log"
     exit 1
 }
 export FIRE4NIX_SMOKE_REPORT="$REPORT"
-exec bash "$APP/scripts/rocknix_wpe_smoke_test.sh"
+smoke_status=0
+bash "$APP/scripts/rocknix_wpe_smoke_test.sh" || smoke_status=$?
+export FIRE4NIX_STARTUP_REPORT="$HERE/Fire4Nix-startup-validation.log"
+startup_status=0
+bash "$APP/scripts/validate_wpe_startup.sh" || startup_status=$?
+if [ -f "$FIRE4NIX_STARTUP_REPORT" ]; then
+    cat "$FIRE4NIX_STARTUP_REPORT" >> "$REPORT"
+fi
+[ "$smoke_status" -eq 0 ] || exit "$smoke_status"
+exit "$startup_status"
 """
 
 startup_validator = """#!/bin/sh
@@ -140,7 +149,7 @@ readme = """Fire4Nix One File Edition
 6. No root installer is required for this portable package.
 
 Prerequisites:
-- ROCKNIX RK3326 image (official 20260901 or newer)
+- ROCKNIX RK3326 image (static audit reference: official 20260901; other versions require validation)
 - R36H/R36S or compatible device with ~1 GB RAM
 - Wayland/Sway compositor running
 - /dev/dri and sound device available
