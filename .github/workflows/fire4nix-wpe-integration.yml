@@ -100,7 +100,11 @@ jobs:
           import shutil
           base = Path('/tmp/fire4nix-library-stage/usr')
           destination = next(folder for folder in (base / 'lib/aarch64-linux-gnu', base / 'lib64', base / 'lib') if list(folder.glob('libWPEWebKit-2.0.so*')))
-          shutil.copytree('/tmp/fire4nix-bundled-candidate/lib', destination, dirs_exist_ok=True, symlinks=True)
+          import json
+          report = json.loads(Path('dist/bundled-dependencies.json').read_text())
+          for item in report['copied']:
+              name = item['library']
+              shutil.copyfile(Path('/tmp/fire4nix-bundled-candidate/lib') / name, destination / name)
           PYCOPY
           sh scripts/stage_wpe_runtime.sh /tmp/fire4nix-library-stage
           ROCKNIX_SYSROOT=/tmp/rocknix-sysroot FIRE4NIX_ONE_FILE_OUTPUT="$PWD/dist/Fire4Nix-RK3326-test.zip" sh scripts/package_one_file.sh
