@@ -43,6 +43,8 @@ jobs:
               ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path))
           print('Python syntax checks passed')
           PY
+      - name: Regression-test dependency checker
+        run: bash source/scripts/test_dependencies.sh
       - name: Check required libraries
         run: bash source/scripts/check_dependencies.sh --strict
       - name: Build host smoke binary
