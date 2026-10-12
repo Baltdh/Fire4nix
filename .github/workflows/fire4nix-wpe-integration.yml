@@ -86,6 +86,25 @@ jobs:
           Path('dist/ROCKNIX-STATUS.txt').write_text('BLOCKED: dependency closure incomplete\n' if blocked else 'STATIC AUDIT PASSED: device testing still required\n')
           print(Path('dist/ROCKNIX-STATUS.txt').read_text())
           PYREPORT
+      - name: Package the audited dependency candidate
+        working-directory: Fire4Nix
+        run: |
+          python3 - <<'PYGATE'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('dist/bundled-dependencies.json').read_text())['audit']
+          assert not (r['errors'] or r['missing'] or r['incompatible_versions']), 'Bundled candidate remains blocked'
+          PYGATE
+          cp -a /tmp/fire4nix-bundled-candidate/lib/. /tmp/fire4nix-library-stage/usr/lib/
+          sh scripts/stage_wpe_runtime.sh /tmp/fire4nix-library-stage
+          ROCKNIX_SYSROOT=/tmp/rocknix-sysroot FIRE4NIX_ONE_FILE_OUTPUT="$PWD/dist/Fire4Nix-RK3326-test.zip" sh scripts/package_one_file.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-RK3326-device-test
+          path: |
+            Fire4Nix/dist/Fire4Nix-RK3326-test.zip
+            Fire4Nix/dist/Fire4Nix-RK3326-test.zip.sha256
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-ROCKNIX-compatibility-report
