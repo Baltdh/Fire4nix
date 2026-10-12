@@ -64,6 +64,15 @@ jobs:
           mkdir -p /tmp/rocknix-image
           tar --no-same-owner -xf /tmp/rocknix.tar -C /tmp/rocknix-image ROCKNIX-RK3326.aarch64-20260901/target/SYSTEM
           unsquashfs -no-progress -d /tmp/rocknix-sysroot /tmp/rocknix-image/ROCKNIX-RK3326.aarch64-20260901/target/SYSTEM usr/lib lib lib64 usr/lib64
+          # This candidate is isolated from the existing integrated runtime.
+          cp -a runtime/aarch64 /tmp/fire4nix-bundled-candidate
+          set +e
+          python3 scripts/bundle_missing_dependencies.py /tmp/fire4nix-bundled-candidate --target /tmp/rocknix-sysroot --source / --launcher bin/fire4nix-wpe-platform > dist/bundled-dependencies.json
+          bundle_status=$?
+          set -e
+          test "$bundle_status" -le 1
+          # Publish evidence, including unresolved dependencies; never label it device-ready.
+          dpkg-query -W > dist/bundled-source-packages.txt
           set +e
           python3 scripts/audit_runtime_dependencies.py runtime/aarch64 --launcher bin/fire4nix-wpe-platform --sysroot /tmp/rocknix-sysroot > dist/rocknix-dependencies.json
           audit_status=$?
@@ -83,6 +92,8 @@ jobs:
           path: |
             Fire4Nix/dist/rocknix-dependencies.json
             Fire4Nix/dist/ROCKNIX-STATUS.txt
+            Fire4Nix/dist/bundled-dependencies.json
+            Fire4Nix/dist/bundled-source-packages.txt
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
