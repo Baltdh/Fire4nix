@@ -5,6 +5,11 @@ set -u
 # Validates launcher path resolution, certificate chains, Wayland/Sway detection,
 # and dynamic module loading without executing the binary on host.
 # Device-specific rendering, button input and network access remain untested.
+#
+# Exit codes:
+#  0 = all checks passed
+#  1 = critical failures found (blocks launch)
+#  2 = environment issue (missing tools, cannot write report)
 
 REAL_SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$0" 2>/dev/null || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "$REAL_SCRIPT_PATH")" && pwd)"
@@ -28,7 +33,7 @@ failures=0
 warnings=0
 
 say() {
-    printf '%s\n' "$*" | tee -a "$REPORT"
+    printf '%s\n' "$*" | tee -a "$REPORT" 2>/dev/null || printf '%s\n' "$*"
 }
 
 pass() {
@@ -64,6 +69,13 @@ say "=== Launcher Path Resolution ==="
 native_binary="$(fire4nix_wpe_platform_binary 2>/dev/null || true)"
 if [ -z "$native_binary" ]; then
     fail "fire4nix-wpe-platform binary not located"
+    say "checked candidates:"
+    say "  \${FIRE4NIX_WPE_PLATFORM_BINARY}"
+    say "  \${FIRE4NIX_HOME:-\$APP_DIR}/bin/wpe-platform-launcher"
+    say "  \${FIRE4NIX_HOME:-\$APP_DIR}/bin/wpe-platform"
+    say "  \${FIRE4NIX_HOME:-\$APP_DIR}/build/fire4nix-wpe-platform"
+    say "  \${FIRE4NIX_HOME:-\$APP_DIR}/build/wpe-platform"
+    say "  \${FIRE4NIX_HOME:-\$APP_DIR}/bin/fire4nix-wpe-platform"
 else
     say "binary=$native_binary"
     
@@ -83,6 +95,8 @@ else
         else
             fail "launcher is not ARM64 ELF"
         fi
+    else
+        warn "file(1) not available; ARM64 ELF identity not verified"
     fi
     
     if [ -x "$native_binary" ]; then
@@ -108,6 +122,8 @@ if [ -n "$native_binary" ] && command -v readelf >/dev/null 2>&1; then
     else
         say "launcher_direct_dependencies=0"
     fi
+elif [ -n "$native_binary" ]; then
+    warn "readelf not available; dependency analysis skipped"
 fi
 
 say ""
@@ -157,7 +173,7 @@ if [ ${#ca_paths[@]} -gt 0 ]; then
         say "  $ca_dir ($cert_count files)"
     done
 else
-    warn "no standard system CA certificate directories found"
+    warn "no standard system CA certificate directories found (TLS may fail)"
 fi
 
 # Check for GIO TLS modules
@@ -178,7 +194,7 @@ if [ -n "$gio_libs" ]; then
         fi
     done
 else
-    warn "GIO TLS module path not available; TLS may fail at runtime"
+    warn "GIO TLS module path not available; pkg-config not found or gio-2.0 not installed"
 fi
 
 say ""
@@ -212,7 +228,7 @@ else
     warn "swaymsg not in PATH; Sway window manager not detected"
 fi
 
-# Check for required libraries
+# Check for required libraries (optional, warn only)
 wpe_needed_libs=(
     "libwayland-client.so"
     "libwayland-egl.so"
@@ -256,6 +272,8 @@ if command -v pkg-config >/dev/null 2>&1; then
     else
         warn "GStreamer plugin path not available"
     fi
+else
+    warn "pkg-config not available; GStreamer plugins not verified"
 fi
 
 say ""
@@ -265,8 +283,9 @@ say "warnings=$warnings"
 
 if [ "$failures" -ne 0 ]; then
     say ""
-    say "=== BLOCKED ==="
-    say "Critical failures must be resolved before launching"
+    say "=== VALIDATION FAILED ==="
+    say "Critical failures must be resolved before launch:"
+    say "  exit_code=1"
     exit 1
 fi
 
@@ -274,10 +293,12 @@ if [ "$warnings" -gt 0 ]; then
     say ""
     say "=== WARNINGS PRESENT ==="
     say "Launch may succeed, but some features may be unavailable"
+    say "  exit_code=0 (warnings do not block)"
 fi
 
 say ""
-say "=== READY ==="
+say "=== VALIDATION PASSED ==="
 say "Launcher passed validation checks."
 say "Device rendering, button input and network access require on-device testing."
+say "  exit_code=0"
 exit 0
