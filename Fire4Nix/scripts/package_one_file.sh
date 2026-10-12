@@ -76,6 +76,7 @@ required = [
     "scripts/theme_manager.sh",
     "scripts/rocknix_wpe_smoke_test.sh",
     "scripts/verify_wpe_runtime.sh",
+    "scripts/validate_wpe_startup.sh",
 ]
 
 for rel in required:
@@ -113,13 +114,36 @@ export FIRE4NIX_SMOKE_REPORT="$REPORT"
 exec bash "$APP/scripts/rocknix_wpe_smoke_test.sh"
 """
 
+startup_validator = """#!/bin/sh
+set -eu
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+APP="$HERE/Fire4Nix"
+REPORT="$HERE/Fire4Nix-startup-validation.log"
+[ -f "$APP/scripts/validate_wpe_startup.sh" ] || {
+    echo "Fire4Nix startup validation script not found." >&2
+    exit 1
+}
+export FIRE4NIX_STARTUP_REPORT="$REPORT"
+exec bash "$APP/scripts/validate_wpe_startup.sh"
+"""
+
 readme = """Fire4Nix One File Edition
 
 1. Extract this ZIP directly into the ROCKNIX ports directory.
    Common layouts use /roms/ports/ or /storage/roms/ports/.
 2. Keep Fire4Nix.sh next to the Fire4Nix/ directory.
 3. Launch Fire4Nix.sh from Ports/EmulationStation.
-4. Launch Teste-Fire4Nix.sh from Ports to run the preflight checks.\n   It writes Fire4Nix-test-report.log beside the launcher.\n5. No root installer is required for this portable package.\n\nPreflight success does not prove page rendering, controller input or stability.
+4. Launch Teste-Fire4Nix.sh from Ports to run the preflight checks.
+   It writes Fire4Nix-test-report.log beside the launcher.
+5. Launch Validate-Fire4Nix.sh to verify launcher paths, certificates, Wayland, and modules.
+   It writes Fire4Nix-startup-validation.log beside the launcher.
+6. No root installer is required for this portable package.
+
+Prerequisites:
+- ROCKNIX RK3326 image (official 20260901 or newer)
+- R36H/R36S or compatible device with ~1 GB RAM
+- Wayland/Sway compositor running
+- /dev/dri and sound device available
 
 This package is emitted only when bin/fire4nix-wpe-platform is a real
 ARM64/aarch64 ELF binary AND runtime/aarch64 contains the validated WPE WebKit
@@ -151,6 +175,7 @@ with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compressleve
     zf.writestr(zip_info("Fire4Nix.sh", True), root_launcher)
     zf.writestr(zip_info("Fire4Nix-README.txt", False), readme)
     zf.writestr(zip_info("Teste-Fire4Nix.sh", True), diagnostic_launcher)
+    zf.writestr(zip_info("Validate-Fire4Nix.sh", True), startup_validator)
     zf.writestr(zip_info("Fire4Nix/dependency-report.json"),
                 Path(os.environ["FIRE4NIX_DEPENDENCY_REPORT"]).read_bytes())
 
