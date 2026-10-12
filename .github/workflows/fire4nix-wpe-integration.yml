@@ -17,7 +17,7 @@ jobs:
       - name: Install compatible build dependencies
         run: |
           apt-get -o Acquire::Retries=3 update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git python3 file binutils
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git python3 file binutils curl squashfs-tools
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential ccache cmake ninja-build pkg-config ruby gperf unifdef libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libicu-dev libharfbuzz-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev libopenjp2-7-dev liblcms2-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libtasn1-6-dev libsqlite3-dev libxml2-dev libxslt1-dev libhyphen-dev libenchant-2-dev libepoxy-dev libgbm-dev libegl-dev libgles-dev libwayland-dev wayland-protocols libinput-dev libsystemd-dev libxkbcommon-dev zlib1g-dev libatk1.0-dev libatk-bridge2.0-dev libwoff-dev libseccomp-dev libpsl-dev libbrotli-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libdrm-dev libudev-dev libsecret-1-dev bubblewrap xdg-dbus-proxy
       - uses: actions/checkout@v4
       - name: Download verified successful WPE build
@@ -56,6 +56,34 @@ jobs:
           tar -C dist -czf dist/Fire4Nix-WPE-ARM64-integration.tar.gz Fire4Nix-WPE-integration
           cd dist
           sha256sum Fire4Nix-WPE-ARM64-integration.tar.gz > Fire4Nix-WPE-ARM64-integration.tar.gz.sha256
+      - name: Audit against pinned official ROCKNIX image
+        working-directory: Fire4Nix
+        run: |
+          curl --fail --location --retry 3 --output /tmp/rocknix.tar https://github.com/ROCKNIX/distribution/releases/download/20260901/ROCKNIX-RK3326.aarch64-20260901.tar
+          echo '118c5641d0f02ecbe1af1143c3de316d720bb0722df40ee0048cb2636e9d652f  /tmp/rocknix.tar' | sha256sum -c -
+          mkdir -p /tmp/rocknix-image
+          tar --no-same-owner -xf /tmp/rocknix.tar -C /tmp/rocknix-image ROCKNIX-RK3326.aarch64-20260901/target/SYSTEM
+          unsquashfs -no-progress -d /tmp/rocknix-sysroot /tmp/rocknix-image/ROCKNIX-RK3326.aarch64-20260901/target/SYSTEM usr/lib lib lib64 usr/lib64
+          set +e
+          python3 scripts/audit_runtime_dependencies.py runtime/aarch64 --launcher bin/fire4nix-wpe-platform --sysroot /tmp/rocknix-sysroot > dist/rocknix-dependencies.json
+          audit_status=$?
+          set -e
+          test "$audit_status" -le 1
+          python3 - <<'PYREPORT'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('dist/rocknix-dependencies.json').read_text())
+          blocked = bool(report['errors'] or report['missing'] or report.get('incompatible_versions'))
+          Path('dist/ROCKNIX-STATUS.txt').write_text('BLOCKED: dependency closure incomplete\n' if blocked else 'STATIC AUDIT PASSED: device testing still required\n')
+          print(Path('dist/ROCKNIX-STATUS.txt').read_text())
+          PYREPORT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-compatibility-report
+          path: |
+            Fire4Nix/dist/rocknix-dependencies.json
+            Fire4Nix/dist/ROCKNIX-STATUS.txt
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-WPE-ARM64-integration-experimental

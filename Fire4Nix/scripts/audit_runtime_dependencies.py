@@ -128,7 +128,9 @@ def audit(root, sysroot=None, extra_elfs=()):
                     for name in [path.name] + entry["soname"]:
                         system[name] = str(path)
     missing, incompatible = [], []
-    for entry in entries:
+    queue = list(entries)
+    visited = {entry["path"] for entry in entries}
+    for entry in queue:
         entry["dependencies"] = {}
         for name in entry["needed"]:
             provider = providers.get(name) or system.get(name)
@@ -136,6 +138,10 @@ def audit(root, sysroot=None, extra_elfs=()):
             if not provider:
                 missing.append({"binary": entry["path"], "library": name})
             else:
+                dependency = inspected[provider]
+                if dependency["path"] not in visited:
+                    visited.add(dependency["path"])
+                    queue.append(dependency)
                 required = set(entry.get("version_needs", {}).get(name, []))
                 available = set(inspected[provider].get("version_definitions", []))
                 absent = sorted(required - available)
@@ -144,8 +150,8 @@ def audit(root, sysroot=None, extra_elfs=()):
                                          "provider": provider, "missing_versions": absent})
     if not entries:
         errors.append("no ELF files found")
-    return {"scope": "static ELF dependencies and required version nodes; individual symbols, dlopen modules and graphics need separate checks",
-            "errors": errors, "missing": missing, "incompatible_versions": incompatible, "elfs": entries}
+    return {"scope": "recursive static ELF dependencies and required version nodes; individual symbols, dlopen modules and graphics need separate checks",
+            "system_elfs": queue[len(entries):], "errors": errors, "missing": missing, "incompatible_versions": incompatible, "elfs": entries}
 
 
 def main():

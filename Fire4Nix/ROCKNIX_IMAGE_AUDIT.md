@@ -49,3 +49,12 @@ Only actual device testing can validate rendering, buttons and memory behavior.
 
 The dependency auditor now resolves absolute sysroot symlinks inside the target
 image, and rejects escape paths and loops. Seven dependency tests pass.
+
+## Automated follow-up
+
+The integration workflow now downloads and checksum-verifies the pinned official
+image and audits the matched launcher plus staged WPE runtime against its library
+files. The audit follows reachable system libraries recursively. It publishes a
+separate compatibility report with BLOCKED or STATIC AUDIT PASSED status; successful
+compilation does not imply target compatibility. No browser execution is claimed.
+Eight dependency tests pass locally. The workflow requires its own CI validation.

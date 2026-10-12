@@ -73,6 +73,24 @@ Version needs section '.gnu.version_r':
             with self.assertRaises(ValueError):
                 module.resolve_target_path(link, root)
 
+    def test_transitive_system_dependency_is_checked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            runtime = base / "runtime"
+            runtime.mkdir()
+            (runtime / "browser").write_bytes(b"\x7fELF")
+            system = base / "image"
+            (system / "usr/lib").mkdir(parents=True)
+            (system / "usr/lib/libfirst.so").write_bytes(b"\x7fELF")
+            def inspect(path):
+                return {"path": str(path), "machine": "AArch64",
+                        "needed": ["libfirst.so"] if path.name == "browser" else ["libsecond.so"],
+                        "soname": [], "version_needs": {}, "version_definitions": []}
+            with patch.object(module, "inspect", side_effect=inspect):
+                report = module.audit(runtime, system)
+            self.assertEqual([x["library"] for x in report["missing"]], ["libsecond.so"])
+            self.assertEqual(len(report["system_elfs"]), 1)
+
     def test_missing_launcher_is_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
