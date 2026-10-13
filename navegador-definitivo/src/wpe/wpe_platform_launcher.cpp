@@ -457,7 +457,6 @@ void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
         "enable-webgl", TRUE,
         "enable-webrtc", options.webRtc,
         "enable-encrypted-media", options.encryptedMedia,
-        "enable-back-forward-navigation-gestures", TRUE,
         nullptr);
 
     webkit_web_view_set_settings(view, settings);
