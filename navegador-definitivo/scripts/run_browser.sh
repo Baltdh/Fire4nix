@@ -35,6 +35,9 @@ export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-about:home}"
 export FIRE4NIX_SEARCH_URL="${FIRE4NIX_SEARCH_URL:-https://duckduckgo.com/?q=%s}"
 export FIRE4NIX_SESSION_LABEL="${FIRE4NIX_SESSION_LABEL:-Fire4Nix ROCKNIX beta Marco 3 start}"
 export FIRE4NIX_VERSION="${FIRE4NIX_VERSION:-0.83-beta-rocknix-marco3-start}"
+# This value is used by startup.snapshot under set -u; a bare 'export'
+# without an assignment below is not enough to initialize it.
+export FIRE4NIX_PLATFORM="${FIRE4NIX_PLATFORM:-rocknix}"
 export FIRE4NIX_BETA="${FIRE4NIX_BETA:-1}"
 export FIRE4NIX_BROWSER_MODE="${FIRE4NIX_BROWSER_MODE:-beta}"
 export FIRE4NIX_UI_PROFILE="${FIRE4NIX_UI_PROFILE:-compact}"
