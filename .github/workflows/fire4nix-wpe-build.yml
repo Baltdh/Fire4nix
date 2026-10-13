@@ -298,7 +298,7 @@ jobs:
           if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
             cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/wayland-smoke/browser.state
           fi
-          if [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE surface:' dist/wayland-smoke/launcher.log && grep -q 'Fire4Nix WPE finished:' dist/wayland-smoke/launcher.log && grep -q 'event=load-finished' dist/wayland-smoke/browser.state 2>/dev/null; then
+          if [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE surface:' dist/wayland-smoke/launcher.log && grep -q 'Fire4Nix WPE finished:' dist/wayland-smoke/launcher.log && grep -q 'Fire4Nix WPE early EGL termination: ok' dist/wayland-smoke/launcher.log && grep -q 'event=load-finished' dist/wayland-smoke/browser.state 2>/dev/null; then
             echo 'DIAGNOSTIC PASS: WPEPlatform created Wayland toplevel and loaded local HTML; sandbox disabled, no physical display verified.' >> dist/wayland-smoke/RESULT.txt
           else
             echo 'DIAGNOSTIC FAIL: no verified WPEPlatform Wayland toplevel and HTML load.' >> dist/wayland-smoke/RESULT.txt
