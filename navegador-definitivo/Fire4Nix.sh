@@ -1,7 +1,7 @@
 #!/bin/sh
 # Portable entry point: use Bash explicitly, even on FAT/exFAT copies.
 set -u
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" || exit 2
+SCRIPT_DIR="$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)" || exit 2
 LOG="${FIRE4NIX_ENTRY_LOG:-/storage/fire4nix-entry.log}"
 if [ ! -d /storage ] || [ ! -w /storage ]; then
   LOG="${TMPDIR:-/tmp}/fire4nix-entry.log"
