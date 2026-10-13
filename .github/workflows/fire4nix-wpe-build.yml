@@ -87,6 +87,32 @@ jobs:
           fi
           grep -q 'Missing value for --cookies-file' /tmp/fire4nix-invalid.txt
           echo 'ARM64 WPE binary executed successfully for CLI startup and error handling.'
+      - name: Exercise actual WPE page loading with isolated HTML
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/page-smoke
+          printf '%s\n' '<!doctype html><html><head><title>Fire4Nix CI smoke</title></head><body><h1>Fire4Nix</h1></body></html>' > dist/page-smoke/index.html
+          test_url="file://$(pwd)/dist/page-smoke/index.html"
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/runtime"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+          set +e
+          timeout 35s ./fire4nix-wpe-platform --headless "$test_url" > dist/page-smoke/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Launcher exit status: $status" > dist/page-smoke/RESULT.txt
+          cat dist/page-smoke/launcher.log
+          if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
+            cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/page-smoke/final-browser.state
+            cat dist/page-smoke/final-browser.state
+          fi
+          if grep -q 'Fire4Nix WPE finished:' dist/page-smoke/launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/launcher.log; then
+            echo 'PASS: WPE reported successful local HTML load' >> dist/page-smoke/RESULT.txt
+          else
+            echo 'FAIL: no verified successful HTML load; graphical runtime not ready' >> dist/page-smoke/RESULT.txt
+            cat dist/page-smoke/RESULT.txt
+            exit 1
+          fi
       - name: Check WPE subprocesses and runtime library ABI
         working-directory: navegador-definitivo
         run: |
