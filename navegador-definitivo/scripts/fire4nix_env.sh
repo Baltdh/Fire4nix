@@ -703,27 +703,46 @@ fire4nix_apply_engine_selection() {
 }
 
 
+fire4nix_is_native_elf() {
+    local binary="${1:-}"
+    [ -f "$binary" ] && [ -x "$binary" ] || return 1
+    # Lightweight ELF signature check: never launch the bundled shell wrapper
+    # as if it were the native browser (which would recurse into the launcher).
+    command -v od >/dev/null 2>&1 || return 1
+    local signature
+    signature="$(LC_ALL=C od -An -tx1 -N4 "$binary" 2>/dev/null | tr -d '[:space:]')" || return 1
+    [ "$signature" = 7f454c46 ]
+}
+
 fire4nix_wpe_platform_binary() {
+    # Explicit overrides remain usable for development/mock testing.
+    # Do not automatically pick the similarly named bundled shell wrapper.
+    local override="${FIRE4NIX_WPE_PLATFORM_BINARY:-}"
+    if [ -n "$override" ] && [ -f "$override" ] && [ -x "$override" ]; then
+        printf '%s\n' "$override"
+        return 0
+    fi
+
+    local root="${FIRE4NIX_HOME:-$APP_DIR}"
     local candidates=(
-        "${FIRE4NIX_WPE_PLATFORM_BINARY:-}"
-        "${FIRE4NIX_HOME:-$APP_DIR}/bin/wpe-platform-launcher"
-        "${FIRE4NIX_HOME:-$APP_DIR}/bin/wpe-platform"
-        "${FIRE4NIX_HOME:-$APP_DIR}/build/fire4nix-wpe-platform"
-        "${FIRE4NIX_HOME:-$APP_DIR}/build/wpe-platform-launcher"
-        "${FIRE4NIX_HOME:-$APP_DIR}/build/wpe-platform"
+        "$root/bin/fire4nix-wpe-platform"
+        "$root/bin/wpe-platform-launcher"
+        "$root/bin/wpe-platform"
+        "$root/build/fire4nix-wpe-platform"
+        "$root/build/wpe-platform-launcher"
+        "$root/build/wpe-platform"
+        "$root/fire4nix-wpe-platform"
     )
 
     local candidate
     for candidate in "${candidates[@]}"; do
-        if [ -n "${candidate:-}" ] && [ -x "$candidate" ]; then
-            printf '%s
-' "$candidate"
+        if fire4nix_is_native_elf "$candidate"; then
+            printf '%s\n' "$candidate"
             return 0
         fi
     done
 
-    printf '%s
-' ""
+    printf '%s\n' ""
 }
 
 fire4nix_export_wpe_common_env() {
