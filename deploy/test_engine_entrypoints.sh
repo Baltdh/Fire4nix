@@ -4,7 +4,20 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL: engine-entrypoint test returned $rc" >&2
+    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log"; do
+      if [ -f "$f" ]; then
+        echo "--- $f ---" >&2
+        cat "$f" >&2
+      fi
+    done
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 mkdir -p "$TMP/bin" "$TMP/config" "$TMP/runtime" "$TMP/logs"
 cat > "$TMP/bin/cog" <<'COG'
 #!/bin/sh
