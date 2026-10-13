@@ -276,6 +276,27 @@ if [ -z "$runtime_candidate" ] || [ ! -d "$runtime_candidate" ] || [ ! -w "$runt
     fi
 fi
 
+# ROCKNIX/Sway may use wayland-1 instead of the default wayland-0,
+# especially when EmulationStation launches from Tools without a full session.
+# Only change the display if the requested socket is not usable.
+active_wayland_socket="${WAYLAND_DISPLAY:-}"
+case "$active_wayland_socket" in
+    /*) ;;
+    *) active_wayland_socket="${XDG_RUNTIME_DIR:-}/${WAYLAND_DISPLAY:-}" ;;
+esac
+if [ ! -S "$active_wayland_socket" ]; then
+    for candidate_socket in \
+        "${XDG_RUNTIME_DIR:-/nonexistent}"/wayland-* \
+        /var/run/0-runtime-dir/wayland-* \
+        "/run/user/$(id -u 2>/dev/null || echo 0)"/wayland-*; do
+        [ -S "$candidate_socket" ] || continue
+        export XDG_RUNTIME_DIR="$(dirname "$candidate_socket")"
+        export WAYLAND_DISPLAY="$(basename "$candidate_socket")"
+        printf '[Fire4Nix] recovered Wayland socket: %s/%s\n' "$XDG_RUNTIME_DIR" "$WAYLAND_DISPLAY" >> "$LOG_FILE" 2>/dev/null || true
+        break
+    done
+fi
+
 # Prefer Wayland when present, otherwise fall back cleanly.
 if [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
     export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-wayland}"
