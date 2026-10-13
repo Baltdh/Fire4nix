@@ -57,14 +57,15 @@ Nao execute como root, nao desative o sandbox, nao substitua bibliotecas
 de sistema do ROCKNIX. Aprovacao de CI != aprovacao no aparelho.
 EOF
 
-(
-  cd "$STAGE"
-  find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
-)
 if command -v readelf >/dev/null 2>&1; then
     readelf -h "$BINARY" > "$STAGE/ELF-HEADERS.txt"
     readelf --version-info "$BINARY" > "$STAGE/ELF-SYMBOL-VERSIONS.txt"
 fi
+
+(
+  cd "$STAGE"
+  find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+)
 
 ARCHIVE="$OUT/Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip"
 python3 - "$STAGE" "$ARCHIVE" <<'PY'
