@@ -908,16 +908,17 @@ int main(int argc, char** argv)
     if (view != nullptr)
         g_object_unref(view);
     if (ownedWaylandDisplay) {
-        // Experimental opt-in only: test whether terminating the EGL display
-        // while the Wayland connection is still alive avoids the Mesa crash
-        // seen during WPEPlatform teardown on the CI software renderer.
-        // Do not enable this automatically on real hardware before validation.
-        if (envEnabled("FIRE4NIX_WPE_EARLY_EGL_TERMINATE")) {
+        // Dispose EGL while the associated Wayland connection still exists.
+        // Without this ordering, Mesa can destroy stale Wayland proxies and
+        // SIGSEGV after the WPEPlatform view closes (verified on ARM64 CI).
+        // Operators may set FIRE4NIX_WPE_EARLY_EGL_TERMINATE=0 if a device
+        // vendor's graphics driver handles EGL lifetime differently.
+        if (envEnabled("FIRE4NIX_WPE_EARLY_EGL_TERMINATE", true)) {
             g_autoptr(GError) eglError = nullptr;
             gpointer nativeEglDisplay = wpe_display_get_egl_display(ownedWaylandDisplay.get(), &eglError);
             if (nativeEglDisplay != nullptr) {
                 EGLBoolean terminated = eglTerminate(reinterpret_cast<EGLDisplay>(nativeEglDisplay));
-                g_message("Fire4Nix WPE experimental early EGL terminate: %s", terminated ? "ok" : "failed");
+                g_message("Fire4Nix WPE early EGL termination: %s", terminated ? "ok" : "failed");
             } else {
                 g_warning("Fire4Nix WPE early EGL terminate unavailable: %s",
                     eglError ? eglError->message : "missing display");
