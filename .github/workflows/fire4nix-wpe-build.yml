@@ -31,7 +31,7 @@ jobs:
       - name: Install ARM64 WPE build dependencies
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev liblcms2-dev libinput-dev libenchant-2-dev libatk1.0-dev libatk-bridge2.0-dev libharfbuzz-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libsecret-1-dev libgbm-dev libdrm-dev libepoxy-dev libwoff-dev libopenjp2-7-dev libpsl-dev libhyphen-dev libseccomp-dev libsystemd-dev libudev-dev
       - uses: actions/checkout@v4
       - name: Retrieve previously compiled WPE ARM64 library
         uses: actions/download-artifact@v4
