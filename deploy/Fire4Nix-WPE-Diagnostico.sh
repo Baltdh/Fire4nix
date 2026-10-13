@@ -6,7 +6,7 @@ find_app_for_diagnostic() {
    printf '%s\n' "$FIRE4NIX_APP_DIR"
    return 0
  fi
- script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P)" || script_dir=.
+ script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P)" || script_dir=.
  for candidate in \
    "$script_dir" \
    "$script_dir/Fire4Nix" \
@@ -17,7 +17,7 @@ find_app_for_diagnostic() {
    /storage/roms/Tools/Fire4Nix \
    /storage/roms/ports/Fire4Nix; do
    if [ -f "$candidate/Fire4Nix.sh" ]; then
-     (CDPATH= cd -- "$candidate" && pwd -P)
+     (CDPATH='' cd -- "$candidate" && pwd -P)
      return 0
    fi
  done
