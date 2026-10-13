@@ -2,7 +2,20 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+cleanup() {
+  result=$?
+  if [ "$result" -ne 0 ]; then
+    echo "FAIL: portable launcher/ABI test exit code $result" >&2
+    for log in "$tmp/diagnostic-report.log" "$tmp/incompatible-report.log" "$tmp/incompatible-console.log"; do
+      if [ -f "$log" ]; then
+        echo "--- $log ---" >&2
+        tail -100 "$log" >&2
+      fi
+    done
+  fi
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
 mkdir -p "$tmp/external/downloads/Fire4Nix" "$tmp/data"
 cp "$root/deploy/Fire4Nix-ROCKNIX.sh" "$tmp/external/downloads/Fire4Nix/Start.sh"
 cat > "$tmp/external/downloads/Fire4Nix/Fire4Nix.sh" <<'EOF'
