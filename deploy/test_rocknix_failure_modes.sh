@@ -55,4 +55,23 @@ env PATH="$TMP/mock-bin:$PATH" FIRE4NIX_WPE_PLATFORM_BINARY="$TMP/mock-bin/fake-
 grep -q MOCK_WPE_STARTUP_FAILURE "$TMP/native-fallback.log"
 grep -q 'attempting Cog fallback' "$TMP/native-fallback.log"
 grep -q MOCK_COG_RECOVERY "$TMP/native-fallback.log"
-echo 'PASS: missing app, failed engine, recovery, logs and native WPE to Cog fallback'
+# A bundled script with the same name is NOT a native WPE ELF engine.
+mkdir -p "$TMP/native-app/bin" "$TMP/native-app/build"
+cp "$ROOT/navegador-definitivo/bin/fire4nix-wpe-platform" "$TMP/native-app/bin/fire4nix-wpe-platform"
+chmod +x "$TMP/native-app/bin/fire4nix-wpe-platform"
+resolved="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" \
+    bash -c 'APP_DIR="$1"; source "$2"; fire4nix_wpe_platform_binary' \
+    bash "$TMP/native-app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh")"
+test -z "$resolved"
+# Check both supported native locations, even before any actual ROCKNIX build.
+cp /bin/true "$TMP/native-app/fire4nix-wpe-platform"
+resolved="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" \
+    bash -c 'APP_DIR="$1"; source "$2"; fire4nix_wpe_platform_binary' \
+    bash "$TMP/native-app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh")"
+test "$resolved" = "$TMP/native-app/fire4nix-wpe-platform"
+cp /bin/true "$TMP/native-app/bin/fire4nix-wpe-platform"
+resolved="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" \
+    bash -c 'APP_DIR="$1"; source "$2"; fire4nix_wpe_platform_binary' \
+    bash "$TMP/native-app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh")"
+test "$resolved" = "$TMP/native-app/bin/fire4nix-wpe-platform"
+echo 'PASS: missing app, recovery, Cog fallback, and native WPE ELF selection without recursive wrappers'
