@@ -554,6 +554,32 @@ fire4nix_is_url_like() {
     return 1
 }
 
+# Percent-encode UTF-8 bytes without Python (often absent on handheld images).
+# Query spaces follow application/x-www-form-urlencoded conventions; path
+# slashes are preserved so a local file: URI remains valid.
+fire4nix_url_escape() {
+    local input="${1:-}" mode="${2:-query}"
+    local LC_ALL=C
+    local result="" char hex i
+    for ((i=0; i<${#input}; i++)); do
+        char="${input:i:1}"
+        case "$char" in
+            [a-zA-Z0-9._~-]) result+="$char" ;;
+            /)
+                if [ "$mode" = path ]; then result+="/"; else result+="%2F"; fi
+                ;;
+            ' ')
+                if [ "$mode" = query ]; then result+="+"; else result+="%20"; fi
+                ;;
+            *)
+                printf -v hex '%%%02X' "'$char"
+                result+="$hex"
+                ;;
+        esac
+    done
+    printf '%s\n' "$result"
+}
+
 fire4nix_normalize_target() {
     local raw
     raw="$(fire4nix_trim "${1:-}")"
@@ -571,10 +597,12 @@ fire4nix_normalize_target() {
     case "$raw" in
         /*)
             if [ -e "$raw" ]; then
-                python3 - "$raw" <<'PY'
-import pathlib, sys
-print(pathlib.Path(sys.argv[1]).resolve().as_uri())
-PY
+                # Canonicalize the parent directory, then encode the absolute
+                # path. Avoid requiring Python3 for offline local HTML files.
+                local parent file
+                parent="$(CDPATH='' cd -- "$(dirname -- "$raw")" && pwd -P)" || return 1
+                file="$(basename -- "$raw")"
+                printf 'file://%s\n' "$(fire4nix_url_escape "$parent/$file" path)"
                 return 0
             fi
             ;;
@@ -593,11 +621,7 @@ PY
     esac
 
     local encoded
-    encoded="$(python3 - "$raw" <<'PY'
-import sys, urllib.parse
-print(urllib.parse.quote_plus(sys.argv[1]))
-PY
-)"
+    encoded="$(fire4nix_url_escape "$raw" query)"
     printf '%s
 ' "${FIRE4NIX_SEARCH_URL:-https://duckduckgo.com/?q=%s}" | sed "s/%s/${encoded}/g"
 }
