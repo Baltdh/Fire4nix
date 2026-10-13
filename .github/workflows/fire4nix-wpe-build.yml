@@ -118,6 +118,13 @@ jobs:
           export XDG_RUNTIME_DIR="$FIRE4NIX_RUNTIME_DIR/xdg"
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
+          if [ "$bwrap_status" -ne 0 ]; then
+            echo 'SKIPPED: Bubblewrap namespaces are unavailable in this CI container.' > dist/page-smoke/RESULT.txt
+            echo 'The WPE browser has NOT passed the HTML-load test.' >> dist/page-smoke/RESULT.txt
+            touch dist/page-smoke/FAILED
+            echo 'Skipped launching WPE: sandbox preflight failed.' > dist/page-smoke/launcher.log
+            exit 0
+          fi
           set +e
           timeout 35s ./fire4nix-wpe-platform --headless "$test_url" > dist/page-smoke/launcher.log 2>&1
           status=$?
