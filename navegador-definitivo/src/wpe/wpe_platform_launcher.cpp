@@ -572,23 +572,34 @@ void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer user
     }
 }
 
-gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer)
+void quitOneShotAfterFailure(gpointer userData)
+{
+    auto* completion = static_cast<NavigationCompletion*>(userData);
+    if (completion != nullptr && completion->exitAfterLoad && completion->loop != nullptr) {
+        g_message("Fire4Nix WPE diagnostic: navigation failed, exiting with error");
+        g_main_loop_quit(completion->loop);
+    }
+}
+
+gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer userData)
 {
     currentNavigationFailed = true;
     g_warning("Fire4Nix WPE load failed for %s: %s",
               failingUri != nullptr ? failingUri : "(unknown)",
               error != nullptr && error->message != nullptr ? error->message : "unknown error");
     publishBrowserState(view, "load-failed", error != nullptr ? error->message : "unknown error");
+    quitOneShotAfterFailure(userData);
     return FALSE;
 }
 
-gboolean onLoadFailedWithTlsErrors(WebKitWebView* view, gchar* failingUri, GTlsCertificate*, GTlsCertificateFlags errors, gpointer)
+gboolean onLoadFailedWithTlsErrors(WebKitWebView* view, gchar* failingUri, GTlsCertificate*, GTlsCertificateFlags errors, gpointer userData)
 {
     currentNavigationFailed = true;
     g_warning("Fire4Nix WPE TLS error for %s (flags=0x%x)",
               failingUri != nullptr ? failingUri : "(unknown)",
               static_cast<unsigned>(errors));
     publishBrowserState(view, "tls-error", "certificate validation failed");
+    quitOneShotAfterFailure(userData);
     return FALSE;
 }
 
@@ -800,8 +811,8 @@ int main(int argc, char** argv)
 
     NavigationCompletion completion { loop, options.exitAfterLoad, false };
     g_signal_connect(view, "load-changed", G_CALLBACK(onLoadChanged), &completion);
-    g_signal_connect(view, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
-    g_signal_connect(view, "load-failed-with-tls-errors", G_CALLBACK(onLoadFailedWithTlsErrors), nullptr);
+    g_signal_connect(view, "load-failed", G_CALLBACK(onLoadFailed), &completion);
+    g_signal_connect(view, "load-failed-with-tls-errors", G_CALLBACK(onLoadFailedWithTlsErrors), &completion);
     g_signal_connect(view, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
     g_signal_connect(view, "notify::title", G_CALLBACK(onTitleNotify), nullptr);
 
