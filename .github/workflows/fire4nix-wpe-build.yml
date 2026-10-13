@@ -48,7 +48,10 @@ jobs:
           mkdir -p ../navegador-definitivo/dist
           tar -tzf Fire4Nix-WPE-ARM64-library.tar.gz > ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt
           grep -E 'WPEWebProcess|WPENetworkProcess|WPEGPUProcess|WebProcess|NetworkProcess|GPUProcess' ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt > ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt || true
+          echo 'SOURCE ARCHIVE PROCESS CANDIDATES:'
           cat ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
+          echo 'SOURCE ARCHIVE ENTRY TYPES:'
+          tar -tvzf Fire4Nix-WPE-ARM64-library.tar.gz | grep -E 'WPEWebProcess|WPENetworkProcess|WPEGPUProcess|WebProcess|NetworkProcess|GPUProcess' || true
           tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
           ldconfig
           pkg-config --exists wpe-webkit-2.0
@@ -162,8 +165,8 @@ jobs:
               lines.append("DIAGNOSIS: candidates exist in tarball; inspect filenames, installation paths and architecture.")
           else:
               lines.append("DIAGNOSIS: required names present; graphical runtime still unverified.")
-          (dist / "WPE-SUBPROCESS-PROVENANCE.txt").write_text("\\n".join(lines) + "\\n")
-          print("\\n".join(lines))
+          (dist / "WPE-SUBPROCESS-PROVENANCE.txt").write_text("\n".join(lines) + "\n")
+          print("\n".join(lines))
           PY
       - name: Compare official Debian WPE runtime package without mixing binaries
         working-directory: navegador-definitivo
