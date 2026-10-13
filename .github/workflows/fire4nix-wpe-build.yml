@@ -96,10 +96,11 @@ jobs:
             exit 1
           fi
           for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-            found="$(find /usr/local/lib /usr/lib /lib -type f -name "$process" -print -quit 2>/dev/null || true)"
+            found="$(find /usr/local/lib /usr/lib /lib /usr/local/bin /usr/bin -type f -name "$process" -print -quit 2>/dev/null || true)"
             if [ -z "$found" ]; then
-              echo "ERROR: missing WPE subprocess $process"
-              exit 1
+              echo "MISSING: $process (not present in the installed WPE build)" | tee -a dist/WPE-SUBPROCESSES.txt
+              echo "$process" >> dist/WPE-MISSING-SUBPROCESSES.txt
+              continue
             fi
             file "$found"
             readelf -h "$found" | grep -q AArch64
@@ -110,6 +111,11 @@ jobs:
             fi
             echo "$process: $found" >> dist/WPE-SUBPROCESSES.txt
           done
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'ERROR: WPE runtime is incomplete; subprocess binaries must be bundled before device release.'
+            cat dist/WPE-MISSING-SUBPROCESSES.txt
+            exit 1
+          fi
       - name: Audit ELF interpreter and linked library versions
         working-directory: navegador-definitivo
         run: |
