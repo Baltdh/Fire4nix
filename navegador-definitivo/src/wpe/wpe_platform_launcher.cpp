@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -33,6 +35,15 @@ struct LaunchOptions {
     bool headlessMode { false };
     bool maximize { false };
     bool fullscreen { false };
+    bool developerExtras { false };
+    bool webRtc { false };
+    bool mediaStream { false };
+    bool encryptedMedia { false };
+    unsigned width { 640 };
+    unsigned height { 480 };
+    unsigned memoryLimitMb { 0 };
+    unsigned networkMemoryLimitMb { 0 };
+    unsigned commandPollMs { 100 };
 };
 
 struct FilterSaveData {
@@ -41,8 +52,10 @@ struct FilterSaveData {
     GError* error { nullptr };
 };
 
-static void filterSavedCallback(WebKitUserContentFilterStore* store, GAsyncResult* result, FilterSaveData* data)
+static void filterSavedCallback(GObject* sourceObject, GAsyncResult* result, gpointer userData)
 {
+    auto* store = WEBKIT_USER_CONTENT_FILTER_STORE(sourceObject);
+    auto* data = static_cast<FilterSaveData*>(userData);
     data->filter = webkit_user_content_filter_store_save_finish(store, result, &data->error);
     g_main_loop_quit(data->mainLoop);
 }
@@ -83,6 +96,46 @@ std::string defaultStartUrl()
                         envOr("FIRE4NIX_DEFAULT_HOME_URL", "https://lite.duckduckgo.com/lite/")));
 }
 
+unsigned parseDimension(const std::string& value, unsigned fallback)
+{
+    if (value.empty())
+        return fallback;
+    char* end = nullptr;
+    const auto parsed = std::strtoul(value.c_str(), &end, 10);
+    if (end == value.c_str() || *end != '\0')
+        return fallback;
+    return static_cast<unsigned>(std::clamp<unsigned long>(parsed, 240, 4096));
+}
+
+unsigned parseUnsignedRange(const std::string& value, unsigned fallback, unsigned minimum, unsigned maximum)
+{
+    if (value.empty())
+        return fallback;
+    char* end = nullptr;
+    const auto parsed = std::strtoul(value.c_str(), &end, 10);
+    if (end == value.c_str() || *end != '\0')
+        return fallback;
+    if (parsed == 0)
+        return 0;
+    return static_cast<unsigned>(std::clamp<unsigned long>(parsed, minimum, maximum));
+}
+
+bool parseSize(const std::string& value, unsigned& width, unsigned& height)
+{
+    const auto separator = value.find_first_of("xX");
+    if (separator == std::string::npos)
+        return false;
+
+    const auto parsedWidth = parseDimension(trimCopy(value.substr(0, separator)), 0);
+    const auto parsedHeight = parseDimension(trimCopy(value.substr(separator + 1)), 0);
+    if (parsedWidth == 0 || parsedHeight == 0)
+        return false;
+
+    width = parsedWidth;
+    height = parsedHeight;
+    return true;
+}
+
 std::vector<std::string> splitList(const std::string& text)
 {
     std::vector<std::string> items;
@@ -102,11 +155,6 @@ std::vector<std::string> splitList(const std::string& text)
     return items;
 }
 
-const char* maybeCString(const std::string& value)
-{
-    return value.empty() ? nullptr : value.c_str();
-}
-
 void appendHostList(std::vector<std::string>& dst, const std::string& text)
 {
     for (const auto& item : splitList(text)) {
@@ -119,13 +167,28 @@ LaunchOptions parseOptions(int argc, char** argv)
 {
     LaunchOptions options;
     options.url = defaultStartUrl();
-    options.privateMode = envEnabled("FIRE4NIX_PRIVATE_MODE", false);
-    options.automationMode = envEnabled("FIRE4NIX_AUTOMATION_MODE", false);
-    options.ignoreTlsErrors = envEnabled("FIRE4NIX_IGNORE_TLS_ERRORS", false);
-    options.enableItp = envEnabled("FIRE4NIX_ENABLE_ITP", false);
-    options.headlessMode = envEnabled("FIRE4NIX_HEADLESS_MODE", false);
-    options.maximize = envEnabled("FIRE4NIX_MAXIMIZE", true);
-    options.fullscreen = envEnabled("FIRE4NIX_FULLSCREEN", true);
+    options.privateMode = envEnabled("FIRE4NIX_WPE_PRIVATE_MODE", envEnabled("FIRE4NIX_PRIVATE_MODE", false));
+    options.automationMode = envEnabled("FIRE4NIX_WPE_AUTOMATION_MODE", envEnabled("FIRE4NIX_AUTOMATION_MODE", false));
+    options.ignoreTlsErrors = envEnabled("FIRE4NIX_WPE_IGNORE_TLS_ERRORS", envEnabled("FIRE4NIX_IGNORE_TLS_ERRORS", false));
+    options.enableItp = envEnabled("FIRE4NIX_WPE_ENABLE_ITP", envEnabled("FIRE4NIX_ENABLE_ITP", false));
+    options.headlessMode = envEnabled("FIRE4NIX_WPE_HEADLESS_MODE", envEnabled("FIRE4NIX_HEADLESS_MODE", false));
+    options.maximize = envEnabled("FIRE4NIX_WPE_MAXIMIZE", envEnabled("FIRE4NIX_MAXIMIZE", true));
+    options.fullscreen = envEnabled("FIRE4NIX_WPE_FULLSCREEN", envEnabled("FIRE4NIX_FULLSCREEN", true));
+    options.developerExtras = envEnabled("FIRE4NIX_DEVELOPER_EXTRAS", false);
+    options.webRtc = envEnabled("FIRE4NIX_ENABLE_WEBRTC", false);
+    options.mediaStream = envEnabled("FIRE4NIX_ENABLE_MEDIA_STREAM", false);
+    options.encryptedMedia = envEnabled("FIRE4NIX_ENABLE_ENCRYPTED_MEDIA", false);
+    options.width = parseDimension(envOr("FIRE4NIX_DISPLAY_WIDTH", "640"), 640);
+    options.height = parseDimension(envOr("FIRE4NIX_DISPLAY_HEIGHT", "480"), 480);
+    options.memoryLimitMb = parseUnsignedRange(envOr("FIRE4NIX_WPE_MEMORY_LIMIT_MB", "0"), 0, 128, 2048);
+    options.networkMemoryLimitMb = parseUnsignedRange(envOr("FIRE4NIX_WPE_NETWORK_MEMORY_LIMIT_MB", "0"), 0, 64, 1024);
+    {
+        const auto pollText = envOr("FIRE4NIX_COMMAND_POLL_MS", "100");
+        char* end = nullptr;
+        const auto parsed = std::strtoul(pollText.c_str(), &end, 10);
+        if (end != pollText.c_str() && *end == '\0')
+            options.commandPollMs = static_cast<unsigned>(std::clamp<unsigned long>(parsed, 25, 1000));
+    }
     options.backgroundColor = envOr("FIRE4NIX_BG_COLOR", envOr("FIRE4NIX_WPE_BG_COLOR", "white"));
     options.timeZone = envOr("FIRE4NIX_TIME_ZONE", envOr("FIRE4NIX_WPE_TIME_ZONE", ""));
     options.cookiesFile = envOr("FIRE4NIX_COOKIES_FILE", envOr("FIRE4NIX_WPE_COOKIES_FILE", ""));
@@ -148,7 +211,7 @@ LaunchOptions parseOptions(int argc, char** argv)
             g_print("Options: --private --automation --ignore-tls-errors --enable-itp --headless\n");
             g_print("         --cookies-file=PATH --cookies-policy=always|never|no-third-party\n");
             g_print("         --proxy=URL --ignore-host=HOST[,HOST...] --content-filter=PATH\n");
-            g_print("         --time-zone=ZONE --bg-color=COLOR --fullscreen --maximized\n");
+            g_print("         --time-zone=ZONE --bg-color=COLOR --size=WIDTHxHEIGHT --fullscreen --maximized\n");
             std::exit(EXIT_SUCCESS);
         }
 
@@ -228,9 +291,21 @@ LaunchOptions parseOptions(int argc, char** argv)
         }
 
         if (arg == "--size" || arg.rfind("--size=", 0) == 0) {
-            // The launcher accepts the option for parity with the official WPE
-            // MiniBrowser, but the native platform decides the actual surface
-            // size. Keep the argument so the beta first-test flow remains simple.
+            std::string value;
+            if (arg == "--size") {
+                if (i + 1 < argc && argv[i + 1] != nullptr) {
+                    value = trimCopy(argv[++i]);
+                } else {
+                    g_printerr("Missing value for --size\n");
+                    std::exit(EXIT_FAILURE);
+                }
+            } else {
+                value = trimCopy(arg.substr(std::strlen("--size=")));
+            }
+            if (!parseSize(value, options.width, options.height)) {
+                g_printerr("Invalid --size '%s'; expected WIDTHxHEIGHT\n", value.c_str());
+                std::exit(EXIT_FAILURE);
+            }
             continue;
         }
 
@@ -262,7 +337,7 @@ void loadContentFilterIfRequested(WebKitWebView* view, const LaunchOptions& opti
 
     saveData.mainLoop = g_main_loop_new(nullptr, FALSE);
     webkit_user_content_filter_store_save_from_file(store, "Fire4NixFilter", contentFilterFile, nullptr,
-        G_CALLBACK(filterSavedCallback),
+        filterSavedCallback,
         &saveData);
     g_main_loop_run(saveData.mainLoop);
 
@@ -283,14 +358,26 @@ void loadContentFilterIfRequested(WebKitWebView* view, const LaunchOptions& opti
         g_object_unref(store);
 }
 
-WebKitWebsiteDataManager* createWebsiteDataManager(const LaunchOptions& options)
+WebKitNetworkSession* createNetworkSession(const LaunchOptions& options)
 {
-    WebKitWebsiteDataManager* manager = (options.privateMode || options.automationMode)
-        ? webkit_website_data_manager_new_ephemeral()
-        : webkit_website_data_manager_new(nullptr);
+    if (options.networkMemoryLimitMb > 0) {
+        WebKitMemoryPressureSettings* networkMemory = webkit_memory_pressure_settings_new();
+        webkit_memory_pressure_settings_set_memory_limit(networkMemory, options.networkMemoryLimitMb);
+        webkit_network_session_set_memory_pressure_settings(networkMemory);
+        webkit_memory_pressure_settings_free(networkMemory);
+        g_message("Fire4Nix WPE network-process memory limit: %u MB", options.networkMemoryLimitMb);
+    }
 
-    if (options.enableItp)
-        webkit_website_data_manager_set_itp_enabled(manager, TRUE);
+    if (options.automationMode)
+        return nullptr;
+
+    WebKitNetworkSession* session = options.privateMode
+        ? webkit_network_session_new_ephemeral()
+        : webkit_network_session_new(nullptr, nullptr);
+    if (session == nullptr)
+        return nullptr;
+
+    webkit_network_session_set_itp_enabled(session, options.enableItp);
 
     if (!options.proxy.empty()) {
         std::vector<const gchar*> ignoreHosts;
@@ -301,73 +388,75 @@ WebKitWebsiteDataManager* createWebsiteDataManager(const LaunchOptions& options)
 
         WebKitNetworkProxySettings* proxySettings = webkit_network_proxy_settings_new(options.proxy.c_str(), ignoreHosts.data());
         if (proxySettings != nullptr) {
-            webkit_website_data_manager_set_network_proxy_settings(manager, WEBKIT_NETWORK_PROXY_MODE_CUSTOM, proxySettings);
+            webkit_network_session_set_proxy_settings(session, WEBKIT_NETWORK_PROXY_MODE_CUSTOM, proxySettings);
             webkit_network_proxy_settings_free(proxySettings);
         }
     }
 
     if (options.ignoreTlsErrors)
-        webkit_website_data_manager_set_tls_errors_policy(manager, WEBKIT_TLS_ERRORS_POLICY_IGNORE);
-
-    return manager;
-}
-
-WebKitWebContext* createWebContext(const LaunchOptions& options)
-{
-    WebKitWebsiteDataManager* manager = createWebsiteDataManager(options);
-    if (manager == nullptr)
-        return nullptr;
-
-    WebKitWebContext* webContext = nullptr;
-    if (!options.timeZone.empty()) {
-        webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
-                                         "website-data-manager", manager,
-                                         "time-zone-override", options.timeZone.c_str(),
-                                         nullptr));
-    } else {
-        webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
-                                         "website-data-manager", manager,
-                                         nullptr));
-    }
-
-    g_object_unref(manager);
-    return webContext;
-}
-
-void applyCookieSettings(WebKitWebContext* webContext, const LaunchOptions& options)
-{
-    if (webContext == nullptr)
-        return;
+        webkit_network_session_set_tls_errors_policy(session, WEBKIT_TLS_ERRORS_POLICY_IGNORE);
 
     if (!options.cookiesPolicy.empty()) {
         auto* enumClass = static_cast<GEnumClass*>(g_type_class_ref(WEBKIT_TYPE_COOKIE_ACCEPT_POLICY));
         const GEnumValue* enumValue = g_enum_get_value_by_nick(enumClass, options.cookiesPolicy.c_str());
         if (enumValue != nullptr) {
-            auto* cookieManager = webkit_web_context_get_cookie_manager(webContext);
+            auto* cookieManager = webkit_network_session_get_cookie_manager(session);
             webkit_cookie_manager_set_accept_policy(cookieManager, static_cast<WebKitCookieAcceptPolicy>(enumValue->value));
         }
         g_type_class_unref(enumClass);
     }
 
-    if (!options.cookiesFile.empty() && !webkit_web_context_is_ephemeral(webContext)) {
-        auto* cookieManager = webkit_web_context_get_cookie_manager(webContext);
+    if (!options.cookiesFile.empty() && !webkit_network_session_is_ephemeral(session)) {
+        auto* cookieManager = webkit_network_session_get_cookie_manager(session);
         const gboolean isText = g_str_has_suffix(options.cookiesFile.c_str(), ".txt");
         const auto storageType = isText ? WEBKIT_COOKIE_PERSISTENT_STORAGE_TEXT : WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE;
         webkit_cookie_manager_set_persistent_storage(cookieManager, options.cookiesFile.c_str(), storageType);
     }
+
+    return session;
+}
+
+WebKitWebContext* createWebContext(const LaunchOptions& options)
+{
+    WebKitMemoryPressureSettings* webMemory = nullptr;
+    if (options.memoryLimitMb > 0) {
+        webMemory = webkit_memory_pressure_settings_new();
+        webkit_memory_pressure_settings_set_memory_limit(webMemory, options.memoryLimitMb);
+        g_message("Fire4Nix WPE web-process memory limit: %u MB", options.memoryLimitMb);
+    }
+
+    WebKitWebContext* webContext = nullptr;
+    if (!options.timeZone.empty()) {
+        webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
+                                         "memory-pressure-settings", webMemory,
+                                         "time-zone-override", options.timeZone.c_str(),
+                                         nullptr));
+    } else {
+        webContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
+                                         "memory-pressure-settings", webMemory,
+                                         nullptr));
+    }
+
+    if (webMemory != nullptr)
+        webkit_memory_pressure_settings_free(webMemory);
+
+    if (webContext != nullptr)
+        webkit_web_context_set_automation_allowed(webContext, options.automationMode);
+
+    return webContext;
 }
 
 void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
 {
     WebKitSettings* settings = webkit_settings_new_with_settings(
         "enable-javascript", TRUE,
-        "enable-developer-extras", TRUE,
-        "enable-write-console-messages-to-stdout", TRUE,
-        "enable-media-stream", TRUE,
+        "enable-developer-extras", options.developerExtras,
+        "enable-write-console-messages-to-stdout", options.developerExtras,
+        "enable-media-stream", options.mediaStream,
         "enable-mediasource", TRUE,
         "enable-webgl", TRUE,
-        "enable-webrtc", TRUE,
-        "enable-encrypted-media", TRUE,
+        "enable-webrtc", options.webRtc,
+        "enable-encrypted-media", options.encryptedMedia,
         "enable-back-forward-navigation-gestures", TRUE,
         nullptr);
 
@@ -380,6 +469,42 @@ void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
             webkit_web_view_set_background_color(view, &color);
     }
 }
+
+bool configurePlatformWindow(WebKitWebView* view, const LaunchOptions& options)
+{
+    if (view == nullptr)
+        return false;
+
+    WPEView* wpeView = webkit_web_view_get_wpe_view(view);
+    if (wpeView == nullptr) {
+        if (!options.headlessMode)
+            g_warning("Fire4Nix WPE: WPEPlatform view unavailable; no visible surface can be configured");
+        return options.headlessMode;
+    }
+
+    WPEToplevel* toplevel = wpe_view_get_toplevel(wpeView);
+    if (toplevel == nullptr) {
+        if (!options.headlessMode)
+            g_warning("Fire4Nix WPE: WPEPlatform toplevel unavailable");
+        return options.headlessMode;
+    }
+
+    wpe_toplevel_resize(toplevel, options.width, options.height);
+    wpe_toplevel_set_title(toplevel, "Fire4Nix");
+    if (options.maximize)
+        wpe_toplevel_maximize(toplevel);
+    if (options.fullscreen)
+        wpe_toplevel_fullscreen(toplevel);
+
+    g_message("Fire4Nix WPE surface: %ux%u maximize=%s fullscreen=%s",
+              options.width,
+              options.height,
+              options.maximize ? "yes" : "no",
+              options.fullscreen ? "yes" : "no");
+    return true;
+}
+
+void publishBrowserState(WebKitWebView* view, const char* event, const char* detail = nullptr);
 
 void logLoadState(WebKitWebView* view, WebKitLoadEvent loadEvent)
 {
@@ -410,6 +535,10 @@ gboolean onUnixSignal(gpointer userData)
 void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
 {
     logLoadState(view, loadEvent);
+    const char* event = loadEvent == WEBKIT_LOAD_STARTED ? "load-started" :
+                        loadEvent == WEBKIT_LOAD_COMMITTED ? "load-committed" :
+                        loadEvent == WEBKIT_LOAD_FINISHED ? "load-finished" : "load-state";
+    publishBrowserState(view, event);
 }
 
 gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer)
@@ -417,7 +546,7 @@ gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failing
     g_warning("Fire4Nix WPE load failed for %s: %s",
               failingUri != nullptr ? failingUri : "(unknown)",
               error != nullptr && error->message != nullptr ? error->message : "unknown error");
-    (void)view;
+    publishBrowserState(view, "load-failed", error != nullptr ? error->message : "unknown error");
     return FALSE;
 }
 
@@ -426,7 +555,7 @@ gboolean onLoadFailedWithTlsErrors(WebKitWebView* view, gchar* failingUri, GTlsC
     g_warning("Fire4Nix WPE TLS error for %s (flags=0x%x)",
               failingUri != nullptr ? failingUri : "(unknown)",
               static_cast<unsigned>(errors));
-    (void)view;
+    publishBrowserState(view, "tls-error", "certificate validation failed");
     return FALSE;
 }
 
@@ -445,9 +574,126 @@ gboolean onWebProcessTerminated(WebKitWebView* view, WebKitWebProcessTermination
     }
 
     g_warning("Fire4Nix WPE web process terminated (%s)", reasonText);
+    publishBrowserState(view, "web-process-terminated", reasonText);
     if (view != nullptr)
         webkit_web_view_reload(view);
     return TRUE;
+}
+
+std::filesystem::path commandFilePath()
+{
+    if (const char* explicitPath = g_getenv("FIRE4NIX_BROWSER_COMMAND_FILE"); explicitPath && *explicitPath)
+        return explicitPath;
+    if (const char* runtime = g_getenv("FIRE4NIX_RUNTIME_DIR"); runtime && *runtime)
+        return std::filesystem::path(runtime) / "browser.cmd";
+    return std::filesystem::path(".fire4nix") / "runtime" / "browser.cmd";
+}
+
+std::filesystem::path stateFilePath()
+{
+    if (const char* explicitPath = g_getenv("FIRE4NIX_BROWSER_STATE_FILE"); explicitPath && *explicitPath)
+        return explicitPath;
+    if (const char* runtime = g_getenv("FIRE4NIX_RUNTIME_DIR"); runtime && *runtime)
+        return std::filesystem::path(runtime) / "browser.state";
+    return std::filesystem::path(".fire4nix") / "runtime" / "browser.state";
+}
+
+void publishBrowserState(WebKitWebView* view, const char* event, const char* detail)
+{
+    if (!view) return;
+    const auto path = stateFilePath();
+    std::error_code ec;
+    if (!path.parent_path().empty())
+        std::filesystem::create_directories(path.parent_path(), ec);
+    const auto temp = path.string() + ".tmp";
+    std::ofstream out(temp, std::ios::trunc);
+    if (!out.is_open()) return;
+    const char* uri = webkit_web_view_get_uri(view);
+    const char* title = webkit_web_view_get_title(view);
+    out << "event=" << (event ? event : "state") << '\n';
+    out << "uri=" << (uri ? uri : "") << '\n';
+    out << "title=" << (title ? title : "") << '\n';
+    out << "loading=" << (webkit_web_view_is_loading(view) ? "1" : "0") << '\n';
+    if (detail) out << "detail=" << detail << '\n';
+    out.close();
+    std::filesystem::rename(temp, path, ec);
+    if (ec) std::filesystem::remove(temp, ec);
+}
+
+struct CommandConsumer {
+    WebKitWebView* view { nullptr };
+    std::filesystem::path path;
+    std::streamoff offset { 0 };
+};
+
+bool applyBrowserCommand(WebKitWebView* view, const std::string& command)
+{
+    if (!view || command.empty() || command.size() > 8192)
+        return false;
+    if (command.rfind("load:", 0) == 0) {
+        const auto uri = command.substr(5);
+        if (uri.rfind("https://", 0) != 0 && uri.rfind("http://", 0) != 0 &&
+            uri != "about:home" && uri != "about:blank")
+            return false;
+        webkit_web_view_load_uri(view, uri.c_str());
+        return true;
+    }
+    if (command == "back") {
+        if (webkit_web_view_can_go_back(view))
+            webkit_web_view_go_back(view);
+        return true;
+    }
+    if (command == "key:alt+Right") {
+        if (webkit_web_view_can_go_forward(view))
+            webkit_web_view_go_forward(view);
+        return true;
+    }
+    if (command == "key:ctrl+r") {
+        webkit_web_view_reload(view);
+        return true;
+    }
+    return false;
+}
+
+gboolean pollBrowserCommands(gpointer userData)
+{
+    auto* consumer = static_cast<CommandConsumer*>(userData);
+    if (!consumer || !consumer->view)
+        return G_SOURCE_REMOVE;
+
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(consumer->path, ec);
+    if (ec)
+        return G_SOURCE_CONTINUE;
+    if (static_cast<std::uintmax_t>(consumer->offset) > size)
+        consumer->offset = 0;
+    constexpr std::uintmax_t kMaxCommandJournalBytes = 256 * 1024;
+    if (size > kMaxCommandJournalBytes) {
+        g_warning("Fire4Nix WPE IPC journal exceeded limit; resetting stale commands");
+        std::ofstream reset(consumer->path, std::ios::trunc);
+        if (reset.good())
+            consumer->offset = 0;
+        return G_SOURCE_CONTINUE;
+    }
+
+    std::ifstream input(consumer->path);
+    if (!input.is_open())
+        return G_SOURCE_CONTINUE;
+    input.seekg(consumer->offset);
+
+    std::string command;
+    while (std::getline(input, command)) {
+        if (!command.empty() && command.back() == '\r')
+            command.pop_back();
+        if (!applyBrowserCommand(consumer->view, command))
+            g_warning("Fire4Nix WPE rejected IPC command: %s", command.c_str());
+    }
+    const auto pos = input.tellg();
+    if (pos != std::streampos(-1))
+        consumer->offset = static_cast<std::streamoff>(pos);
+    else
+        consumer->offset = static_cast<std::streamoff>(size);
+    return G_SOURCE_CONTINUE;
 }
 
 void onTitleNotify(GObject* object, GParamSpec*, gpointer)
@@ -456,6 +702,7 @@ void onTitleNotify(GObject* object, GParamSpec*, gpointer)
     const char* title = webkit_web_view_get_title(view);
     if (title != nullptr && *title != '\0')
         g_message("Fire4Nix WPE title: %s", title);
+    publishBrowserState(view, "title-changed");
 }
 
 } // namespace
@@ -466,6 +713,7 @@ int main(int argc, char** argv)
 
     g_message("Fire4Nix WPE launcher starting");
     g_message("Fire4Nix WPE start URL: %s", options.url.c_str());
+    g_message("Fire4Nix WPE target size: %ux%u", options.width, options.height);
 
     GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
     WebKitWebContext* webContext = createWebContext(options);
@@ -474,15 +722,39 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    WebKitWebView* view = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(webContext));
-    if (view == nullptr) {
-        g_printerr("Fire4Nix WPE: failed to create WebKitWebView\n");
+    WebKitNetworkSession* networkSession = createNetworkSession(options);
+    if (!options.automationMode && networkSession == nullptr) {
+        g_printerr("Fire4Nix WPE: failed to create WebKitNetworkSession\n");
+        g_object_unref(webContext);
+        g_main_loop_unref(loop);
         return EXIT_FAILURE;
     }
 
-    applyCookieSettings(webContext, options);
+    WebKitWebView* view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+        "web-context", webContext,
+        "network-session", networkSession,
+        nullptr));
+    if (view == nullptr) {
+        g_printerr("Fire4Nix WPE: failed to create WebKitWebView\n");
+        if (networkSession != nullptr)
+            g_object_unref(networkSession);
+        g_object_unref(webContext);
+        g_main_loop_unref(loop);
+        return EXIT_FAILURE;
+    }
+
     applyBrowserDefaults(view, options);
     loadContentFilterIfRequested(view, options);
+
+    if (!configurePlatformWindow(view, options)) {
+        g_printerr("Fire4Nix WPE: failed to configure the WPEPlatform surface\n");
+        g_object_unref(view);
+        if (networkSession != nullptr)
+            g_object_unref(networkSession);
+        g_object_unref(webContext);
+        g_main_loop_unref(loop);
+        return EXIT_FAILURE;
+    }
 
     g_signal_connect(view, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
     g_signal_connect(view, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
@@ -490,6 +762,11 @@ int main(int argc, char** argv)
     g_signal_connect(view, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
     g_signal_connect(view, "notify::title", G_CALLBACK(onTitleNotify), nullptr);
 
+    g_message("Fire4Nix WPE optional features: devtools=%s webrtc=%s media-stream=%s encrypted-media=%s",
+              options.developerExtras ? "on" : "off",
+              options.webRtc ? "on" : "off",
+              options.mediaStream ? "on" : "off",
+              options.encryptedMedia ? "on" : "off");
     if (options.privateMode)
         g_message("Fire4Nix WPE private browsing enabled");
     if (options.automationMode)
@@ -504,11 +781,23 @@ int main(int argc, char** argv)
     g_unix_signal_add(SIGINT, onUnixSignal, loop);
     g_unix_signal_add(SIGTERM, onUnixSignal, loop);
 
+    CommandConsumer commandConsumer { view, commandFilePath(), 0 };
+    std::error_code commandEc;
+    if (std::filesystem::exists(commandConsumer.path, commandEc))
+        commandConsumer.offset = static_cast<std::streamoff>(std::filesystem::file_size(commandConsumer.path, commandEc));
+    const guint commandPollSource = g_timeout_add(options.commandPollMs, pollBrowserCommands, &commandConsumer);
+    g_message("Fire4Nix WPE IPC poll interval: %u ms", options.commandPollMs);
+
     webkit_web_view_load_uri(view, options.url.c_str());
     g_main_loop_run(loop);
 
+    if (commandPollSource != 0)
+        g_source_remove(commandPollSource);
+
     if (view != nullptr)
         g_object_unref(view);
+    if (networkSession != nullptr)
+        g_object_unref(networkSession);
     if (webContext != nullptr)
         g_object_unref(webContext);
     if (loop != nullptr)
