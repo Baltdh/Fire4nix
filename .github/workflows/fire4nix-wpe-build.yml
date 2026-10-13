@@ -196,7 +196,6 @@ jobs:
             cat dist/WPE-MISSING-SUBPROCESSES.txt
             exit 1
           fi
- ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt || true
           } | tee ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
           tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
           ldconfig
