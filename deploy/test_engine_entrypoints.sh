@@ -49,4 +49,16 @@ grep -q 'MOCK_WPE_ARGS https://example.org/recovery' "$TMP/recovery.log"
 grep -q 'attempting Cog fallback' "$TMP/recovery.log"
 grep -q 'MOCK_COG_ARGS' "$TMP/recovery.log"
 grep -q 'https://example.org/recovery' "$TMP/recovery.log"
-printf '%s\n' 'PASS: Cog/WPE scripts call the Bash engine function, native WPE starts and Cog recovers from fast failure.'
+# Execute the full user-facing entrypoint: Fire4Nix.sh -> run_browser.sh ->
+# engine resolution -> Cog. This catches unset variables hidden by lower-level
+# helper tests, especially under set -u.
+FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/full-engine.conf" \
+    FIRE4NIX_START_PAGE="https://example.org/full-startup" \
+    FIRE4NIX_LOG="$TMP/logs/full-browser.log" \
+    FIRE4NIX_ENTRY_LOG="$TMP/full-entry.log" \
+    sh "$ROOT/navegador-definitivo/Fire4Nix.sh"
+grep -q 'MOCK_COG_ARGS' "$TMP/full-entry.log"
+grep -q 'https://example.org/full-startup' "$TMP/full-entry.log"
+grep -q 'Exit code: 0' "$TMP/full-entry.log"
+grep -q 'launching engine=cog' "$TMP/logs/full-browser.log"
+printf '%s\n' 'PASS: Cog/WPE scripts, Cog fallback and full Fire4Nix.sh startup with initialized log variables.'
