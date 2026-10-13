@@ -533,7 +533,17 @@ gboolean onUnixSignal(gpointer userData)
     auto* loop = static_cast<GMainLoop*>(userData);
     if (loop != nullptr)
         g_main_loop_quit(loop);
-    return G_SOURCE_REMOVE;
+    // The source is explicitly removed before the main loop is released.
+    return G_SOURCE_CONTINUE;
+}
+
+void onWpeViewClosed(WPEView*, gpointer userData)
+{
+    auto* loop = static_cast<GMainLoop*>(userData);
+    if (loop != nullptr) {
+        g_message("Fire4Nix WPE Wayland view closed");
+        g_main_loop_quit(loop);
+    }
 }
 
 struct NavigationCompletion {
@@ -810,6 +820,8 @@ int main(int argc, char** argv)
     }
 
     NavigationCompletion completion { loop, options.exitAfterLoad, false };
+    if (WPEView* wpeView = webkit_web_view_get_wpe_view(view))
+        g_signal_connect(wpeView, "closed", G_CALLBACK(onWpeViewClosed), loop);
     g_signal_connect(view, "load-changed", G_CALLBACK(onLoadChanged), &completion);
     g_signal_connect(view, "load-failed", G_CALLBACK(onLoadFailed), &completion);
     g_signal_connect(view, "load-failed-with-tls-errors", G_CALLBACK(onLoadFailedWithTlsErrors), &completion);
@@ -832,8 +844,8 @@ int main(int argc, char** argv)
     if (!options.contentFilter.empty())
         g_message("Fire4Nix WPE content filter: %s", options.contentFilter.c_str());
 
-    g_unix_signal_add(SIGINT, onUnixSignal, loop);
-    g_unix_signal_add(SIGTERM, onUnixSignal, loop);
+    const guint sigintSource = g_unix_signal_add(SIGINT, onUnixSignal, loop);
+    const guint sigtermSource = g_unix_signal_add(SIGTERM, onUnixSignal, loop);
 
     CommandConsumer commandConsumer { view, commandFilePath(), 0 };
     std::error_code commandEc;
@@ -847,6 +859,11 @@ int main(int argc, char** argv)
 
     if (commandPollSource != 0)
         g_source_remove(commandPollSource);
+    // Avoid leaving GLib signal callbacks pointing at an already freed loop.
+    if (sigintSource != 0)
+        g_source_remove(sigintSource);
+    if (sigtermSource != 0)
+        g_source_remove(sigtermSource);
 
     if (view != nullptr)
         g_object_unref(view);
