@@ -541,7 +541,11 @@ void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
                         loadEvent == WEBKIT_LOAD_COMMITTED ? "load-committed" :
                         loadEvent == WEBKIT_LOAD_FINISHED ? "load-finished" : "load-state";
     publishBrowserState(view, event);
-    if (loadEvent == WEBKIT_LOAD_FINISHED)
+    // LOAD_FINISHED also fires after failed navigations. Only reset the
+    // recovery budget for a successfully committed page without load errors.
+    if (loadEvent == WEBKIT_LOAD_FINISHED &&
+        webkit_web_view_get_estimated_load_progress(view) >= 1.0 &&
+        webkit_web_view_get_uri(view) != nullptr)
         consecutiveWebProcessFailures = 0;
 }
 
