@@ -109,12 +109,25 @@ for f in "$APP/fire4nix-wpe-platform" "$APP/bin/wpe-platform-launcher" "$APP/bin
  if command -v readelf >/dev/null 2>&1; then
    readelf -h "$f" 2>/dev/null | grep -E 'Class:|Machine:' || true
    readelf -d "$f" 2>/dev/null | grep NEEDED || true
+   check_elf_abi "$f"
  fi
  if command -v ldd >/dev/null 2>&1 && [ -x "$f" ]; then
    dependencies="$(ldd "$f" 2>&1 || true)"
    case "$dependencies" in
      *'not found'*) echo "WARNING: unresolved shared libraries for $f"; printf '%s\n' "$dependencies" | grep 'not found' ;;
    esac
+ fi
+done
+echo "WPE subprocess inventory (system paths):"
+for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+ found=""
+ for root in /usr/libexec/wpe-webkit-2.0 /usr/local/libexec/wpe-webkit-2.0 /usr/lib/wpe-webkit-2.0 /storage/usr/libexec/wpe-webkit-2.0; do
+  if [ -f "$root/$process" ]; then found="$root/$process"; break; fi
+ done
+ if [ -n "$found" ]; then
+  echo "$process: $found"
+ else
+  echo "$process: NOT FOUND at known WPE runtime paths"
  fi
 done
 for name in libWPEBackend-fdo-1.0.so libwpe-1.0.so libWPEWebKit-2.0.so libwebkit2gtk-4.1.so; do
