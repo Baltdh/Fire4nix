@@ -30,6 +30,10 @@ cp "$tmp/external/downloads/Fire4Nix/Fire4Nix.sh" "$tmp/Tools/Fire4Nix/Fire4Nix.
 chmod +x "$tmp/Tools/Fire4Nix/Start.sh"
 FIRE4NIX_LAUNCH_LOG="$log" FIRE4NIX_DATA_ROOT="$tmp/data" "$tmp/Tools/Fire4Nix/Start.sh"
 test "$(grep -c 'PORTABLE_TEST_OK' "$log")" -eq 4
-env -u FIRE4NIX_APP_DIR sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/diagnostic.log"
+env -u FIRE4NIX_APP_DIR FIRE4NIX_DIAGNOSTIC_LOG="$tmp/diagnostic-report.log" \
+  sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/diagnostic.log"
 grep -F "app: $tmp/Tools/Fire4Nix" "$tmp/diagnostic.log"
+grep -F "app: $tmp/Tools/Fire4Nix" "$tmp/diagnostic-report.log"
+grep -F "Diagnostic saved: $tmp/diagnostic-report.log" "$tmp/diagnostic.log"
+test "$(stat -c '%a' "$tmp/diagnostic-report.log")" = 600
 echo 'Portable, symlink, override and Tools directory/diagnostic tests passed'
