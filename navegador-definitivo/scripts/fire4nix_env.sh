@@ -762,6 +762,21 @@ fire4nix_activate_bundled_wpe_runtime() {
                 ;;
         esac
     done
+    # Architecture checks precede LD_LIBRARY_PATH changes. A misplaced
+    # ARM32/x86_64 library must never be treated as a ROCKNIX WPE engine.
+    if ! command -v od >/dev/null 2>&1; then
+        echo "[Fire4Nix] ERROR: od required for bundled ELF architecture checks" >&2
+        return 1
+    fi
+    local elf_header elf_machine
+    for path in "$library" "$process_dir/WPEWebProcess" "$process_dir/WPENetworkProcess" "$process_dir/WPEGPUProcess"; do
+        elf_header="$(LC_ALL=C od -An -tx1 -N6 "$path" 2>/dev/null | tr -d '[:space:]')" || return 1
+        elf_machine="$(LC_ALL=C od -An -tx1 -j18 -N2 "$path" 2>/dev/null | tr -d '[:space:]')" || return 1
+        if [ "$elf_header" != 7f454c460201 ] || [ "$elf_machine" != b700 ]; then
+            echo "[Fire4Nix] ERROR: bundled WPE component is not ELF64 AArch64: $path" >&2
+            return 1
+        fi
+    done
     if [ ! -f "$root/SHA256SUMS" ] || ! command -v sha256sum >/dev/null 2>&1; then
         echo "[Fire4Nix] ERROR: bundled WPE requires SHA256SUMS and sha256sum" >&2
         return 1
