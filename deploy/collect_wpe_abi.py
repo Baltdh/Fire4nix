@@ -16,6 +16,7 @@ import sys
 
 PROCESSES = ("WPEWebProcess", "WPENetworkProcess", "WPEGPUProcess")
 VERSION_PATTERN = re.compile(r"GLIBC_(\d+(?:\.\d+)+)")
+CPP_VERSION_PATTERN = re.compile(r"\b(GLIBCXX|CXXABI)_(\d+(?:\.\d+)+)")
 NEEDED_PATTERN = re.compile(r"\(NEEDED\).*?\[(.*?)\]")
 INTERPRETER_PATTERN = re.compile(r"Requesting program interpreter: (.*?)\]")
 SONAME_PATTERN = re.compile(r"\(SONAME\).*?\[(.*?)\]")
@@ -46,6 +47,10 @@ def read_elf(path, expected_machine):
     output = result.stdout
     versions = sorted(set(VERSION_PATTERN.findall(output)), key=version_key)
     version_name = "GLIBC_" + versions[-1] if versions else None
+    cpp_requirements = {}
+    for namespace in ("GLIBCXX", "CXXABI"):
+        numbers = sorted({ver for name, ver in CPP_VERSION_PATTERN.findall(output) if name == namespace}, key=version_key)
+        cpp_requirements[namespace] = [namespace + "_" + v for v in numbers]
     sha = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -57,6 +62,7 @@ def read_elf(path, expected_machine):
         "elf_machine": machine,
         "glibc_versions": ["GLIBC_" + x for x in versions],
         "highest_required_glibc": version_name,
+        "cpp_abi_version_requirements": cpp_requirements,
         "interpreter": INTERPRETER_PATTERN.findall(output),
         "needed": sorted(set(NEEDED_PATTERN.findall(output))),
         "soname": SONAME_PATTERN.findall(output),
@@ -73,12 +79,19 @@ def inventory(launcher, webkit, subprocess_dir, expected_machine=183):
          for record in records.values() for version in record["glibc_versions"]},
         key=version_key
     )
+    highest_cpp_requirements = {}
+    for namespace in ("GLIBCXX", "CXXABI"):
+        numbers = sorted({v.removeprefix(namespace + "_")
+                          for entry in records.values()
+                          for v in entry["cpp_abi_version_requirements"][namespace]}, key=version_key)
+        highest_cpp_requirements[namespace] = namespace + "_" + numbers[-1] if numbers else None
     return {
         "schema": "fire4nix-wpe-abi-v1",
         "qualification": "build-origin static ABI inventory only; ROCKNIX runtime, dynamic plugins and graphics unverified",
         "expected_elf_machine": expected_machine,
         "required_processes": list(PROCESSES),
         "highest_required_glibc_across_components": ("GLIBC_" + versions[-1]) if versions else None,
+        "highest_required_cpp_abi_across_components": highest_cpp_requirements,
         "components": records,
     }
 
