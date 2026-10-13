@@ -6,6 +6,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/app" "$TMP/data" "$TMP/runtime"
 cp "$ROOT/deploy/Fire4Nix-ROCKNIX.sh" "$TMP/app/Start.sh"
+chmod +x "$TMP/app/Start.sh"
 LOG="$TMP/launch.log"
 run() {
   FIRE4NIX_LAUNCH_LOG="$LOG" FIRE4NIX_DATA_ROOT="$TMP/data" \
