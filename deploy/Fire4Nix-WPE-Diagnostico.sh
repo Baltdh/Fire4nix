@@ -96,6 +96,26 @@ for manifest in "$APP/../WPE-ABI-REQUIREMENTS.json" "$APP/WPE-ABI-REQUIREMENTS.j
   # This does not require jq or Python to be installed on ROCKNIX.
   wpe_floor="$(sed -n 's/.*"highest_required_glibc_across_components": "\(GLIBC_[0-9.]*\)".*/\1/p' "$manifest" 2>/dev/null | head -1)"
   echo "WPE build-origin GLIBC floor: ${wpe_floor:-unavailable}"
+  case "$LIBC_VERSION" in
+   "glibc "[0-9]*)
+    if [ -n "$wpe_floor" ]; then
+     if awk -v need="${wpe_floor#GLIBC_}" -v host="${LIBC_VERSION#glibc }" 'BEGIN {
+       split(need,n,"."); split(host,h,".");
+       for (i=1; i<=3; i++) {
+         a=n[i]+0; b=h[i]+0;
+         if (a>b) exit 1;
+         if (a<b) exit 0;
+       }
+       exit 0
+     }'; then
+      echo "WPE build GLIBC requirement: satisfied (other runtime dependencies unverified)"
+     else
+      echo "INCOMPATIBLE: WPE build requires $wpe_floor but device reports $LIBC_VERSION"
+     fi
+    fi
+    ;;
+   *) echo "WPE build GLIBC comparison: unavailable" ;;
+  esac
   echo "WPE ABI validation: device libraries, dynamic modules and graphics unverified"
   break
  fi
