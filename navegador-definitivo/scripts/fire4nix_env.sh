@@ -897,18 +897,7 @@ fire4nix_detect_engine() {
                         return 0
                     fi
                     ;;
-                browser.arm64)
-                    if [ -x "${FIRE4NIX_BINARY:-}" ] && [ "${FIRE4NIX_BINARY##*/}" = "browser.arm64" ]; then
-                        printf '%s
-' "browser.arm64"
-                        return 0
-                    fi
-                    if [ -x "${FIRE4NIX_HOME:-$APP_DIR}/bin/browser.arm64" ]; then
-                        printf '%s
-' "browser.arm64"
-                        return 0
-                    fi
-                    ;;
+
             esac
         done
     fi
@@ -927,24 +916,8 @@ fire4nix_detect_engine() {
         fi
     done
 
-    if [ -n "${FIRE4NIX_BINARY:-}" ] && [ -x "${FIRE4NIX_BINARY:-}" ]; then
-        case "${FIRE4NIX_BINARY##*/}" in
-            browser.arm64|browser|fire4nix)
-                printf '%s
-' "${FIRE4NIX_BINARY##*/}"
-                return 0
-                ;;
-        esac
-    fi
-
-    if [ -x "${FIRE4NIX_HOME:-$APP_DIR}/bin/browser.arm64" ]; then
-        printf '%s
-' "browser.arm64"
-        return 0
-    fi
-
-    printf '%s
-' "auto"
+    # Do not auto-select browser.arm64: it is a shell wrapper, not an engine.
+    printf '%s\n' "auto"
 }
 
 fire4nix_resolve_engine() {
@@ -1061,6 +1034,10 @@ fire4nix_launch_engine() {
 
     local engine normalized_url profile_dir
     engine="$(fire4nix_resolve_engine "$requested_engine")"
+    if [ "$engine" = "auto" ]; then
+        echo "[Fire4Nix] ERROR: no native browser engine available" >&2
+        return 127
+    fi
     normalized_url="$(fire4nix_normalize_target "$url")"
     profile_dir="$(fire4nix_apply_engine_selection "$engine")"
 
