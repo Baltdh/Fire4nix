@@ -8,7 +8,7 @@ cleanup() {
   rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "FAIL: engine-entrypoint test returned $rc" >&2
-    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log" "$TMP/full-trace.log" "$TMP/positional-entry.log" "$TMP/failing-entry.log"; do
+    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/drm.log" "$TMP/override.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log" "$TMP/full-trace.log" "$TMP/positional-entry.log" "$TMP/failing-entry.log"; do
       if [ -f "$f" ]; then
         echo "--- $f ---" >&2
         cat "$f" >&2
@@ -28,6 +28,7 @@ COG
 cat > "$TMP/bin/mock-wpe" <<'WPE'
 #!/bin/sh
 printf 'MOCK_WPE_ARGS %s\n' "$*"
+printf 'MOCK_WPE_PLATFORM %s LEGACY %s\n' "${WPE_PLATFORM:-unset}" "${WPE_DISPLAY:-unset}"
 exit "${MOCK_WPE_EXIT_CODE:-0}"
 WPE
 chmod +x "$TMP/bin/cog" "$TMP/bin/mock-wpe"
@@ -43,8 +44,14 @@ bash "$ROOT/navegador-definitivo/scripts/wpe_cog_launch.sh" "https://example.org
 grep -q 'MOCK_COG_ARGS' "$TMP/cog.log"
 grep -q 'https://example.org/cog-entry' "$TMP/cog.log"
 
-bash "$ROOT/navegador-definitivo/scripts/wpe_platform_launch.sh" "https://example.org/wpe-entry" > "$TMP/wpe.log" 2>&1
+FIRE4NIX_WPE_DISPLAY=wayland bash "$ROOT/navegador-definitivo/scripts/wpe_platform_launch.sh" "https://example.org/wpe-entry" > "$TMP/wpe.log" 2>&1
 grep -q 'MOCK_WPE_ARGS https://example.org/wpe-entry' "$TMP/wpe.log"
+grep -q 'MOCK_WPE_PLATFORM wayland LEGACY wpe-display-wayland' "$TMP/wpe.log"
+# Verify the DRM selection and explicit upstream override, without a GPU.
+FIRE4NIX_WPE_DISPLAY=drm bash "$ROOT/navegador-definitivo/scripts/wpe_platform_launch.sh" "https://example.org/drm-entry" > "$TMP/drm.log" 2>&1
+grep -q 'MOCK_WPE_PLATFORM drm LEGACY wpe-display-drm' "$TMP/drm.log"
+FIRE4NIX_WPE_DISPLAY=wayland WPE_PLATFORM=headless bash "$ROOT/navegador-definitivo/scripts/wpe_platform_launch.sh" "https://example.org/override" > "$TMP/override.log" 2>&1
+grep -q 'MOCK_WPE_PLATFORM headless LEGACY wpe-display-wayland' "$TMP/override.log"
 
 MOCK_WPE_EXIT_CODE=42 bash "$ROOT/navegador-definitivo/scripts/wpe_platform_launch.sh" "https://example.org/recovery" > "$TMP/recovery.log" 2>&1
 grep -q 'MOCK_WPE_ARGS https://example.org/recovery' "$TMP/recovery.log"
