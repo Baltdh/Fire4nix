@@ -53,6 +53,7 @@ test "$(stat -c '%a' "$tmp/diagnostic-report.log")" = 600
 # that it reports incompatible symbol requirements, rather than claiming the
 # standalone launcher will run on ROCKNIX.
 mkdir -p "$tmp/Tools/Fire4Nix/bin" "$tmp/mock-bin"
+printf '%s\n' '{"highest_required_glibc_across_components": "GLIBC_9.99"}' > "$tmp/Tools/WPE-ABI-REQUIREMENTS.json"
 cp /bin/true "$tmp/Tools/Fire4Nix/bin/fire4nix-wpe-platform"
 cat > "$tmp/mock-bin/getconf" <<'MOCK'
 #!/bin/sh
@@ -61,6 +62,7 @@ MOCK
 chmod +x "$tmp/mock-bin/getconf"
 PATH="$tmp/mock-bin:$PATH" FIRE4NIX_DIAGNOSTIC_LOG="$tmp/incompatible-report.log" \
   sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/incompatible-console.log"
+grep -F 'WPE build-origin GLIBC floor: GLIBC_9.99' "$tmp/incompatible-report.log"
 grep -F 'Highest required GLIBC: GLIBC_' "$tmp/incompatible-report.log"
 grep -F 'INCOMPATIBLE: binary requires GLIBC_' "$tmp/incompatible-report.log"
 grep -F 'WPEWebProcess: NOT FOUND' "$tmp/incompatible-report.log"
