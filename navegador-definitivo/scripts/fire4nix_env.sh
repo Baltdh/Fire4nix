@@ -777,6 +777,16 @@ fire4nix_activate_bundled_wpe_runtime() {
             return 1
         fi
     done
+    # Prevent shipping foreign-architecture ELF shared objects/plugins inside
+    # an otherwise AArch64 runtime. Keep resource/non-ELF data unaffected.
+    while IFS= read -r -d '' path; do
+        elf_header="$(LC_ALL=C od -An -tx1 -N6 "$path" 2>/dev/null | tr -d '[:space:]')" || return 1
+        elf_machine="$(LC_ALL=C od -An -tx1 -j18 -N2 "$path" 2>/dev/null | tr -d '[:space:]')" || return 1
+        if [ "$elf_header" != 7f454c460201 ] || [ "$elf_machine" != b700 ]; then
+            echo "[Fire4Nix] ERROR: foreign ELF library in WPE runtime: $path" >&2
+            return 1
+        fi
+    done < <(find "$lib_dir" -type f \( -name '*.so' -o -name '*.so.*' \) -print0)
     if [ ! -f "$root/SHA256SUMS" ] || ! command -v sha256sum >/dev/null 2>&1; then
         echo "[Fire4Nix] ERROR: bundled WPE requires SHA256SUMS and sha256sum" >&2
         return 1
@@ -797,6 +807,20 @@ fire4nix_activate_bundled_wpe_runtime() {
         echo "[Fire4Nix] ERROR: unsafe or malformed bundled checksum manifest" >&2
         return 1
     fi
+    # Every indispensable file must be covered by the checksum manifest.
+    # A valid digest list that omits WPEWebProcess is not an integrity check.
+    local required_file required_relative
+    for required_file in "$library" "$process_dir/WPEWebProcess" "$process_dir/WPENetworkProcess" "$process_dir/WPEGPUProcess"; do
+        resolved="$(readlink -f "$required_file" 2>/dev/null)" || return 1
+        required_relative="${resolved#"$root"/}"
+        if ! awk -v required="$required_relative" '
+            substr($0,67)==required { matched=1 }
+            END { if (!matched) exit 1 }
+        ' "$root/SHA256SUMS"; then
+            echo "[Fire4Nix] ERROR: required WPE component absent from manifest: $required_relative" >&2
+            return 1
+        fi
+    done
     if ! (cd "$root" && sha256sum -c SHA256SUMS >/dev/null 2>&1); then
         echo "[Fire4Nix] ERROR: bundled WPE checksum mismatch" >&2
         return 1
