@@ -532,6 +532,8 @@ gboolean onUnixSignal(gpointer userData)
     return G_SOURCE_REMOVE;
 }
 
+unsigned consecutiveWebProcessFailures = 0;
+
 void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
 {
     logLoadState(view, loadEvent);
@@ -539,6 +541,8 @@ void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
                         loadEvent == WEBKIT_LOAD_COMMITTED ? "load-committed" :
                         loadEvent == WEBKIT_LOAD_FINISHED ? "load-finished" : "load-state";
     publishBrowserState(view, event);
+    if (loadEvent == WEBKIT_LOAD_FINISHED)
+        consecutiveWebProcessFailures = 0;
 }
 
 gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer)
@@ -577,10 +581,9 @@ gboolean onWebProcessTerminated(WebKitWebView* view, WebKitWebProcessTermination
     publishBrowserState(view, "web-process-terminated", reasonText);
     // Avoid an infinite crash/reload cycle on devices with incompatible
     // graphics drivers or a broken bundled WPE runtime.
-    static unsigned consecutiveProcessFailures = 0;
-    ++consecutiveProcessFailures;
-    if (view != nullptr && consecutiveProcessFailures <= 2) {
-        g_warning("Fire4Nix WPE attempting web-process recovery %u/2", consecutiveProcessFailures);
+    ++consecutiveWebProcessFailures;
+    if (view != nullptr && consecutiveWebProcessFailures <= 2) {
+        g_warning("Fire4Nix WPE attempting web-process recovery %u/2", consecutiveWebProcessFailures);
         webkit_web_view_reload(view);
     } else {
         g_critical("Fire4Nix WPE stopped automatic reloads after repeated web-process failures; inspect the launcher log");
