@@ -491,11 +491,29 @@ jobs:
             echo 'Subprocess inventory complete in build container; ROCKNIX still unverified' >> dist/BUILD-MANIFEST.txt
           fi
           echo "Commit: $GITHUB_SHA" >> dist/BUILD-MANIFEST.txt
+      - name: Record matching WPE ABI requirements (build-origin only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          python3 ../deploy/collect_wpe_abi.py \
+            --launcher "$(pwd)/fire4nix-wpe-platform" \
+            --webkit "$webkit" \
+            --process-dir /usr/libexec/wpe-webkit-2.0 \
+            --output dist/WPE-ABI-REQUIREMENTS.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("dist/WPE-ABI-REQUIREMENTS.json").read_text())
+          assert data["expected_elf_machine"] == 183
+          assert len(data["components"]) == 5
+          assert "unverified" in data["qualification"].lower()
+          PY
       - name: Stage experimental ARM64 Tools package (launcher only)
         working-directory: navegador-definitivo
         run: |
           set -eu
-          bash ../deploy/stage_rocknix_candidate.sh "$(pwd)/fire4nix-wpe-platform" "$(pwd)/dist/rocknix-candidate"
+          FIRE4NIX_WPE_ABI_MANIFEST="$(pwd)/dist/WPE-ABI-REQUIREMENTS.json" bash ../deploy/stage_rocknix_candidate.sh "$(pwd)/fire4nix-wpe-platform" "$(pwd)/dist/rocknix-candidate"
           cd dist/rocknix-candidate
           sha256sum -c SHA256SUMS
           test -s Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip
