@@ -33,4 +33,26 @@ APP
 run
 grep -q MOCK_ENGINE_RECOVERED "$LOG"
 grep -q 'Browser exit code: 0' "$LOG"
-echo 'PASS: missing app, failed engine, recovery and logs'
+# Native WPE may be present but incompatible with the device's graphics/runtime.
+# In that case a fast startup failure must fall back to Cog, rather than close.
+mkdir -p "$TMP/mock-bin"
+cat > "$TMP/mock-bin/fake-wpe" <<'WPE'
+#!/bin/sh
+echo MOCK_WPE_STARTUP_FAILURE
+exit 42
+WPE
+cat > "$TMP/mock-bin/cog" <<'COG'
+#!/bin/sh
+echo MOCK_COG_RECOVERY
+exit 0
+COG
+chmod +x "$TMP/mock-bin/fake-wpe" "$TMP/mock-bin/cog"
+env PATH="$TMP/mock-bin:$PATH" FIRE4NIX_WPE_PLATFORM_BINARY="$TMP/mock-bin/fake-wpe" \
+    FIRE4NIX_CONFIG_DIR="$TMP/data" FIRE4NIX_RUNTIME_DIR="$TMP/runtime" \
+    bash -c 'APP_DIR="$1"; source "$2"; fire4nix_launch_wpe_platform "https://example.org"' \
+    bash "$TMP/app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh" \
+    > "$TMP/native-fallback.log" 2>&1
+grep -q MOCK_WPE_STARTUP_FAILURE "$TMP/native-fallback.log"
+grep -q 'attempting Cog fallback' "$TMP/native-fallback.log"
+grep -q MOCK_COG_RECOVERY "$TMP/native-fallback.log"
+echo 'PASS: missing app, failed engine, recovery, logs and native WPE to Cog fallback'
