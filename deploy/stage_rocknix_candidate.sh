@@ -45,6 +45,8 @@ O pacote inclui somente o executavel do launcher WPE e scripts de
 inicializacao/diagnostico. NAO inclui libWPEWebKit, seus subprocessos nem
 todas as bibliotecas necessarias. Foi compilado em Debian ARM64; o ABI do
 ROCKNIX ainda NAO foi verificado. Nao existe garantia de que va abrir.
+Se presente, WPE-ABI-REQUIREMENTS.json documenta as dependencias da build
+Debian e NAO significa que elas estejam instaladas no dispositivo.
 
 1. Extraia a pasta Fire4Nix-ROCKNIX-Tools-CANDIDATE para a pasta Tools.
 2. Execute Diagnostico.sh e consulte /storage/fire4nix-wpe-diagnostic.log.
@@ -56,6 +58,16 @@ ROCKNIX ainda NAO foi verificado. Nao existe garantia de que va abrir.
 Nao execute como root, nao desative o sandbox, nao substitua bibliotecas
 de sistema do ROCKNIX. Aprovacao de CI != aprovacao no aparelho.
 EOF
+
+if [ -n "${FIRE4NIX_WPE_ABI_MANIFEST:-}" ]; then
+    if [ ! -f "$FIRE4NIX_WPE_ABI_MANIFEST" ]; then
+        echo "ERROR: requested WPE ABI report not found: $FIRE4NIX_WPE_ABI_MANIFEST" >&2
+        exit 4
+    fi
+    python3 -m json.tool "$FIRE4NIX_WPE_ABI_MANIFEST" >/dev/null ||
+        { echo 'ERROR: invalid WPE ABI JSON' >&2; exit 4; }
+    cp "$FIRE4NIX_WPE_ABI_MANIFEST" "$STAGE/WPE-ABI-REQUIREMENTS.json"
+fi
 
 if command -v readelf >/dev/null 2>&1; then
     readelf -h "$BINARY" > "$STAGE/ELF-HEADERS.txt"
