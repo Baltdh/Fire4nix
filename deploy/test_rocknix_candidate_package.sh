@@ -15,7 +15,8 @@ chmod +x "$TMP/mock-arm64"
 # ELF64 little-endian AArch64 machine ID 0xb7; this fixture is for archive
 # validation, not for execution on the R36H or another ARM64 device.
 printf '\267\000' | dd of="$TMP/mock-arm64" bs=1 seek=18 conv=notrunc 2>/dev/null
-bash "$ROOT/deploy/stage_rocknix_candidate.sh" "$TMP/mock-arm64" "$TMP/out"
+printf '%s\n' '{"schema":"fire4nix-wpe-abi-v1","qualification":"build-origin only; ROCKNIX unverified"}' > "$TMP/abi.json"
+FIRE4NIX_WPE_ABI_MANIFEST="$TMP/abi.json" bash "$ROOT/deploy/stage_rocknix_candidate.sh" "$TMP/mock-arm64" "$TMP/out"
 test -s "$TMP/out/Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip"
 (
   cd "$TMP/out"
@@ -26,6 +27,7 @@ test -s "$TMP/out/Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip"
 python3 - "$TMP/out/Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip" <<'PY'
 from pathlib import PurePosixPath
 import sys
+import json
 import zipfile
 file = sys.argv[1]
 prefix = 'Fire4Nix-ROCKNIX-Tools-CANDIDATE/'
@@ -40,6 +42,7 @@ required = (
     'Fire4Nix/scripts/wpe_platform_launch.sh',
     'Fire4Nix/bin/fire4nix-wpe-platform',
     'SHA256SUMS',
+    'WPE-ABI-REQUIREMENTS.json',
 )
 with zipfile.ZipFile(file) as archive:
     assert not archive.testzip(), "Corrupt ZIP"
@@ -51,6 +54,9 @@ with zipfile.ZipFile(file) as archive:
         assert '..' not in PurePosixPath(name).parts
     readme = archive.read(prefix + 'LEIA-ANTES-DE-TESTAR.txt').decode()
     assert 'NAO inclui libWPEWebKit' in readme
+    assert 'NAO significa que elas estejam instaladas' in readme
+    manifest = json.loads(archive.read(prefix + 'WPE-ABI-REQUIREMENTS.json'))
+    assert manifest['schema'] == 'fire4nix-wpe-abi-v1'
     binary = archive.read(prefix + 'Fire4Nix/bin/fire4nix-wpe-platform')
     assert binary[:6] == b'\x7fELF\x02\x01' and binary[18:20] == b'\xb7\x00'
     assert archive.getinfo(prefix+'Start-Fire4Nix.sh').external_attr >> 16 & 0o111
