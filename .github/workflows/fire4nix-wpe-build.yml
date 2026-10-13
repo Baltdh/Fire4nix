@@ -193,6 +193,11 @@ jobs:
             cat PROCESS-FILES.txt
             echo 'Installed experimental library:'
             pkg-config --modversion wpe-webkit-2.0
+            echo 'Debian reference library candidates:'
+            find extracted -type f -name 'libWPEWebKit-2.0.so*' -print
+            echo 'Source archive subprocess candidates:'
+            cat ../WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
+            echo 'Version compatibility must be established before using reference executables.'
             echo 'Compatibility NOT established: do not combine processes with experimental library yet.'
           } > ../WPE-DEBIAN-REFERENCE-COMPARISON.txt
           cat ../WPE-DEBIAN-REFERENCE-COMPARISON.txt
