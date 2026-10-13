@@ -179,7 +179,7 @@ jobs:
             export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/diagnostic-runtime"
             mkdir -p "$FIRE4NIX_RUNTIME_DIR"
             set +e
-            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 timeout 20s ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/page-smoke/unsandboxed-launcher.log 2>&1
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland timeout 20s ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/page-smoke/unsandboxed-launcher.log 2>&1
             diagnostic_status=$?
             set -e
             echo "Diagnostic launcher exit status: $diagnostic_status" >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
@@ -187,7 +187,7 @@ jobs:
             if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
               cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/page-smoke/unsandboxed-browser.state
             fi
-            if [ "$diagnostic_status" -eq 0 ] && grep -q 'Fire4Nix WPE finished:' dist/page-smoke/unsandboxed-launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/unsandboxed-launcher.log && grep -q 'event=load-finished' dist/page-smoke/unsandboxed-browser.state 2>/dev/null && grep -q 'loading=0' dist/page-smoke/unsandboxed-browser.state 2>/dev/null; then
+            if [ "$diagnostic_status" -eq 0 ] && grep -q 'Fire4Nix WPE graphics platform: headless' dist/page-smoke/unsandboxed-launcher.log && grep -q 'Fire4Nix WPE finished:' dist/page-smoke/unsandboxed-launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/unsandboxed-launcher.log && grep -q 'event=load-finished' dist/page-smoke/unsandboxed-browser.state 2>/dev/null && grep -q 'loading=0' dist/page-smoke/unsandboxed-browser.state 2>/dev/null; then
               echo 'DIAGNOSTIC PASS: HTML loaded only with sandbox disabled; production remains BLOCKED.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
             else
               echo 'DIAGNOSTIC FAIL: HTML not verified even with sandbox disabled.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
@@ -197,7 +197,7 @@ jobs:
             export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/diagnostic-failure-runtime"
             mkdir -p "$FIRE4NIX_RUNTIME_DIR"
             set +e
-            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 timeout 15s ./fire4nix-wpe-platform --headless --exit-after-load "file://$(pwd)/dist/page-smoke/does-not-exist.html" > dist/page-smoke/unsandboxed-negative.log 2>&1
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland timeout 15s ./fire4nix-wpe-platform --headless --exit-after-load "file://$(pwd)/dist/page-smoke/does-not-exist.html" > dist/page-smoke/unsandboxed-negative.log 2>&1
             negative_status=$?
             set -e
             echo "Negative-control exit status: $negative_status" >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
