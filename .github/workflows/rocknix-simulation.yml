@@ -18,6 +18,7 @@ jobs:
           bash deploy/test_portable_launcher.sh
           bash deploy/test_rocknix_simulation.sh
           bash deploy/test_rocknix_failure_modes.sh
+          bash deploy/test_engine_entrypoints.sh
       - name: Inspect official ROCKNIX build sources
         run: |
           git clone --depth 1 --filter=blob:none --sparse --branch next https://github.com/ROCKNIX/distribution.git /tmp/rocknix
