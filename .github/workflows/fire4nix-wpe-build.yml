@@ -47,9 +47,9 @@ jobs:
           sha256sum -c SHA256SUMS
           mkdir -p ../navegador-definitivo/dist
           tar -tzf Fire4Nix-WPE-ARM64-library.tar.gz > ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt
-          {
-            echo 'Subprocess candidates inside the original WPE library archive:'
-            grep -Ei '(^|/)(WPEWebProcess|WPENetworkProcess|WPEGPUProcess|[^/]*[Ww]eb[Pp]rocess[^/]*|[^/]*[Nn]etwork[Pp]rocess[^/]*|[^/]*[Gg][Pp][Uu][Pp]rocess[^/]*)
+          grep -E 'WPEWebProcess|WPENetworkProcess|WPEGPUProcess|WebProcess|NetworkProcess|GPUProcess' ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt > ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt || true
+          cat ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
+          tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
           ldconfig
           pkg-config --exists wpe-webkit-2.0
       - name: Compile actual WPE launcher for ARM64
