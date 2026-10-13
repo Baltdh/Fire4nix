@@ -10,6 +10,7 @@
 #include <wpe/webkit.h>
 #include <wpe/wpe-platform.h>
 #include <wpe/wayland/wpe-wayland.h>
+#include <EGL/egl.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -907,6 +908,21 @@ int main(int argc, char** argv)
     if (view != nullptr)
         g_object_unref(view);
     if (ownedWaylandDisplay) {
+        // Experimental opt-in only: test whether terminating the EGL display
+        // while the Wayland connection is still alive avoids the Mesa crash
+        // seen during WPEPlatform teardown on the CI software renderer.
+        // Do not enable this automatically on real hardware before validation.
+        if (envEnabled("FIRE4NIX_WPE_EARLY_EGL_TERMINATE")) {
+            g_autoptr(GError) eglError = nullptr;
+            gpointer nativeEglDisplay = wpe_display_get_egl_display(ownedWaylandDisplay.get(), &eglError);
+            if (nativeEglDisplay != nullptr) {
+                EGLBoolean terminated = eglTerminate(reinterpret_cast<EGLDisplay>(nativeEglDisplay));
+                g_message("Fire4Nix WPE experimental early EGL terminate: %s", terminated ? "ok" : "failed");
+            } else {
+                g_warning("Fire4Nix WPE early EGL terminate unavailable: %s",
+                    eglError ? eglError->message : "missing display");
+            }
+        }
         g_message("Fire4Nix WPE releasing explicit Wayland display");
         ownedWaylandDisplay.reset();
     }
