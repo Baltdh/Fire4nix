@@ -22,6 +22,42 @@ jobs:
           if file navegador-definitivo/bin/fire4nix-wpe-platform | grep -q ELF; then
             echo "Unexpected ELF in wrapper path"; exit 1
           fi
+  host-sandbox-preflight:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - name: Check host namespace and Bubblewrap capabilities
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          mkdir -p host-sandbox-evidence
+          {
+            uname -a
+            echo "Host user namespace limit:"
+            cat /proc/sys/user/max_user_namespaces 2>/dev/null || true
+            echo "Host unprivileged namespace setting:"
+            cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
+            echo "Host seccomp mode:"
+            grep -E '^(NoNewPrivs|Seccomp):' /proc/self/status || true
+          } > host-sandbox-evidence/environment.txt
+          set +e
+          bwrap --unshare-user --ro-bind / / -- /bin/true > host-sandbox-evidence/bwrap.log 2>&1
+          status=$?
+          set -e
+          echo "Host Bubblewrap status: $status" | tee host-sandbox-evidence/result.txt
+          cat host-sandbox-evidence/bwrap.log
+          if [ "$status" -ne 0 ]; then
+            echo 'Host namespace preflight failed; no browser rendering claim.' >> host-sandbox-evidence/result.txt
+            exit 1
+          fi
+          echo 'Host namespace preflight passed; WPE HTML rendering still requires a separate test.' >> host-sandbox-evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-ARM64-host-sandbox-preflight
+          path: host-sandbox-evidence/
+          if-no-files-found: warn
   wpe-build:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
