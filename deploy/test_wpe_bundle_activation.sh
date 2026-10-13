@@ -65,6 +65,18 @@ printf '\076\000' | dd of="$TMP/bundle/libexec/wpe-webkit-2.0/WPEGPUProcess" bs=
 reject 'x86_64 ELF masquerading as AArch64'
 printf '\267\000' | dd of="$TMP/bundle/libexec/wpe-webkit-2.0/WPEGPUProcess" bs=1 seek=18 conv=notrunc 2>/dev/null
 
+# The checksum list must cover all required helper executables.
+cp "$TMP/bundle/SHA256SUMS" "$TMP/complete-manifest"
+grep -v 'WPENetworkProcess' "$TMP/complete-manifest" > "$TMP/bundle/SHA256SUMS"
+reject 'checksum manifest missing WPENetworkProcess'
+cp "$TMP/complete-manifest" "$TMP/bundle/SHA256SUMS"
+
+# Foreign architecture dependencies cannot be mixed into the bundle.
+cp /bin/true "$TMP/bundle/lib/libforeign.so.1"
+printf '\\076\\000' | dd of="$TMP/bundle/lib/libforeign.so.1" bs=1 seek=18 conv=notrunc 2>/dev/null
+reject 'foreign ELF shared library'
+rm "$TMP/bundle/lib/libforeign.so.1"
+
 # Preserve ROCKNIX's own libc and dynamic loader.
 cp "$TMP/bundle/lib/libWPEWebKit-2.0.so" "$TMP/bundle/lib/libc.so.6"
 reject 'bundled libc.so.6'
