@@ -711,7 +711,6 @@ fire4nix_wpe_platform_binary() {
         "${FIRE4NIX_HOME:-$APP_DIR}/build/fire4nix-wpe-platform"
         "${FIRE4NIX_HOME:-$APP_DIR}/build/wpe-platform-launcher"
         "${FIRE4NIX_HOME:-$APP_DIR}/build/wpe-platform"
-        "${FIRE4NIX_HOME:-$APP_DIR}/bin/fire4nix-wpe-platform"
     )
 
     local candidate
@@ -1043,6 +1042,10 @@ fire4nix_launch_wpe_platform() {
         exec "$native_binary" "$url" "$@"
     fi
 
+    if ! command -v cog >/dev/null 2>&1; then
+        echo "[Fire4Nix] ERROR: no native WPE binary and Cog is not installed" >&2
+        return 127
+    fi
     cog_platform="$(fire4nix_cog_platform_name)"
     fire4nix_cog_runtime_env "$cog_platform"
     local -a cog_args
