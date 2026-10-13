@@ -705,6 +705,7 @@ fire4nix_activate_bundled_wpe_runtime() {
         return 0
     fi
 
+    root="$(CDPATH='' cd -- "$root" 2>/dev/null && pwd -P)" || return 1
     local lib_dir="$root/lib"
     local process_dir="$root/libexec/wpe-webkit-2.0"
     local process library resolved path
@@ -739,7 +740,18 @@ fire4nix_activate_bundled_wpe_runtime() {
         echo "[Fire4Nix] ERROR: readlink required for bundled symlink validation" >&2
         return 1
     fi
-    # Never allow a symlink in the bundle to escape onto host system files.
+    # Never allow symlinks inside the bundle to escape onto host system
+    # files. Validate the whole runtime (not only required entrypoints).
+    while IFS= read -r -d '' path; do
+        resolved="$(readlink -f "$path" 2>/dev/null)" || return 1
+        case "$resolved" in
+            "$root"/*) ;;
+            *)
+                echo "[Fire4Nix] ERROR: symlink escapes WPE runtime: $path" >&2
+                return 1
+                ;;
+        esac
+    done < <(find "$root" -type l -print0)
     for path in "$library" "$process_dir/"WPE*Process; do
         resolved="$(readlink -f "$path" 2>/dev/null)" || return 1
         case "$resolved" in
@@ -752,6 +764,22 @@ fire4nix_activate_bundled_wpe_runtime() {
     done
     if [ ! -f "$root/SHA256SUMS" ] || ! command -v sha256sum >/dev/null 2>&1; then
         echo "[Fire4Nix] ERROR: bundled WPE requires SHA256SUMS and sha256sum" >&2
+        return 1
+    fi
+    # Refuse absolute paths, traversal and shell-escaped checksum names.
+    # sha256sum -c alone validates bytes but not the path scope.
+    if ! awk '
+        NF {
+            hash=substr($0,1,64); separator=substr($0,65,2); filename=substr($0,67);
+            if (length(hash)!=64 || hash ~ /[^0-9a-f]/ || separator!="  " ||
+                filename !~ /^(lib|libexec|share)\// ||
+                filename ~ /(^|\/)\.\.(\/|$)/ || filename ~ /\\/ ||
+                filename ~ /(^|\/)\.\/(|$)/) bad=1;
+            entries++;
+        }
+        END { if (bad || !entries) exit 1 }
+    ' "$root/SHA256SUMS"; then
+        echo "[Fire4Nix] ERROR: unsafe or malformed bundled checksum manifest" >&2
         return 1
     fi
     if ! (cd "$root" && sha256sum -c SHA256SUMS >/dev/null 2>&1); then
