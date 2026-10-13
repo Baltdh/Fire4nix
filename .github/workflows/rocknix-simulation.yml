@@ -15,7 +15,7 @@ jobs:
       - name: Read ROCKNIX upstream build configuration
         run: |
           git clone --depth 1 --filter=blob:none --sparse --branch next https://github.com/ROCKNIX/distribution.git /tmp/rocknix
-          git -C /tmp/rocknix sparse-checkout set Dockerfile Makefile
+          git -C /tmp/rocknix sparse-checkout set --no-cone Dockerfile Makefile
           test -f /tmp/rocknix/Dockerfile
           test -f /tmp/rocknix/Makefile
           echo "ROCKNIX upstream build sources inspected; not a booted ROCKNIX system."
