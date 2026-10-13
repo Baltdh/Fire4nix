@@ -24,6 +24,7 @@ WPE_PKG_NAME ?= $(shell for pkg in wpe-webkit-2.0 wpe-webkit wpewebkit; do $(PKG
 WPE_PLATFORM_WAYLAND_PKG ?= wpe-platform-wayland-2.0
 WPE_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags $(WPE_PKG_NAME) $(WPE_PLATFORM_WAYLAND_PKG) 2>/dev/null)
 WPE_LIBS ?= $(shell $(PKG_CONFIG) --libs $(WPE_PKG_NAME) $(WPE_PLATFORM_WAYLAND_PKG) 2>/dev/null)
+WPE_LIBS += $(shell $(PKG_CONFIG) --libs egl 2>/dev/null)
 
 TARGET = fire4nix
 
