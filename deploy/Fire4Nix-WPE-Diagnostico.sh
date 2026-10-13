@@ -1,5 +1,6 @@
 #!/bin/sh
-# Run on the actual ROCKNIX device. Read-only checks; no installation.
+# Run on ROCKNIX: read-only checks, then save one private diagnostic log.
+# Does not install packages, change graphics drivers, or disable the WebKit sandbox.
 set -u
 find_app_for_diagnostic() {
  if [ -n "${FIRE4NIX_APP_DIR:-}" ]; then
@@ -23,8 +24,11 @@ find_app_for_diagnostic() {
  done
  printf '%s\n' /storage/roms/ports/Fire4Nix
 }
+run_diagnostic() {
 APP="$(find_app_for_diagnostic)"
 echo "=== Fire4Nix WPE preflight ==="
+echo "checked_at: $(date 2>/dev/null || printf unknown)"
+echo "kernel: $(uname -r 2>/dev/null || printf unknown)"
 echo "architecture: $(uname -m)"
 echo "app: $APP"
 echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-unset}"
@@ -68,3 +72,23 @@ else
  echo "Wayland socket: environment unavailable"
 fi
 echo "=== end ==="
+}
+
+# The R36H may close a Tools-launched shell immediately. Persist the report
+# to a predictable location so it can be inspected later without a terminal.
+REPORT="${FIRE4NIX_DIAGNOSTIC_LOG:-}"
+if [ -z "$REPORT" ]; then
+ if [ -d /storage ] && [ -w /storage ]; then
+  REPORT="/storage/fire4nix-wpe-diagnostic.log"
+ else
+  REPORT="${TMPDIR:-/tmp}/fire4nix-wpe-diagnostic.log"
+ fi
+fi
+if (umask 077; : > "$REPORT") 2>/dev/null; then
+ run_diagnostic > "$REPORT" 2>&1
+ cat "$REPORT"
+ echo "Diagnostic saved: $REPORT"
+else
+ echo "WARNING: cannot save diagnostic at $REPORT; printing instead" >&2
+ run_diagnostic
+fi
