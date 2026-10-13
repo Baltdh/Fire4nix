@@ -90,14 +90,20 @@ check_elf_abi() {
  esac
 }
 # Compare C++ ABI independently from glibc. This is read-only.
-DEVICE_LIBSTDCPP=""
+DEVICE_LIBSTDCPP="${FIRE4NIX_DEVICE_LIBSTDCPP:-}"
 for cpp_path in \
  /usr/lib/libstdc++.so.6 /usr/lib64/libstdc++.so.6 \
  /lib/libstdc++.so.6 /lib64/libstdc++.so.6 \
  /usr/lib/aarch64-linux-gnu/libstdc++.so.6 \
+ /usr/lib/x86_64-linux-gnu/libstdc++.so.6 \
  /lib/aarch64-linux-gnu/libstdc++.so.6; do
+ if [ -n "$DEVICE_LIBSTDCPP" ]; then break; fi
  if [ -f "$cpp_path" ]; then DEVICE_LIBSTDCPP="$cpp_path"; break; fi
 done
+if [ -n "$DEVICE_LIBSTDCPP" ] && [ ! -f "$DEVICE_LIBSTDCPP" ]; then
+ echo "WARNING: requested device libstdc++ provider does not exist: $DEVICE_LIBSTDCPP"
+ DEVICE_LIBSTDCPP=""
+fi
 echo "Device libstdc++ provider: ${DEVICE_LIBSTDCPP:-not found}"
 check_cpp_abi_version() {
  family=$1
