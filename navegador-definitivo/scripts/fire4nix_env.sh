@@ -1083,7 +1083,10 @@ fire4nix_launch_engine() {
 
     case "${engine,,}" in
         wpe-platform|wpe-native|wpe-platform-launcher)
+            # Unlike Cog's exec, the native WPE path can now return normally.
+            # Propagate its real status; do not fall through to return 1 below.
             fire4nix_launch_wpe_platform "$normalized_url" "$@"
+            return $?
             ;;
         cog|wpe|wpe-launcher|wpe-browser|wpe-platform-launcher|mini-browser|wpe-webkit-launcher|wpewebkit-launcher)
             local cog_platform
