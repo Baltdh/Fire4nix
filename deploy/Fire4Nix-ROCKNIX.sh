@@ -1,29 +1,74 @@
 #!/bin/sh
-# Fire4Nix ROCKNIX launcher. Safe to invoke from Ports or Tools.
+# Fire4Nix ROCKNIX portable launcher: works from Ports, Tools, Downloads,
+# external storage, or any readable directory containing the app.
 set -u
+
+resolve_launcher_dir() {
+  target=$1
+  case "$target" in
+    /*) ;;
+    *) target="$(pwd)/$target" ;;
+  esac
+  hops=0
+  while [ -L "$target" ]; do
+    hops=$((hops + 1))
+    [ "$hops" -le 20 ] || return 1
+    link=$(readlink "$target") || return 1
+    case "$link" in
+      /*) target=$link ;;
+      *) target="$(dirname "$target")/$link" ;;
+    esac
+  done
+  CDPATH="" cd -- "$(dirname "$target")" && pwd -P
+}
+
+find_app() {
+  # Explicit override takes precedence, but only if it is valid.
+  if [ -n "${FIRE4NIX_APP_DIR:-}" ]; then
+    [ -f "$FIRE4NIX_APP_DIR/Fire4Nix.sh" ] || return 1
+    printf '%s\n' "$FIRE4NIX_APP_DIR"
+    return 0
+  fi
+
+  script_dir=$(resolve_launcher_dir "$0") || return 1
+  for candidate in \
+    "$script_dir" \
+    "$script_dir/navegador-definitivo" \
+    "$script_dir/Fire4Nix" \
+    "$script_dir/../navegador-definitivo" \
+    "$script_dir/../Fire4Nix" \
+    /storage/roms/ports/Fire4Nix \
+    /storage/roms/ports/fire4nix \
+    /storage/roms/ports/Fire4nix \
+    /storage/roms/ports/navegador-definitivo \
+    /storage/roms/tools/Fire4Nix; do
+    if [ -f "$candidate/Fire4Nix.sh" ]; then
+      (CDPATH="" cd -- "$candidate" && pwd -P)
+      return $?
+    fi
+  done
+  return 1
+}
+
 LOG="${FIRE4NIX_LAUNCH_LOG:-/storage/fire4nix-launch.log}"
 [ -d /storage ] && [ -w /storage ] || LOG="${TMPDIR:-/tmp}/fire4nix-launch.log"
-APP="${FIRE4NIX_APP_DIR:-/storage/roms/ports/Fire4Nix}"
-if [ ! -d "$APP" ]; then
-  for candidate in /storage/roms/ports/fire4nix /storage/roms/ports/Fire4nix /storage/roms/ports/navegador-definitivo /storage/roms/tools/Fire4Nix; do
-    if [ -f "$candidate/Fire4Nix.sh" ]; then APP="$candidate"; break; fi
-  done
-fi
+APP=$(find_app) || APP=""
 (
   echo "=== Fire4Nix $(date) ==="
   echo "arch=$(uname -m) uid=$(id -u) app=$APP"
-  if [ ! -f "$APP/Fire4Nix.sh" ]; then
-    echo "ERROR: missing $APP/Fire4Nix.sh"
+  if [ -z "$APP" ] || [ ! -f "$APP/Fire4Nix.sh" ]; then
+    echo "ERROR: Fire4Nix.sh not found. Keep the launcher next to the application folder, or set FIRE4NIX_APP_DIR."
     exit 3
   fi
   if ! command -v bash >/dev/null 2>&1; then
     echo "ERROR: bash unavailable"
     exit 127
   fi
-  # Use a writable profile; the ROM partition may be FAT/exFAT.
-  export FIRE4NIX_CONFIG_DIR="${FIRE4NIX_CONFIG_DIR:-/storage/.config/fire4nix}"
-  export FIRE4NIX_RUNTIME_DIR="${FIRE4NIX_RUNTIME_DIR:-/storage/.cache/fire4nix/runtime}"
-  export FIRE4NIX_LOG_DIR="${FIRE4NIX_LOG_DIR:-/storage/.cache/fire4nix/logs}"
+  DATA_ROOT="${FIRE4NIX_DATA_ROOT:-/storage}"
+  [ -d "$DATA_ROOT" ] && [ -w "$DATA_ROOT" ] || DATA_ROOT="${HOME:-/tmp}"
+  export FIRE4NIX_CONFIG_DIR="${FIRE4NIX_CONFIG_DIR:-$DATA_ROOT/.config/fire4nix}"
+  export FIRE4NIX_RUNTIME_DIR="${FIRE4NIX_RUNTIME_DIR:-$DATA_ROOT/.cache/fire4nix/runtime}"
+  export FIRE4NIX_LOG_DIR="${FIRE4NIX_LOG_DIR:-$DATA_ROOT/.cache/fire4nix/logs}"
   mkdir -p "$FIRE4NIX_CONFIG_DIR" "$FIRE4NIX_RUNTIME_DIR" "$FIRE4NIX_LOG_DIR" || exit 4
   cd "$APP" || exit 5
   bash "$APP/Fire4Nix.sh" "$@"
