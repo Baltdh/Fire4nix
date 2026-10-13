@@ -66,6 +66,20 @@ jobs:
           assert 'not found' not in deps, 'Unresolved shared libraries'
           print('ARM64 ELF and build-container dependencies verified')
           PY
+      - name: Execute native ARM64 WPE launcher CLI smoke tests
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          timeout 20s ./fire4nix-wpe-platform --help > /tmp/fire4nix-help.txt
+          timeout 20s ./fire4nix-wpe-platform --version > /tmp/fire4nix-version.txt
+          grep -q 'Fire4Nix WPE launcher' /tmp/fire4nix-help.txt
+          grep -q 'Fire4Nix WPE launcher' /tmp/fire4nix-version.txt
+          if timeout 20s ./fire4nix-wpe-platform --cookies-file > /tmp/fire4nix-invalid.txt 2>&1; then
+            echo 'ERROR: missing argument unexpectedly succeeded'
+            exit 1
+          fi
+          grep -q 'Missing value for --cookies-file' /tmp/fire4nix-invalid.txt
+          echo 'ARM64 WPE binary executed successfully for CLI startup and error handling.'
       - name: Audit ELF interpreter and linked library versions
         working-directory: navegador-definitivo
         run: |
