@@ -533,24 +533,31 @@ gboolean onUnixSignal(gpointer userData)
 }
 
 unsigned consecutiveWebProcessFailures = 0;
+bool currentNavigationFailed = false;
+bool currentNavigationCommitted = false;
 
 void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
 {
     logLoadState(view, loadEvent);
+    if (loadEvent == WEBKIT_LOAD_STARTED) {
+        currentNavigationFailed = false;
+        currentNavigationCommitted = false;
+    }
+    if (loadEvent == WEBKIT_LOAD_COMMITTED)
+        currentNavigationCommitted = true;
     const char* event = loadEvent == WEBKIT_LOAD_STARTED ? "load-started" :
                         loadEvent == WEBKIT_LOAD_COMMITTED ? "load-committed" :
                         loadEvent == WEBKIT_LOAD_FINISHED ? "load-finished" : "load-state";
     publishBrowserState(view, event);
-    // LOAD_FINISHED also fires after failed navigations. Only reset the
-    // recovery budget for a successfully committed page without load errors.
-    if (loadEvent == WEBKIT_LOAD_FINISHED &&
-        webkit_web_view_get_estimated_load_progress(view) >= 1.0 &&
-        webkit_web_view_get_uri(view) != nullptr)
+    // LOAD_FINISHED can follow an error: only a committed, error-free load
+    // restores the automatic process-recovery budget.
+    if (loadEvent == WEBKIT_LOAD_FINISHED && currentNavigationCommitted && !currentNavigationFailed)
         consecutiveWebProcessFailures = 0;
 }
 
 gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer)
 {
+    currentNavigationFailed = true;
     g_warning("Fire4Nix WPE load failed for %s: %s",
               failingUri != nullptr ? failingUri : "(unknown)",
               error != nullptr && error->message != nullptr ? error->message : "unknown error");
@@ -560,6 +567,7 @@ gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failing
 
 gboolean onLoadFailedWithTlsErrors(WebKitWebView* view, gchar* failingUri, GTlsCertificate*, GTlsCertificateFlags errors, gpointer)
 {
+    currentNavigationFailed = true;
     g_warning("Fire4Nix WPE TLS error for %s (flags=0x%x)",
               failingUri != nullptr ? failingUri : "(unknown)",
               static_cast<unsigned>(errors));
@@ -581,6 +589,7 @@ gboolean onWebProcessTerminated(WebKitWebView* view, WebKitWebProcessTermination
         break;
     }
 
+    currentNavigationFailed = true;
     g_warning("Fire4Nix WPE web process terminated (%s)", reasonText);
     publishBrowserState(view, "web-process-terminated", reasonText);
     // Avoid an infinite crash/reload cycle on devices with incompatible
