@@ -192,6 +192,21 @@ jobs:
             else
               echo 'DIAGNOSTIC FAIL: HTML not verified even with sandbox disabled.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
             fi
+            # Negative control: a nonexistent local page must exit with a real
+            # navigation error instead of hanging or falsely reporting success.
+            export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/diagnostic-failure-runtime"
+            mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+            set +e
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 timeout 15s ./fire4nix-wpe-platform --headless --exit-after-load "file://$(pwd)/dist/page-smoke/does-not-exist.html" > dist/page-smoke/unsandboxed-negative.log 2>&1
+            negative_status=$?
+            set -e
+            echo "Negative-control exit status: $negative_status" >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            if [ "$negative_status" -eq 1 ] && grep -q 'Fire4Nix WPE load failed' dist/page-smoke/unsandboxed-negative.log && grep -q 'navigation failed, exiting with error' dist/page-smoke/unsandboxed-negative.log; then
+              echo 'DIAGNOSTIC PASS: nonexistent HTML rejected promptly with exit code 1.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            else
+              echo 'DIAGNOSTIC FAIL: nonexistent HTML did not produce the expected error exit.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+              cat dist/page-smoke/unsandboxed-negative.log
+            fi
             cat dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
             exit 0
           fi
