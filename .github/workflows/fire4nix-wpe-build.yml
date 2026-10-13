@@ -77,15 +77,15 @@ jobs:
           import re
           from pathlib import Path
           text = Path('dist/ELF-PROGRAM-HEADERS.txt').read_text()
-          match = re.search(r'Requesting program interpreter: ([^\\]]+)', text)
+          match = next((line.split('Requesting program interpreter: ', 1)[1].split(']')[0] for line in text.splitlines() if 'Requesting program interpreter: ' in line), None)
           if not match:
               raise SystemExit('Missing ELF program interpreter')
-          interpreter = match.group(1)
+          interpreter = match
           print('ARM64 ELF interpreter:', interpreter)
           if 'aarch64' not in interpreter and 'ld-linux' not in interpreter:
               raise SystemExit('Unexpected ELF interpreter')
           versions = Path('dist/ELF-SYMBOL-VERSIONS.txt').read_text()
-          glibc = sorted(set(re.findall(r'GLIBC_[0-9]+\\.[0-9]+', versions)))
+          glibc = sorted(set(re.findall(r'GLIBC_[0-9]+[.][0-9]+', versions)))
           print('Required GLIBC symbol versions:', ', '.join(glibc))
           Path('dist/ELF-ABI-SUMMARY.txt').write_text(
               'Interpreter: ' + interpreter + '\\n'
