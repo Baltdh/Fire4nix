@@ -6,7 +6,7 @@ cleanup() {
   result=$?
   if [ "$result" -ne 0 ]; then
     echo "FAIL: portable launcher/ABI test exit code $result" >&2
-    for log in "$tmp/diagnostic-report.log" "$tmp/incompatible-report.log" "$tmp/incompatible-console.log"; do
+    for log in "$tmp/diagnostic-report.log" "$tmp/incompatible-report.log" "$tmp/incompatible-console.log" "$tmp/compatible-report.log" "$tmp/compatible-console.log"; do
       if [ -f "$log" ]; then
         echo "--- $log ---" >&2
         tail -100 "$log" >&2
@@ -57,7 +57,7 @@ printf '%s\n' '{"highest_required_glibc_across_components": "GLIBC_9.99", "highe
 cp /bin/true "$tmp/Tools/Fire4Nix/bin/fire4nix-wpe-platform"
 cat > "$tmp/mock-bin/getconf" <<'MOCK'
 #!/bin/sh
-if [ "${1:-}" = GNU_LIBC_VERSION ]; then printf '%s\n' 'glibc 2.0'; else exit 1; fi
+if [ "${1:-}" = GNU_LIBC_VERSION ]; then printf 'glibc %s\n' "${FIRE4NIX_TEST_LIBC_VERSION:-2.0}"; else exit 1; fi
 MOCK
 chmod +x "$tmp/mock-bin/getconf"
 PATH="$tmp/mock-bin:$PATH" FIRE4NIX_DIAGNOSTIC_LOG="$tmp/incompatible-report.log" \
@@ -73,4 +73,17 @@ grep -F 'INCOMPATIBLE: WPE build requires CXXABI_99.99.99' "$tmp/incompatible-re
 grep -F 'Highest required GLIBC: GLIBC_' "$tmp/incompatible-report.log"
 grep -F 'INCOMPATIBLE: binary requires GLIBC_' "$tmp/incompatible-report.log"
 grep -F 'WPEWebProcess: NOT FOUND' "$tmp/incompatible-report.log"
+# Positive control: use an intentionally newer device libc and low
+# symbol requirements. This also guards against lexicographic comparisons.
+printf '%s\n' '{"highest_required_glibc_across_components":"GLIBC_2.38","highest_required_cpp_abi_across_components":{"GLIBCXX":"GLIBCXX_1.0","CXXABI":"CXXABI_1.0"}}' > "$tmp/Tools/WPE-ABI-REQUIREMENTS.json"
+FIRE4NIX_TEST_LIBC_VERSION=99.0 PATH="$tmp/mock-bin:$PATH" \
+  FIRE4NIX_DIAGNOSTIC_LOG="$tmp/compatible-report.log" \
+  sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/compatible-console.log"
+grep -F 'WPE build GLIBC requirement: satisfied' "$tmp/compatible-report.log"
+grep -F 'WPE GLIBCXX requirement: satisfied' "$tmp/compatible-report.log"
+grep -F 'WPE CXXABI requirement: satisfied' "$tmp/compatible-report.log"
+if grep -Fq 'INCOMPATIBLE:' "$tmp/compatible-report.log"; then
+  echo 'FAIL: compatible build reported incompatible' >&2
+  exit 1
+fi
 echo 'Portable, Tools and ABI compatibility diagnostics passed'
