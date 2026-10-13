@@ -106,4 +106,22 @@ else
 fi
 test "$status" -eq 63
 grep -q 'Exit code: 63' "$TMP/failing-entry.log"
-printf '%s\n' 'PASS: Cog/WPE entrypoints, fallback, full launch, Wayland recovery, positional URL and exit-code propagation.'
+# ROCKNIX images may not bundle Python3. The browser must still open local
+# HTML files and encode UTF-8 search queries without using that interpreter.
+cat > "$TMP/bin/python3" <<'PYTHON'
+#!/bin/sh
+echo "Unexpected Python3 dependency while normalizing URL" >&2
+exit 98
+PYTHON
+chmod +x "$TMP/bin/python3"
+normalize() {
+    FIRE4NIX_SEARCH_URL='https://duckduckgo.com/?q=%s' bash -c \
+        'APP_DIR="$1"; source "$2"; fire4nix_normalize_target "$3"' \
+        bash "$ROOT/navegador-definitivo" \
+        "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh" "$1"
+}
+test "$(normalize 'café & chá')" = 'https://duckduckgo.com/?q=caf%C3%A9+%26+ch%C3%A1'
+mkdir -p "$TMP/offline files"
+: > "$TMP/offline files/index 1.html"
+test "$(normalize "$TMP/offline files/index 1.html")" = "file://$TMP/offline%20files/index%201.html"
+printf '%s\n' 'PASS: Cog/WPE, fallback, full launch, Wayland, CLI URL, exit codes and Python-free UTF-8 normalization.'
