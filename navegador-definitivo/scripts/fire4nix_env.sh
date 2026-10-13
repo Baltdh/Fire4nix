@@ -692,6 +692,88 @@ fire4nix_cog_platform_name() {
     printf '%s\n' "${FIRE4NIX_COG_PLATFORM:-wl}"
 }
 
+# Optional, checksum-verified portable WPE runtime. The experimental
+# launcher-only ZIP has no runtime tree and this function is a no-op there.
+# No ROOTFS/system libraries are ever copied or overwritten.
+fire4nix_activate_bundled_wpe_runtime() {
+    local root="${FIRE4NIX_BUNDLED_WPE_ROOT:-${FIRE4NIX_HOME:-$APP_DIR}/runtime/aarch64}"
+    if [ ! -d "$root" ]; then
+        if [ -n "${FIRE4NIX_BUNDLED_WPE_ROOT:-}" ]; then
+            echo "[Fire4Nix] ERROR: explicitly selected WPE runtime is missing: $root" >&2
+            return 1
+        fi
+        return 0
+    fi
+
+    local lib_dir="$root/lib"
+    local process_dir="$root/libexec/wpe-webkit-2.0"
+    local process library resolved path
+    if [ ! -d "$lib_dir" ] || [ ! -d "$process_dir" ]; then
+        echo "[Fire4Nix] ERROR: incomplete bundled WPE layout under $root" >&2
+        return 1
+    fi
+    library=""
+    for path in "$lib_dir"/libWPEWebKit-2.0.so "$lib_dir"/libWPEWebKit-2.0.so.*; do
+        if [ -f "$path" ]; then library="$path"; break; fi
+    done
+    if [ -z "$library" ]; then
+        echo "[Fire4Nix] ERROR: bundled libWPEWebKit-2.0.so is missing" >&2
+        return 1
+    fi
+    for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+        if [ ! -f "$process_dir/$process" ] || [ ! -x "$process_dir/$process" ]; then
+            echo "[Fire4Nix] ERROR: bundled WPE subprocess unavailable: $process" >&2
+            return 1
+        fi
+    done
+
+    # Fail closed if a staged bundle attempts to override the system's
+    # dynamic loader or libc. This is a common source of ROCKNIX crashes.
+    for path in "$lib_dir"/libc.so* "$lib_dir"/ld-linux* "$lib_dir"/ld-*.so*; do
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            echo "[Fire4Nix] ERROR: bundled core loader/libc forbidden: $path" >&2
+            return 1
+        fi
+    done
+    if ! command -v readlink >/dev/null 2>&1; then
+        echo "[Fire4Nix] ERROR: readlink required for bundled symlink validation" >&2
+        return 1
+    fi
+    # Never allow a symlink in the bundle to escape onto host system files.
+    for path in "$library" "$process_dir/"WPE*Process; do
+        resolved="$(readlink -f "$path" 2>/dev/null)" || return 1
+        case "$resolved" in
+            "$root"/*) ;;
+            *)
+                echo "[Fire4Nix] ERROR: WPE component escapes bundled runtime: $path" >&2
+                return 1
+                ;;
+        esac
+    done
+    if [ ! -f "$root/SHA256SUMS" ] || ! command -v sha256sum >/dev/null 2>&1; then
+        echo "[Fire4Nix] ERROR: bundled WPE requires SHA256SUMS and sha256sum" >&2
+        return 1
+    fi
+    if ! (cd "$root" && sha256sum -c SHA256SUMS >/dev/null 2>&1); then
+        echo "[Fire4Nix] ERROR: bundled WPE checksum mismatch" >&2
+        return 1
+    fi
+
+    # The matching WebKit build MUST support WEBKIT_EXEC_PATH outside developer
+    # mode. Setting it alone does not patch an unmodified WebKit release.
+    export WEBKIT_EXEC_PATH="$process_dir"
+    export LD_LIBRARY_PATH="$lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    if [ -d "$lib_dir/gio/modules" ]; then
+        export GIO_EXTRA_MODULES="$lib_dir/gio/modules${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
+    fi
+    if [ -d "$lib_dir/gstreamer-1.0" ]; then
+        export GST_PLUGIN_PATH="$lib_dir/gstreamer-1.0${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
+    fi
+    export FIRE4NIX_WPE_RUNTIME_ACTIVATED=1
+    echo "[Fire4Nix] checksum-verified WPE runtime activated: $root" >&2
+    return 0
+}
+
 fire4nix_wpe_runtime_env() {
     local display="$(fire4nix_wpe_display_name)"
     local platform="$(fire4nix_cog_platform_name)"
@@ -1065,14 +1147,21 @@ fire4nix_launch_wpe_platform() {
 
     if [ -n "$native_binary" ]; then
         fire4nix_wpe_runtime_env
+        if ! fire4nix_activate_bundled_wpe_runtime; then
+            echo "[Fire4Nix] bundled WPE preflight failed; refusing partial runtime" >&2
+            # Do not launch a native executable against an incomplete bundle.
+            # A Cog fallback, if installed, is still allowed below.
+            native_binary=""
+        fi
         # Keep the shell alive to recover from an immediate WPE startup failure.
         # A browser that crashes after running normally should not unexpectedly
         # reopen the user's session in a different engine.
         local started_at="$SECONDS" native_status
-        if "$native_binary" "$url" "$@"; then
+        if [ -n "$native_binary" ] && "$native_binary" "$url" "$@"; then
             return 0
         else
             native_status=$?
+            if [ -z "$native_binary" ]; then native_status=126; fi
         fi
         case "$native_status" in
             130|143)
