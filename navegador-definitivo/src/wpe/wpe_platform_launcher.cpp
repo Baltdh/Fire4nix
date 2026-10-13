@@ -33,6 +33,7 @@ struct LaunchOptions {
     bool ignoreTlsErrors { false };
     bool enableItp { false };
     bool headlessMode { false };
+    bool exitAfterLoad { false }; // CI/diagnostic opt-in; normal browser stays open.
     bool maximize { false };
     bool fullscreen { false };
     bool developerExtras { false };
@@ -208,7 +209,7 @@ LaunchOptions parseOptions(int argc, char** argv)
         if (arg == "--help" || arg == "-h") {
             g_print("Fire4Nix WPE launcher\n");
             g_print("Usage: %s [URL] [options]\n", argv[0] != nullptr ? argv[0] : "fire4nix-wpe-platform");
-            g_print("Options: --private --automation --ignore-tls-errors --enable-itp --headless\n");
+            g_print("Options: --private --automation --ignore-tls-errors --enable-itp --headless --exit-after-load\n");
             g_print("         --cookies-file=PATH --cookies-policy=always|never|no-third-party\n");
             g_print("         --proxy=URL --ignore-host=HOST[,HOST...] --content-filter=PATH\n");
             g_print("         --time-zone=ZONE --bg-color=COLOR --size=WIDTHxHEIGHT --fullscreen --maximized\n");
@@ -238,6 +239,10 @@ LaunchOptions parseOptions(int argc, char** argv)
         }
         if (arg == "--headless") {
             options.headlessMode = true;
+            continue;
+        }
+        if (arg == "--exit-after-load") {
+            options.exitAfterLoad = true;
             continue;
         }
         if (arg == "--fullscreen") {
@@ -531,11 +536,17 @@ gboolean onUnixSignal(gpointer userData)
     return G_SOURCE_REMOVE;
 }
 
+struct NavigationCompletion {
+    GMainLoop* loop { nullptr };
+    bool exitAfterLoad { false };
+    bool successful { false };
+};
+
 unsigned consecutiveWebProcessFailures = 0;
 bool currentNavigationFailed = false;
 bool currentNavigationCommitted = false;
 
-void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
+void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer userData)
 {
     logLoadState(view, loadEvent);
     if (loadEvent == WEBKIT_LOAD_STARTED) {
@@ -550,8 +561,15 @@ void onLoadChanged(WebKitWebView* view, WebKitLoadEvent loadEvent, gpointer)
     publishBrowserState(view, event);
     // LOAD_FINISHED can follow an error: only a committed, error-free load
     // restores the automatic process-recovery budget.
-    if (loadEvent == WEBKIT_LOAD_FINISHED && currentNavigationCommitted && !currentNavigationFailed)
+    if (loadEvent == WEBKIT_LOAD_FINISHED && currentNavigationCommitted && !currentNavigationFailed) {
         consecutiveWebProcessFailures = 0;
+        auto* completion = static_cast<NavigationCompletion*>(userData);
+        if (completion != nullptr && completion->exitAfterLoad && completion->loop != nullptr) {
+            completion->successful = true;
+            g_message("Fire4Nix WPE diagnostic: navigation complete, exiting normally");
+            g_main_loop_quit(completion->loop);
+        }
+    }
 }
 
 gboolean onLoadFailed(WebKitWebView* view, WebKitLoadEvent, const gchar* failingUri, GError* error, gpointer)
@@ -780,7 +798,8 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    g_signal_connect(view, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
+    NavigationCompletion completion { loop, options.exitAfterLoad, false };
+    g_signal_connect(view, "load-changed", G_CALLBACK(onLoadChanged), &completion);
     g_signal_connect(view, "load-failed", G_CALLBACK(onLoadFailed), nullptr);
     g_signal_connect(view, "load-failed-with-tls-errors", G_CALLBACK(onLoadFailedWithTlsErrors), nullptr);
     g_signal_connect(view, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
@@ -828,5 +847,5 @@ int main(int argc, char** argv)
         g_main_loop_unref(loop);
 
     g_message("Fire4Nix WPE launcher exiting");
-    return EXIT_SUCCESS;
+    return options.exitAfterLoad && !completion.successful ? EXIT_FAILURE : EXIT_SUCCESS;
 }
