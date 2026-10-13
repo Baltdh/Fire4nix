@@ -268,6 +268,53 @@ jobs:
           fi
           cat dist/relocatable-probe/RESULT.txt
           tail -35 dist/relocatable-probe/launcher.log
+      - name: Probe relocation of libWPEWebKit without installing system libraries
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/runtime-library-probe
+          staged_root="$(mktemp -d /tmp/fire4nix-wpe-runtime.XXXXXX)"
+          trap 'rm -rf "$staged_root"' EXIT
+          mkdir -p "$staged_root/lib" "$staged_root/libexec/wpe-webkit-2.0"
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          cp -L "$webkit" "$staged_root/lib/libWPEWebKit-2.0.so"
+          for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            cp "/usr/libexec/wpe-webkit-2.0/$process" "$staged_root/libexec/wpe-webkit-2.0/$process"
+            chmod 755 "$staged_root/libexec/wpe-webkit-2.0/$process"
+          done
+          (
+            cd "$staged_root"
+            find lib libexec -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/runtime-library-probe/browser-runtime"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/runtime-library-probe/xdg"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf '%s\n' '<!doctype html><html><title>Portable library probe</title><body>WPE Library</body></html>' > dist/runtime-library-probe/index.html
+          test_url="file://$(pwd)/dist/runtime-library-probe/index.html"
+          # CI-only: use an isolated local HTML page and no sandbox for loader
+          # diagnostics. Never distribute or enable this override on ROCKNIX.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$staged_root/libexec/wpe-webkit-2.0" \
+            LD_LIBRARY_PATH="$staged_root/lib" LD_DEBUG=libs \
+            LD_DEBUG_OUTPUT="$(pwd)/dist/runtime-library-probe/ld-debug" \
+            timeout 25s ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/runtime-library-probe/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Runtime-library probe launcher status: $status" > dist/runtime-library-probe/RESULT.txt
+          if grep -Fh "$staged_root/lib/libWPEWebKit-2.0.so" dist/runtime-library-probe/ld-debug.* > dist/runtime-library-probe/LIBRARY-LOADER-EVIDENCE.txt 2>/dev/null && \
+             [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE finished:' dist/runtime-library-probe/launcher.log; then
+            echo 'LIBRARY RELOCATION PASS: WPE executed local HTML with libWPEWebKit loaded from the portable directory.' >> dist/runtime-library-probe/RESULT.txt
+          else
+            echo 'LIBRARY RELOCATION INCONCLUSIVE/FAIL: loader origin or HTML success not verified.' >> dist/runtime-library-probe/RESULT.txt
+          fi
+          rm -f dist/runtime-library-probe/ld-debug.*
+          cat dist/runtime-library-probe/RESULT.txt
+          tail -25 dist/runtime-library-probe/launcher.log
+          # Debian runtime dependencies remain system-supplied. This is NOT
+          # proof of self-contained packaging or ROCKNIX target compatibility.
       - name: Probe WPEPlatform Wayland surface with isolated Weston compositor
         working-directory: navegador-definitivo
         run: |
