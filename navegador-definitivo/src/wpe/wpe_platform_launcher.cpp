@@ -575,8 +575,17 @@ gboolean onWebProcessTerminated(WebKitWebView* view, WebKitWebProcessTermination
 
     g_warning("Fire4Nix WPE web process terminated (%s)", reasonText);
     publishBrowserState(view, "web-process-terminated", reasonText);
-    if (view != nullptr)
+    // Avoid an infinite crash/reload cycle on devices with incompatible
+    // graphics drivers or a broken bundled WPE runtime.
+    static unsigned consecutiveProcessFailures = 0;
+    ++consecutiveProcessFailures;
+    if (view != nullptr && consecutiveProcessFailures <= 2) {
+        g_warning("Fire4Nix WPE attempting web-process recovery %u/2", consecutiveProcessFailures);
         webkit_web_view_reload(view);
+    } else {
+        g_critical("Fire4Nix WPE stopped automatic reloads after repeated web-process failures; inspect the launcher log");
+        publishBrowserState(view, "web-process-recovery-exhausted", reasonText);
+    }
     return TRUE;
 }
 
