@@ -322,9 +322,16 @@ if [ -z "${SDL_AUDIODRIVER:-}" ] && { [ -e /dev/snd ] || [ -d /dev/snd ]; }; the
 fi
 
 
-if [ -z "${FIRE4NIX_START_PAGE:-}" ] && [ $# -gt 0 ]; then
-    export FIRE4NIX_START_PAGE="$1"
-    shift
+# A positional target supplied by the user must override the saved home page.
+# Options beginning with '--' are still passed to the engine unchanged.
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        --*) ;;
+        *)
+            export FIRE4NIX_START_PAGE="$1"
+            shift
+            ;;
+    esac
 fi
 
 if [ -z "${FIRE4NIX_HOME_URL:-}" ] && [ -n "${FIRE4NIX_START_PAGE:-}" ]; then
@@ -340,10 +347,7 @@ if [ "${FIRE4NIX_SET_GOVERNOR:-${FIRE4NIX_SET_GOVERNOR:-0}}" = "1" ]; then
     done
 fi
 
-if [ -z "${FIRE4NIX_START_PAGE:-}" ] && [ $# -gt 0 ]; then
-    export FIRE4NIX_START_PAGE="$1"
-    shift
-fi
+
 
 # Normalize legacy engine labels into auto-detection.
 if fire4nix_is_legacy_engine_label "${FIRE4NIX_ENGINE:-}"; then
@@ -376,8 +380,13 @@ export FIRE4NIX_ENGINE="$selected_engine"
 echo "[INFO] Launching with engine: ${selected_engine}"
 echo "[Fire4Nix] launching engine=${selected_engine}" >> "$LOG_FILE"
 
-if ! fire4nix_launch_engine "$selected_engine" "$FIRE4NIX_START_PAGE" "$@"; then
-    echo "[ERROR] no launchable browser engine found" >&2
-    echo "[Fire4Nix] no launchable browser engine found" >> "$LOG_FILE"
-    exit 1
+# Preserve failures from the selected engine (including Cog fallback), rather
+# than misreport every exit as "engine not found" and replacing its status with 1.
+if fire4nix_launch_engine "$selected_engine" "$FIRE4NIX_START_PAGE" "$@"; then
+    exit 0
+else
+    engine_status=$?
+    echo "[ERROR] Fire4Nix engine '$selected_engine' exited with code $engine_status" >&2
+    echo "[Fire4Nix] engine=$selected_engine exit_code=$engine_status" >> "$LOG_FILE"
+    exit "$engine_status"
 fi
