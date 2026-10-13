@@ -39,6 +39,8 @@ def main():
         data = json.loads(output.read_text())
         check(data["schema"] == "fire4nix-wpe-abi-v1", "schema mismatch")
         check(len(data["components"]) == 5, "missing ABI inventory component")
+        check(set(data["highest_required_cpp_abi_across_components"]) == {"GLIBCXX", "CXXABI"}, "C++ ABI requirements not inventoried")
+        check(all(set(entry["cpp_abi_version_requirements"]) == {"GLIBCXX", "CXXABI"} for entry in data["components"].values()), "per-ELF C++ ABI requirements missing")
         check(all(len(v["sha256"]) == 64 for v in data["components"].values()),
               "missing component digests")
         check("UNVERIFIED" not in data["qualification"] or "unverified" in data["qualification"].lower(),
