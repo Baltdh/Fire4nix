@@ -8,7 +8,7 @@ cleanup() {
   rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "FAIL: engine-entrypoint test returned $rc" >&2
-    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log"; do
+    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log"; do
       if [ -f "$f" ]; then
         echo "--- $f ---" >&2
         cat "$f" >&2
