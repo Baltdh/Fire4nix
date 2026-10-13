@@ -1012,7 +1012,25 @@ fire4nix_launch_wpe_platform() {
 
     if [ -n "$native_binary" ]; then
         fire4nix_wpe_runtime_env
-        exec "$native_binary" "$url" "$@"
+        # Keep the shell alive to recover from an immediate WPE startup failure.
+        # A browser that crashes after running normally should not unexpectedly
+        # reopen the user's session in a different engine.
+        local started_at="$SECONDS" native_status
+        if "$native_binary" "$url" "$@"; then
+            return 0
+        else
+            native_status=$?
+        fi
+        case "$native_status" in
+            130|143)
+                return "$native_status"
+                ;;
+        esac
+        if (( SECONDS - started_at > 15 )); then
+            echo "[Fire4Nix] WPE stopped after startup (exit $native_status); not switching engines" >&2
+            return "$native_status"
+        fi
+        echo "[Fire4Nix] WPE startup failed (exit $native_status); attempting Cog fallback" >&2
     fi
 
     if ! command -v cog >/dev/null 2>&1; then
