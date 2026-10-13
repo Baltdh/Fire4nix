@@ -246,7 +246,7 @@ jobs:
           # Weston is deliberately headless, but WPE must be a REAL Wayland
           # client with a WPEPlatform toplevel. This tests window creation;
           # there is no claim of visible output or actual device validation.
-          timeout 35s weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 --width=640 --height=480 --use-pixman > dist/wayland-smoke/weston.log 2>&1 &
+          timeout 75s weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 --width=640 --height=480 --use-pixman > dist/wayland-smoke/weston.log 2>&1 &
           weston_pid=$!
           trap 'kill "$weston_pid" 2>/dev/null || true; wait "$weston_pid" 2>/dev/null || true' EXIT
           ready=0
@@ -282,6 +282,18 @@ jobs:
               echo 'No local core file; inspect CORE-PATTERN.txt for host core handling.' > dist/wayland-smoke/BACKTRACE.txt
             fi
             cat dist/wayland-smoke/BACKTRACE.txt
+            # Many cloud kernels redirect cores outside Docker. Attempt an
+            # in-process GDB run when a local core cannot be captured.
+            if [ -z "$corefile" ]; then
+              set +e
+              WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 \
+                timeout 35s gdb -q -batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 24' \
+                  --args ./fire4nix-wpe-platform --exit-after-load "$test_url" > dist/wayland-smoke/GDB-RUN.txt 2>&1
+              debugger_status=$?
+              set -e
+              echo "GDB diagnostic exit code: $debugger_status" >> dist/wayland-smoke/RESULT.txt
+              tail -120 dist/wayland-smoke/GDB-RUN.txt
+            fi
           fi
           if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
             cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/wayland-smoke/browser.state
