@@ -698,8 +698,13 @@ fire4nix_wpe_runtime_env() {
     local width="${FIRE4NIX_DISPLAY_WIDTH:-640}"
     local height="${FIRE4NIX_DISPLAY_HEIGHT:-480}"
 
+    # WPE WebKit 2.54+ uses WPE_PLATFORM=wayland|drm|headless.
+    # WPE_DISPLAY=wpe-display-* is only a compatibility fallback for earlier
+    # 2.54 snapshots; it must not be the sole selector on current WPEPlatform.
+    # Respect a user's explicit WPE_PLATFORM override.
+    export WPE_PLATFORM="${WPE_PLATFORM:-${display#wpe-display-}}"
     export WPE_DISPLAY="$display"
-    export FIRE4NIX_WPE_PLATFORM_MODE="$display"
+    export FIRE4NIX_WPE_PLATFORM_MODE="$WPE_PLATFORM"
     export COG_PLATFORM_NAME="$platform"
     export COG_PLATFORM_PARAMS="${COG_PLATFORM_PARAMS:-${FIRE4NIX_COG_PLATFORM_PARAMS:-}}"
     export COG_PLATFORM_WL_VIEW_FULLSCREEN="${COG_PLATFORM_WL_VIEW_FULLSCREEN:-1}"
