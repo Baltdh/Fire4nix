@@ -202,6 +202,40 @@ with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compressleve
             arc = f"Fire4Nix/{rel}"
             zf.writestr(zip_info(arc, is_executable_runtime(rel)), src.read_bytes())
 
+# Verify the ZIP itself: all manifest paths must survive archive extraction
+# as ordinary files with exactly the expected bytes. This catches missing
+# symlink targets and checksums that only passed in the staging directory.
+with zipfile.ZipFile(output) as zf:
+    archive_names = set(zf.namelist())
+    manifest_name = "Fire4Nix/runtime/aarch64/runtime.manifest"
+    if manifest_name not in archive_names:
+        raise SystemExit("missing runtime.manifest in ZIP")
+    manifest_text = zf.read(manifest_name).decode("utf-8")
+    checksums = manifest_text.split("[sha256]", 1)
+    if len(checksums) != 2:
+        raise SystemExit("runtime manifest missing checksum section")
+    checked = 0
+    for line in checksums[1].splitlines():
+        if not line.strip():
+            continue
+        if len(line) < 67 or line[64:66] != "  ":
+            raise SystemExit(f"malformed manifest entry: {line[:80]}")
+        expected, rel = line[:64], line[66:]
+        if not all(ch in "0123456789abcdef" for ch in expected):
+            raise SystemExit(f"invalid digest: {rel}")
+        if rel.startswith("/") or ".." in Path(rel).parts:
+            raise SystemExit(f"unsafe manifest path: {rel}")
+        member = "Fire4Nix/runtime/aarch64/" + rel
+        if member not in archive_names:
+            raise SystemExit(f"runtime file absent from ZIP: {rel}")
+        actual = hashlib.sha256(zf.read(member)).hexdigest()
+        if actual != expected:
+            raise SystemExit(f"runtime checksum mismatch in ZIP: {rel}")
+        checked += 1
+    if not checked:
+        raise SystemExit("no runtime files checked")
+    print(f"Verified {checked} runtime checksums inside ZIP")
+
 digest = hashlib.sha256(output.read_bytes()).hexdigest()
 (output.parent / f"{output.name}.sha256").write_text(f"{digest}  {output.name}\n")
 print(f"package={output}")
