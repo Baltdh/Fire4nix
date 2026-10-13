@@ -103,7 +103,7 @@ jobs:
             exit 1
           fi
           for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-            found="$(find /usr/local/lib /usr/lib /lib /usr/local/bin /usr/bin -type f -name "$process" -print -quit 2>/dev/null || true)"
+            found="$(find /usr/libexec /usr/local/libexec /usr/local/lib /usr/lib /lib /usr/local/bin /usr/bin -type f -name "$process" -print -quit 2>/dev/null || true)"
             if [ -z "$found" ]; then
               echo "MISSING: $process (not present in the installed WPE build)" | tee -a dist/WPE-SUBPROCESSES.txt
               echo "$process" >> dist/WPE-MISSING-SUBPROCESSES.txt
@@ -135,7 +135,7 @@ jobs:
             pkg-config --variable=prefix wpe-webkit-2.0
             pkg-config --variable=libdir wpe-webkit-2.0
             echo 'WebKit/WPE process candidates:'
-            find /usr/local /usr/lib /usr/bin /lib -type f \( -iname '*WebProcess*' -o -iname '*NetworkProcess*' -o -iname '*GPUProcess*' -o -iname '*webkit*process*' \) -print 2>/dev/null | sort || true
+            find /usr/local /usr/libexec /usr/lib /usr/bin /lib -type f \( -iname '*WebProcess*' -o -iname '*NetworkProcess*' -o -iname '*GPUProcess*' -o -iname '*webkit*process*' \) -print 2>/dev/null | sort || true
             echo 'WPE executables recorded in installed package metadata:'
             find /usr/local/lib/pkgconfig /usr/lib/aarch64-linux-gnu/pkgconfig -name '*wpe*.pc' -print 2>/dev/null || true
           } > dist/WPE-INSTALL-INVENTORY.txt
