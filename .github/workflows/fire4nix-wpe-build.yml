@@ -466,6 +466,23 @@ jobs:
             echo 'Subprocess inventory complete in build container; ROCKNIX still unverified' >> dist/BUILD-MANIFEST.txt
           fi
           echo "Commit: $GITHUB_SHA" >> dist/BUILD-MANIFEST.txt
+      - name: Stage experimental ARM64 Tools package (launcher only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          bash ../deploy/stage_rocknix_candidate.sh "$(pwd)/fire4nix-wpe-platform" "$(pwd)/dist/rocknix-candidate"
+          cd dist/rocknix-candidate
+          sha256sum -c SHA256SUMS
+          test -s Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip
+          echo 'NOTE: this archive does not contain WPE runtime libraries. NOT A RELEASE.'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-ARM64-Tools-launcher-only-EXPERIMENTAL
+          path: |
+            navegador-definitivo/dist/rocknix-candidate/Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip
+            navegador-definitivo/dist/rocknix-candidate/SHA256SUMS
+            navegador-definitivo/dist/rocknix-candidate/STATUS.txt
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-WPE-ARM64-launcher-experimental
