@@ -19,4 +19,5 @@ fi
 bash "$root/deploy/test_portable_launcher.sh"
 bash "$root/deploy/test_engine_entrypoints.sh"
 bash "$root/deploy/test_rocknix_candidate_package.sh"
+python3 "$root/deploy/test_wpe_abi_audit.py"
 echo "Launcher syntax and WPE wrapper regression checks passed"
