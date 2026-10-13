@@ -63,6 +63,7 @@ chmod +x "$tmp/mock-bin/getconf"
 PATH="$tmp/mock-bin:$PATH" FIRE4NIX_DIAGNOSTIC_LOG="$tmp/incompatible-report.log" \
   sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/incompatible-console.log"
 grep -F 'WPE build-origin GLIBC floor: GLIBC_9.99' "$tmp/incompatible-report.log"
+grep -F 'INCOMPATIBLE: WPE build requires GLIBC_9.99 but device reports glibc 2.0' "$tmp/incompatible-report.log"
 grep -F 'Highest required GLIBC: GLIBC_' "$tmp/incompatible-report.log"
 grep -F 'INCOMPATIBLE: binary requires GLIBC_' "$tmp/incompatible-report.log"
 grep -F 'WPEWebProcess: NOT FOUND' "$tmp/incompatible-report.log"
