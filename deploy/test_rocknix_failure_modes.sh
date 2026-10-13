@@ -65,11 +65,20 @@ resolved="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" 
 test -z "$resolved"
 # Check both supported native locations, even before any actual ROCKNIX build.
 cp /bin/true "$TMP/native-app/fire4nix-wpe-platform"
+# Reject foreign-architecture ELF even when its ELF magic is valid.
+printf '\076\000' | dd of="$TMP/native-app/fire4nix-wpe-platform" bs=1 seek=18 conv=notrunc 2>/dev/null
+rejected="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" \
+    bash -c 'APP_DIR="$1"; source "$2"; fire4nix_wpe_platform_binary' \
+    bash "$TMP/native-app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh")"
+test -z "$rejected"
+# Synthesize only the AArch64 ELF machine header for architecture-selection
+# tests. This dummy is not a runnable AArch64 browser.
+printf '\267\000' | dd of="$TMP/native-app/fire4nix-wpe-platform" bs=1 seek=18 conv=notrunc 2>/dev/null
 resolved="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" \
     bash -c 'APP_DIR="$1"; source "$2"; fire4nix_wpe_platform_binary' \
     bash "$TMP/native-app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh")"
 test "$resolved" = "$TMP/native-app/fire4nix-wpe-platform"
-cp /bin/true "$TMP/native-app/bin/fire4nix-wpe-platform"
+cp "$TMP/native-app/fire4nix-wpe-platform" "$TMP/native-app/bin/fire4nix-wpe-platform"
 resolved="$(env -u FIRE4NIX_WPE_PLATFORM_BINARY FIRE4NIX_HOME="$TMP/native-app" \
     bash -c 'APP_DIR="$1"; source "$2"; fire4nix_wpe_platform_binary' \
     bash "$TMP/native-app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh")"
