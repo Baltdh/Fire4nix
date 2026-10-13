@@ -164,6 +164,34 @@ jobs:
           (dist / "WPE-SUBPROCESS-PROVENANCE.txt").write_text("\\n".join(lines) + "\\n")
           print("\\n".join(lines))
           PY
+      - name: Compare official Debian WPE runtime package without mixing binaries
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/debian-reference
+          cd dist/debian-reference
+          apt-get download libwpewebkit-2.0-1
+          deb="$(find . -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$deb"
+          dpkg-deb -f "$deb" Package Version Architecture > PACKAGE-METADATA.txt
+          dpkg-deb -x "$deb" extracted
+          find extracted -type f \( -name WPEWebProcess -o -name WPENetworkProcess -o -name WPEGPUProcess \) -print | sort > PROCESS-FILES.txt
+          test "$(wc -l < PROCESS-FILES.txt)" -eq 3
+          while IFS= read -r candidate; do
+            file "$candidate"
+            readelf -h "$candidate" | grep -q AArch64
+          done < PROCESS-FILES.txt
+          {
+            echo 'Official Debian runtime package (reference only, NOT installed):'
+            cat PACKAGE-METADATA.txt
+            echo 'Reference executables:'
+            cat PROCESS-FILES.txt
+            echo 'Installed experimental library:'
+            pkg-config --modversion wpe-webkit-2.0
+            echo 'Compatibility NOT established: do not combine processes with experimental library yet.'
+          } > ../WPE-DEBIAN-REFERENCE-COMPARISON.txt
+          cat ../WPE-DEBIAN-REFERENCE-COMPARISON.txt
+          rm -rf extracted "$deb"
       - name: Audit ELF interpreter and linked library versions
         working-directory: navegador-definitivo
         run: |
