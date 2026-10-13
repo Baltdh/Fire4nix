@@ -22,6 +22,7 @@ mkdir -p "$TMP/bin" "$TMP/config" "$TMP/runtime" "$TMP/logs"
 cat > "$TMP/bin/cog" <<'COG'
 #!/bin/sh
 printf 'MOCK_COG_ARGS %s\n' "$*"
+printf 'MOCK_COG_WAYLAND %s %s\n' "${WAYLAND_DISPLAY:-unset}" "${XDG_RUNTIME_DIR:-unset}"
 COG
 cat > "$TMP/bin/mock-wpe" <<'WPE'
 #!/bin/sh
@@ -49,22 +50,35 @@ grep -q 'MOCK_WPE_ARGS https://example.org/recovery' "$TMP/recovery.log"
 grep -q 'attempting Cog fallback' "$TMP/recovery.log"
 grep -q 'MOCK_COG_ARGS' "$TMP/recovery.log"
 grep -q 'https://example.org/recovery' "$TMP/recovery.log"
+# Create a ROCKNIX-like Wayland socket named wayland-1, with wayland-0
+# deliberately misconfigured to check automatic session recovery.
+mkdir -p "$TMP/wayland"
+python3 - "$TMP/wayland/wayland-1" <<'PY'
+import socket, sys
+sock = socket.socket(socket.AF_UNIX)
+sock.bind(sys.argv[1])
+sock.close()
+PY
 # Execute the full user-facing entrypoint: Fire4Nix.sh -> run_browser.sh ->
 # engine resolution -> Cog. This catches unset variables hidden by lower-level
 # helper tests, especially under set -u.
 if ! FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/full-engine.conf" \
+    XDG_RUNTIME_DIR="$TMP/wayland" WAYLAND_DISPLAY=wayland-0 \
     FIRE4NIX_START_PAGE="https://example.org/full-startup" \
     FIRE4NIX_LOG="$TMP/logs/full-browser.log" \
     FIRE4NIX_ENTRY_LOG="$TMP/full-entry.log" \
     sh "$ROOT/navegador-definitivo/Fire4Nix.sh"; then
     FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/full-engine.conf" \
-        FIRE4NIX_START_PAGE="https://example.org/full-startup" \
+        XDG_RUNTIME_DIR="$TMP/wayland" WAYLAND_DISPLAY=wayland-0 \
+    FIRE4NIX_START_PAGE="https://example.org/full-startup" \
         FIRE4NIX_LOG="$TMP/logs/full-browser.log" \
         bash -x "$ROOT/navegador-definitivo/scripts/run_browser.sh" > "$TMP/full-trace.log" 2>&1 || true
     exit 1
 fi
 grep -q 'MOCK_COG_ARGS' "$TMP/full-entry.log"
 grep -q 'https://example.org/full-startup' "$TMP/full-entry.log"
+grep -q "MOCK_COG_WAYLAND wayland-1 $TMP/wayland" "$TMP/full-entry.log"
+grep -q 'recovered Wayland socket: ' "$TMP/logs/full-browser.log"
 grep -q 'Exit code: 0' "$TMP/full-entry.log"
 grep -q 'launching engine=cog' "$TMP/logs/full-browser.log"
-printf '%s\n' 'PASS: Cog/WPE scripts, Cog fallback and full Fire4Nix.sh startup with initialized log variables.'
+printf '%s\n' 'PASS: Cog/WPE scripts, fallback, full Fire4Nix.sh startup, logs, and wayland-1 recovery.'
