@@ -118,6 +118,21 @@ jobs:
           else
             echo 'PRESENT: required WPE subprocess binaries found in build container' > dist/WPE-RUNTIME-STATUS.txt
           fi
+      - name: Inventory actual WPE runtime installation paths
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist
+          {
+            echo 'WPE pkg-config variables:'
+            pkg-config --variable=prefix wpe-webkit-2.0
+            pkg-config --variable=libdir wpe-webkit-2.0
+            echo 'WebKit/WPE process candidates:'
+            find /usr/local /usr/lib /usr/bin /lib -type f \( -iname '*WebProcess*' -o -iname '*NetworkProcess*' -o -iname '*GPUProcess*' -o -iname '*webkit*process*' \) -print 2>/dev/null | sort || true
+            echo 'WPE executables recorded in installed package metadata:'
+            find /usr/local/lib/pkgconfig /usr/lib/aarch64-linux-gnu/pkgconfig -name '*wpe*.pc' -print 2>/dev/null || true
+          } > dist/WPE-INSTALL-INVENTORY.txt
+          cat dist/WPE-INSTALL-INVENTORY.txt
       - name: Audit ELF interpreter and linked library versions
         working-directory: navegador-definitivo
         run: |
