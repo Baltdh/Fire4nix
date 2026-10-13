@@ -22,4 +22,14 @@ mkdir -p "$tmp/override"
 cp "$tmp/external/downloads/Fire4Nix/Fire4Nix.sh" "$tmp/override/Fire4Nix.sh"
 FIRE4NIX_APP_DIR="$tmp/override" FIRE4NIX_LAUNCH_LOG="$log" FIRE4NIX_DATA_ROOT="$tmp/data" "$tmp/shortcut.sh"
 test "$(grep -c 'PORTABLE_TEST_OK' "$log")" = 3
-echo 'Portable, symlink and override launcher tests passed'
+# Exercise the requested ROCKNIX Tools layout, including diagnostic auto-discovery.
+mkdir -p "$tmp/Tools/Fire4Nix"
+cp "$root/deploy/Fire4Nix-ROCKNIX.sh" "$tmp/Tools/Fire4Nix/Start.sh"
+cp "$root/deploy/Fire4Nix-WPE-Diagnostico.sh" "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh"
+cp "$tmp/external/downloads/Fire4Nix/Fire4Nix.sh" "$tmp/Tools/Fire4Nix/Fire4Nix.sh"
+chmod +x "$tmp/Tools/Fire4Nix/Start.sh"
+FIRE4NIX_LAUNCH_LOG="$log" FIRE4NIX_DATA_ROOT="$tmp/data" "$tmp/Tools/Fire4Nix/Start.sh"
+test "$(grep -c 'PORTABLE_TEST_OK' "$log")" -eq 4
+env -u FIRE4NIX_APP_DIR sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/diagnostic.log"
+grep -F "app: $tmp/Tools/Fire4Nix" "$tmp/diagnostic.log"
+echo 'Portable, symlink, override and Tools directory/diagnostic tests passed'
