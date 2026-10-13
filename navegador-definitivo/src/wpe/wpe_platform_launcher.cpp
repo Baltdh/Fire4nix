@@ -773,8 +773,14 @@ void onTitleNotify(GObject* object, GParamSpec*, gpointer)
 int main(int argc, char** argv)
 {
     const LaunchOptions options = parseOptions(argc, argv);
+    // --headless is an explicit diagnostic request and must win over a
+    // previously exported WPE_PLATFORM=wayland from a launcher environment.
+    // Without this, a CI/browser test could unexpectedly create a window.
+    if (options.headlessMode)
+        g_setenv("WPE_PLATFORM", "headless", TRUE);
 
     g_message("Fire4Nix WPE launcher starting");
+    g_message("Fire4Nix WPE graphics platform: %s", g_getenv("WPE_PLATFORM") ? g_getenv("WPE_PLATFORM") : "auto");
     g_message("Fire4Nix WPE start URL: %s", options.url.c_str());
     g_message("Fire4Nix WPE target size: %ux%u", options.width, options.height);
 
