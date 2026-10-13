@@ -267,7 +267,7 @@ jobs:
           ulimit -c unlimited || true
           cat /proc/sys/kernel/core_pattern > dist/wayland-smoke/CORE-PATTERN.txt 2>/dev/null || true
           set +e
-          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 FIRE4NIX_WPE_EARLY_EGL_TERMINATE=1 \
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 \
             timeout 25s ./fire4nix-wpe-platform --exit-after-load "$test_url" > dist/wayland-smoke/launcher.log 2>&1
           status=$?
           set -e
@@ -286,7 +286,7 @@ jobs:
             # in-process GDB run when a local core cannot be captured.
             if [ -z "$corefile" ]; then
               set +e
-              WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 FIRE4NIX_WPE_EARLY_EGL_TERMINATE=1 \
+              WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 \
                 timeout 35s gdb -q -batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 24' \
                   --args ./fire4nix-wpe-platform --exit-after-load "$test_url" > dist/wayland-smoke/GDB-RUN.txt 2>&1
               debugger_status=$?
