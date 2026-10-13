@@ -39,4 +39,6 @@ Use `Fire4Nix-WPE-Diagnostico.sh` na pasta Tools. O relatório padrão é `/stor
 
 O código já possui ativação opcional para `runtime/aarch64` dentro do aplicativo, usando `WEBKIT_EXEC_PATH` e bibliotecas relativas somente após verificar arquitetura ELF, manifestos SHA-256, subprocessos e links simbólicos. Essa função é preparatória e **não basta para comprovar que o WebKit suporta diretórios relocalizáveis**.
 
+A build ARM64 passou no teste de `WPEWebProcess` executado a partir de um `WEBKIT_EXEC_PATH` temporário no CI. Há um segundo teste (`dist/runtime-library-probe/RESULT.txt`) que verifica se o carregador dinâmico escolhe `libWPEWebKit-2.0.so` a partir de um diretório portátil usando `LD_DEBUG=libs`. Ele usa outras bibliotecas do Debian no runner; logo **não prova um pacote completo**.
+
 O ZIP `Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip` é **somente um launcher experimental**; não é a edição completa.
