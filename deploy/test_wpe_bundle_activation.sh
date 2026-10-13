@@ -73,7 +73,7 @@ cp "$TMP/complete-manifest" "$TMP/bundle/SHA256SUMS"
 
 # Foreign architecture dependencies cannot be mixed into the bundle.
 cp /bin/true "$TMP/bundle/lib/libforeign.so.1"
-printf '\\076\\000' | dd of="$TMP/bundle/lib/libforeign.so.1" bs=1 seek=18 conv=notrunc 2>/dev/null
+printf '\076\000' | dd of="$TMP/bundle/lib/libforeign.so.1" bs=1 seek=18 conv=notrunc 2>/dev/null
 reject 'foreign ELF shared library'
 rm "$TMP/bundle/lib/libforeign.so.1"
 
