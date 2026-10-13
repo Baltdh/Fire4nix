@@ -8,12 +8,15 @@
 #include <glib.h>
 #include <glib-unix.h>
 #include <wpe/webkit.h>
+#include <wpe/wpe-platform.h>
+#include <wpe/wayland/wpe-wayland.h>
 
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -799,10 +802,40 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    WebKitWebView* view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
-        "web-context", webContext,
-        "network-session", networkSession,
-        nullptr));
+    // The implicit/default WPEDisplay is released by WebKit at process exit,
+    // which can be too late for Wayland/EGL: Mesa then destroys Wayland proxies
+    // after the connection has gone away. Own an explicit display on Wayland
+    // and release it promptly after the web view.
+    using DisplayHandle = std::unique_ptr<WPEDisplay, void (*)(WPEDisplay*)>;
+    DisplayHandle ownedWaylandDisplay(nullptr, [](WPEDisplay* display) {
+        if (display != nullptr)
+            g_object_unref(display);
+    });
+    if (g_strcmp0(g_getenv("WPE_PLATFORM"), "wayland") == 0) {
+        ownedWaylandDisplay.reset(wpe_display_wayland_new());
+        g_autoptr(GError) displayError = nullptr;
+        if (!ownedWaylandDisplay || !wpe_display_connect(ownedWaylandDisplay.get(), &displayError)) {
+            g_printerr("Fire4Nix WPE: Wayland display connection failed: %s\n",
+                displayError != nullptr ? displayError->message : "no display");
+            if (networkSession != nullptr)
+                g_object_unref(networkSession);
+            g_object_unref(webContext);
+            g_main_loop_unref(loop);
+            return EXIT_FAILURE;
+        }
+        g_message("Fire4Nix WPE explicit Wayland display connected");
+    }
+
+    WebKitWebView* view = WEBKIT_WEB_VIEW(ownedWaylandDisplay
+        ? g_object_new(WEBKIT_TYPE_WEB_VIEW,
+            "web-context", webContext,
+            "network-session", networkSession,
+            "display", ownedWaylandDisplay.get(),
+            nullptr)
+        : g_object_new(WEBKIT_TYPE_WEB_VIEW,
+            "web-context", webContext,
+            "network-session", networkSession,
+            nullptr));
     if (view == nullptr) {
         g_printerr("Fire4Nix WPE: failed to create WebKitWebView\n");
         if (networkSession != nullptr)
@@ -873,6 +906,10 @@ int main(int argc, char** argv)
 
     if (view != nullptr)
         g_object_unref(view);
+    if (ownedWaylandDisplay) {
+        g_message("Fire4Nix WPE releasing explicit Wayland display");
+        ownedWaylandDisplay.reset();
+    }
     if (networkSession != nullptr)
         g_object_unref(networkSession);
     if (webContext != nullptr)
