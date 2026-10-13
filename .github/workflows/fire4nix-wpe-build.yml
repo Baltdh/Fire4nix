@@ -105,6 +105,13 @@ jobs:
             echo "Container capability status:"
             grep -E '^(CapEff|NoNewPrivs|Seccomp):' /proc/self/status || true
           } > dist/page-smoke/SANDBOX-ENVIRONMENT.txt
+          # Diagnose container namespace support separately from WPE startup.
+          set +e
+          /usr/bin/bwrap --unshare-user --ro-bind / / -- /bin/true > dist/page-smoke/BWRAP-PREFLIGHT.txt 2>&1
+          bwrap_status=$?
+          set -e
+          echo "Bubblewrap namespace preflight exit status: $bwrap_status" >> dist/page-smoke/BWRAP-PREFLIGHT.txt
+          cat dist/page-smoke/BWRAP-PREFLIGHT.txt
           test_url="file://$(pwd)/dist/page-smoke/index.html"
           export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/runtime"
           mkdir -p "$FIRE4NIX_RUNTIME_DIR"
@@ -127,6 +134,9 @@ jobs:
             echo 'PASS: WPE reported successful local HTML load' >> dist/page-smoke/RESULT.txt
           else
             echo 'FAIL: no verified successful HTML load; graphical runtime not ready' >> dist/page-smoke/RESULT.txt
+            if [ "$bwrap_status" -ne 0 ]; then
+              echo 'DIAGNOSIS: Bubblewrap namespace preflight failed in GitHub container; WPE runtime result is inconclusive.' >> dist/page-smoke/RESULT.txt
+            fi
             cat dist/page-smoke/RESULT.txt
             touch dist/page-smoke/FAILED
           fi
