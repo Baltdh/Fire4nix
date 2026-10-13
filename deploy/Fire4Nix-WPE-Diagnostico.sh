@@ -89,6 +89,52 @@ check_elf_abi() {
   *) echo "ABI GLIBC comparison: unavailable (unknown/non-glibc libc)" ;;
  esac
 }
+# Compare C++ ABI independently from glibc. This is read-only.
+DEVICE_LIBSTDCPP=""
+for cpp_path in \
+ /usr/lib/libstdc++.so.6 /usr/lib64/libstdc++.so.6 \
+ /lib/libstdc++.so.6 /lib64/libstdc++.so.6 \
+ /usr/lib/aarch64-linux-gnu/libstdc++.so.6 \
+ /lib/aarch64-linux-gnu/libstdc++.so.6; do
+ if [ -f "$cpp_path" ]; then DEVICE_LIBSTDCPP="$cpp_path"; break; fi
+done
+echo "Device libstdc++ provider: ${DEVICE_LIBSTDCPP:-not found}"
+check_cpp_abi_version() {
+ family=$1
+ requirement=$2
+ if [ -z "$DEVICE_LIBSTDCPP" ] || ! command -v readelf >/dev/null 2>&1; then
+  echo "WPE $family compatibility: unverified (no device libstdc++ or readelf)"
+  return 0
+ fi
+ available="$(readelf --version-info "$DEVICE_LIBSTDCPP" 2>/dev/null |
+  grep -Eo "${family}_[0-9]+([.][0-9]+)+" |
+  awk -F_ '{print $2}' | sort -u |
+  awk -F. '{
+    a=$1+0; b=$2+0; c=$3+0; d=$4+0;
+    if (NR==1 || a>aa || (a==aa && b>bb) ||
+        (a==aa && b==bb && c>cc) ||
+        (a==aa && b==bb && c==cc && d>dd)) {
+      aa=a; bb=b; cc=c; dd=d; best=$0
+    }
+  } END {print best}' || true)"
+ if [ -z "$available" ]; then
+  echo "WPE $family compatibility: unverified (no $family versions found)"
+  return 0
+ fi
+ echo "Device highest $family: ${family}_$available"
+ if awk -v need="${requirement#*_}" -v host="$available" 'BEGIN {
+   split(need,n,"."); split(host,h,".");
+   for (i=1; i<=4; i++) {
+     if ((n[i]+0)>(h[i]+0)) exit 1
+     if ((n[i]+0)<(h[i]+0)) exit 0
+   }
+   exit 0
+ }'; then
+  echo "WPE $family requirement: satisfied (other dependencies unverified)"
+ else
+  echo "INCOMPATIBLE: WPE build requires $requirement but device libstdc++ supports up to ${family}_$available"
+ fi
+}
 for manifest in "$APP/../WPE-ABI-REQUIREMENTS.json" "$APP/WPE-ABI-REQUIREMENTS.json"; do
  if [ -f "$manifest" ]; then
   echo "WPE ABI manifest supplied: $manifest"
@@ -99,6 +145,7 @@ for manifest in "$APP/../WPE-ABI-REQUIREMENTS.json" "$APP/WPE-ABI-REQUIREMENTS.j
   for abi_family in GLIBCXX CXXABI; do
    abi_version="$(sed -n "s/.*\"$abi_family\":[[:space:]]*\"\([A-Z0-9_.]*\)\".*/\1/p" "$manifest" 2>/dev/null | head -1)"
    echo "WPE build-origin $abi_family requirement: ${abi_version:-unavailable}"
+   if [ -n "$abi_version" ]; then check_cpp_abi_version "$abi_family" "$abi_version"; fi
   done
   case "$LIBC_VERSION" in
    "glibc "[0-9]*)
