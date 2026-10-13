@@ -19,4 +19,4 @@ shift || true
 export FIRE4NIX_ENGINE_PRIORITY="${FIRE4NIX_ENGINE_PRIORITY:-wpe-platform,cog,chromium,firefox,browser.arm64}"
 export FIRE4NIX_ENGINE_SELECTED="wpe-platform"
 
-exec fire4nix_launch_engine "wpe-platform" "$target" "$@"
+fire4nix_launch_engine "wpe-platform" "$target" "$@"  # This is a Bash function; it execs the chosen binary itself.
