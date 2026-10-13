@@ -108,6 +108,9 @@ jobs:
           test_url="file://$(pwd)/dist/page-smoke/index.html"
           export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/runtime"
           mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+          export XDG_RUNTIME_DIR="$FIRE4NIX_RUNTIME_DIR/xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
           set +e
           timeout 35s ./fire4nix-wpe-platform --headless "$test_url" > dist/page-smoke/launcher.log 2>&1
           status=$?
