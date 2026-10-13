@@ -66,8 +66,19 @@ jobs:
           assert 'not found' not in deps, 'Unresolved shared libraries'
           print('ARM64 ELF and build-container dependencies verified')
           PY
+      - name: Record ARM64 build evidence
+        working-directory: navegador-definitivo
+        run: |
+          mkdir -p dist
+          sha256sum fire4nix-wpe-platform > dist/SHA256SUMS
+          readelf -d fire4nix-wpe-platform > dist/ELF-DEPENDENCIES.txt
+          ldd fire4nix-wpe-platform > dist/LDD-BUILD-ENV.txt
+          echo 'ARM64 launcher only; ROCKNIX runtime compatibility unverified' > dist/BUILD-MANIFEST.txt
+          echo "Commit: $GITHUB_SHA" >> dist/BUILD-MANIFEST.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-WPE-ARM64-launcher-experimental
-          path: navegador-definitivo/fire4nix-wpe-platform
+          path: |
+            navegador-definitivo/fire4nix-wpe-platform
+            navegador-definitivo/dist/
           if-no-files-found: error
