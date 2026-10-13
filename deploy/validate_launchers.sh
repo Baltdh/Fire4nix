@@ -7,6 +7,7 @@ bash -n "$root/navegador-definitivo/scripts/run_browser.sh"
 bash -n "$root/navegador-definitivo/scripts/wpe_cog_launch.sh"
 bash -n "$root/navegador-definitivo/scripts/wpe_platform_launch.sh"
 bash -n "$root/deploy/test_engine_entrypoints.sh"
+bash -n "$root/deploy/stage_rocknix_candidate.sh" "$root/deploy/test_rocknix_candidate_package.sh"
 sh -n "$root/navegador-definitivo/Fire4Nix.sh"
 sh -n "$root/deploy/Fire4Nix-ROCKNIX.sh"
 sh -n "$root/deploy/Fire4Nix-WPE-Diagnostico.sh"
@@ -16,4 +17,5 @@ if grep -Eq '^[[:space:]]*"\$\{FIRE4NIX_HOME:-\$APP_DIR\}/bin/fire4nix-wpe-platf
 fi
 bash "$root/deploy/test_portable_launcher.sh"
 bash "$root/deploy/test_engine_entrypoints.sh"
+bash "$root/deploy/test_rocknix_candidate_package.sh"
 echo "Launcher syntax and WPE wrapper regression checks passed"
