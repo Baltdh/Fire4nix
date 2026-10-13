@@ -26,4 +26,4 @@ export FIRE4NIX_COG_CONSOLE="${FIRE4NIX_COG_CONSOLE:-1}"
 
 export FIRE4NIX_ENGINE_PROFILE_DIR="$(fire4nix_apply_engine_selection cog)"
 export FIRE4NIX_ENGINE_SELECTED="cog"
-exec fire4nix_launch_engine cog "$target" "$@"
+fire4nix_launch_engine cog "$target" "$@"  # This is a Bash function; it execs the chosen binary itself.
