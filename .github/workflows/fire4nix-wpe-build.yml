@@ -80,7 +80,7 @@ jobs:
       - name: Install ARM64 WPE build dependencies
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils bubblewrap weston gdb libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev liblcms2-dev libinput-dev libenchant-2-dev libatk1.0-dev libatk-bridge2.0-dev libharfbuzz-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libsecret-1-dev libgbm-dev libdrm-dev libepoxy-dev libwoff-dev libopenjp2-7-dev libpsl-dev libhyphen-dev libseccomp-dev libsystemd-dev libudev-dev
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils bubblewrap weston gdb strace libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev liblcms2-dev libinput-dev libenchant-2-dev libatk1.0-dev libatk-bridge2.0-dev libharfbuzz-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libsecret-1-dev libgbm-dev libdrm-dev libepoxy-dev libwoff-dev libopenjp2-7-dev libpsl-dev libhyphen-dev libseccomp-dev libsystemd-dev libudev-dev
       - uses: actions/checkout@v4
       - name: Retrieve previously compiled WPE ARM64 library
         uses: actions/download-artifact@v4
@@ -232,6 +232,42 @@ jobs:
             cat dist/page-smoke/RESULT.txt
             touch dist/page-smoke/FAILED
           fi
+      - name: Check whether WebKit honors relocatable subprocess directory
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/relocatable-probe/libexec/wpe-webkit-2.0
+          for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            cp "/usr/libexec/wpe-webkit-2.0/$process" "dist/relocatable-probe/libexec/wpe-webkit-2.0/$process"
+            chmod 755 "dist/relocatable-probe/libexec/wpe-webkit-2.0/$process"
+          done
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/relocatable-probe/browser-runtime"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/relocatable-probe/xdg"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf '%s\n' '<!doctype html><html><title>WPE relocation probe</title><body>Relocatable</body></html>' > dist/relocatable-probe/index.html
+          test_url="file://$(pwd)/dist/relocatable-probe/index.html"
+          process_dir="$(pwd)/dist/relocatable-probe/libexec/wpe-webkit-2.0"
+          # A valid portable WPE build must spawn its helpers from this exact
+          # directory. Setting WEBKIT_EXEC_PATH alone is NOT proof it works.
+          # Unsafe sandbox override is strictly for this isolated CI fixture.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WEBKIT_EXEC_PATH="$process_dir" WPE_PLATFORM=headless \
+            timeout 30s strace -ff -e trace=execve -o dist/relocatable-probe/exec \
+              ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/relocatable-probe/launcher.log 2>&1
+          probe_status=$?
+          set -e
+          echo "Trace probe launcher status: $probe_status" > dist/relocatable-probe/RESULT.txt
+          if grep -Fh "execve(\"$process_dir/WPEWebProcess\"" dist/relocatable-probe/exec.* >/dev/null 2>&1; then
+            echo 'RELOCATION PASS: WebKit executed WPEWebProcess from the requested portable libexec path.' >> dist/relocatable-probe/RESULT.txt
+          elif grep -Fh '/usr/libexec/wpe-webkit-2.0/WPEWebProcess' dist/relocatable-probe/exec.* >/dev/null 2>&1; then
+            echo 'RELOCATION FAIL: WebKit ignored WEBKIT_EXEC_PATH and executed the system WPEWebProcess.' >> dist/relocatable-probe/RESULT.txt
+            echo 'A relocatable WebKit build/patch is required before a complete One File Edition release.' >> dist/relocatable-probe/RESULT.txt
+          else
+            echo 'RELOCATION INCONCLUSIVE: no helper execve evidence (trace unavailable or process not spawned).' >> dist/relocatable-probe/RESULT.txt
+          fi
+          cat dist/relocatable-probe/RESULT.txt
+          tail -35 dist/relocatable-probe/launcher.log
       - name: Probe WPEPlatform Wayland surface with isolated Weston compositor
         working-directory: navegador-definitivo
         run: |
