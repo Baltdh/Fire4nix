@@ -36,4 +36,19 @@ grep -F "app: $tmp/Tools/Fire4Nix" "$tmp/diagnostic.log"
 grep -F "app: $tmp/Tools/Fire4Nix" "$tmp/diagnostic-report.log"
 grep -F "Diagnostic saved: $tmp/diagnostic-report.log" "$tmp/diagnostic.log"
 test "$(stat -c '%a' "$tmp/diagnostic-report.log")" = 600
-echo 'Portable, symlink, override and Tools directory/diagnostic tests passed'
+# ABI preflight is read-only: simulate a device with too-old glibc and verify
+# that it reports incompatible symbol requirements, rather than claiming the
+# standalone launcher will run on ROCKNIX.
+mkdir -p "$tmp/Tools/Fire4Nix/bin" "$tmp/mock-bin"
+cp /bin/true "$tmp/Tools/Fire4Nix/bin/fire4nix-wpe-platform"
+cat > "$tmp/mock-bin/getconf" <<'MOCK'
+#!/bin/sh
+if [ "${1:-}" = GNU_LIBC_VERSION ]; then printf '%s\n' 'glibc 2.0'; else exit 1; fi
+MOCK
+chmod +x "$tmp/mock-bin/getconf"
+PATH="$tmp/mock-bin:$PATH" FIRE4NIX_DIAGNOSTIC_LOG="$tmp/incompatible-report.log" \
+  sh "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh" > "$tmp/incompatible-console.log"
+grep -F 'Highest required GLIBC: GLIBC_' "$tmp/incompatible-report.log"
+grep -F 'INCOMPATIBLE: binary requires GLIBC_' "$tmp/incompatible-report.log"
+grep -F 'WPEWebProcess: NOT FOUND' "$tmp/incompatible-report.log"
+echo 'Portable, Tools and ABI compatibility diagnostics passed'
