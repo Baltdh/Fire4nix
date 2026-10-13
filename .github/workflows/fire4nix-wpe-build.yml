@@ -1,0 +1,47 @@
+name: Fire4Nix static checks and WPE build
+on:
+  push:
+    branches: [feature/extracted-source-audit]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Validate launcher syntax and wrapper safety
+        run: bash deploy/validate_launchers.sh
+      - name: ShellCheck launcher entrypoints
+        run: |
+          shellcheck -s sh navegador-definitivo/Fire4Nix.sh deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh
+      - name: Verify source-only placeholders are not ELF engines
+        run: |
+          file navegador-definitivo/bin/browser.arm64 navegador-definitivo/bin/fire4nix-wpe-platform
+          if file navegador-definitivo/bin/fire4nix-wpe-platform | grep -q ELF; then
+            echo "Unexpected ELF in wrapper path"; exit 1
+          fi
+  wpe-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WPE build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libwpewebkit-2.0-dev libwpebackend-fdo-1.0-dev
+      - name: Compile WPE launcher for CI host (x86_64, NOT RK3326)
+        working-directory: navegador-definitivo
+        run: |
+          make wpe-platform-launcher
+          test -f fire4nix-wpe-platform
+          file fire4nix-wpe-platform
+          readelf -h fire4nix-wpe-platform
+          readelf -d fire4nix-wpe-platform | grep NEEDED
+          ldd fire4nix-wpe-platform
+      - name: Upload host-only WPE executable for build inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: wpe-launcher-linux-x86_64-NOT-ROCKNIX
+          path: navegador-definitivo/fire4nix-wpe-platform
+          if-no-files-found: error
