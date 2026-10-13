@@ -8,7 +8,7 @@ cleanup() {
   rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "FAIL: engine-entrypoint test returned $rc" >&2
-    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log" "$TMP/full-trace.log"; do
+    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log" "$TMP/full-trace.log" "$TMP/positional-entry.log" "$TMP/failing-entry.log"; do
       if [ -f "$f" ]; then
         echo "--- $f ---" >&2
         cat "$f" >&2
@@ -23,6 +23,7 @@ cat > "$TMP/bin/cog" <<'COG'
 #!/bin/sh
 printf 'MOCK_COG_ARGS %s\n' "$*"
 printf 'MOCK_COG_WAYLAND %s %s\n' "${WAYLAND_DISPLAY:-unset}" "${XDG_RUNTIME_DIR:-unset}"
+exit "${MOCK_COG_EXIT_CODE:-0}"
 COG
 cat > "$TMP/bin/mock-wpe" <<'WPE'
 #!/bin/sh
@@ -81,4 +82,28 @@ grep -q "MOCK_COG_WAYLAND wayland-1 $TMP/wayland" "$TMP/full-entry.log"
 grep -q 'recovered Wayland socket: ' "$TMP/logs/full-browser.log"
 grep -q 'Exit code: 0' "$TMP/full-entry.log"
 grep -q 'launching engine=cog' "$TMP/logs/full-browser.log"
-printf '%s\n' 'PASS: Cog/WPE scripts, fallback, full Fire4Nix.sh startup, logs, and wayland-1 recovery.'
+# A user-provided positional URL overrides a preset homepage.
+FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/url-engine.conf" \
+    FIRE4NIX_START_PAGE="https://example.org/preset-home" \
+    FIRE4NIX_ENTRY_LOG="$TMP/positional-entry.log" \
+    sh "$ROOT/navegador-definitivo/Fire4Nix.sh" "https://example.org/explicit-url"
+grep -q 'MOCK_COG_ARGS.*https://example.org/explicit-url' "$TMP/positional-entry.log"
+if grep -q 'MOCK_COG_ARGS.*https://example.org/preset-home' "$TMP/positional-entry.log"; then
+    echo "FAIL: preset homepage replaced explicitly requested URL" >&2
+    exit 1
+fi
+
+# An engine failure must retain its original code all the way to the user
+# entrypoint; a generic status=1 hides the real reason for startup failure.
+if MOCK_COG_EXIT_CODE=63 FIRE4NIX_ENGINE=cog \
+    FIRE4NIX_ENGINE_FILE="$TMP/config/fail-engine.conf" \
+    FIRE4NIX_ENTRY_LOG="$TMP/failing-entry.log" \
+    sh "$ROOT/navegador-definitivo/Fire4Nix.sh" "https://example.org/error"; then
+    echo "FAIL: failed Cog session unexpectedly succeeded" >&2
+    exit 1
+else
+    status=$?
+fi
+test "$status" -eq 63
+grep -q 'Exit code: 63' "$TMP/failing-entry.log"
+printf '%s\n' 'PASS: Cog/WPE entrypoints, fallback, full launch, Wayland recovery, positional URL and exit-code propagation.'
