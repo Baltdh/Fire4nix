@@ -709,9 +709,14 @@ fire4nix_is_native_elf() {
     # Lightweight ELF signature check: never launch the bundled shell wrapper
     # as if it were the native browser (which would recurse into the launcher).
     command -v od >/dev/null 2>&1 || return 1
-    local signature
+    local signature header machine
     signature="$(LC_ALL=C od -An -tx1 -N4 "$binary" 2>/dev/null | tr -d '[:space:]')" || return 1
-    [ "$signature" = 7f454c46 ]
+    [ "$signature" = 7f454c46 ] || return 1
+    # Native package targets RK3326/ROCKNIX: ELF64, little-endian, AArch64.
+    # Reject accidentally bundled x86_64/ARM32 binaries before attempting exec.
+    header="$(LC_ALL=C od -An -tx1 -j4 -N2 "$binary" 2>/dev/null | tr -d '[:space:]')" || return 1
+    machine="$(LC_ALL=C od -An -tx1 -j18 -N2 "$binary" 2>/dev/null | tr -d '[:space:]')" || return 1
+    [ "$header" = 0201 ] && [ "$machine" = b700 ]
 }
 
 fire4nix_wpe_platform_binary() {
