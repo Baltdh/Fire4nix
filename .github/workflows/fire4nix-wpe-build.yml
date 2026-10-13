@@ -106,12 +106,12 @@ jobs:
             cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/page-smoke/final-browser.state
             cat dist/page-smoke/final-browser.state
           fi
-          if grep -q 'Fire4Nix WPE finished:' dist/page-smoke/launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/launcher.log; then
+          if grep -q 'Fire4Nix WPE finished:' dist/page-smoke/launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/launcher.log && grep -q 'event=load-finished' dist/page-smoke/final-browser.state && grep -q 'loading=0' dist/page-smoke/final-browser.state; then
             echo 'PASS: WPE reported successful local HTML load' >> dist/page-smoke/RESULT.txt
           else
             echo 'FAIL: no verified successful HTML load; graphical runtime not ready' >> dist/page-smoke/RESULT.txt
             cat dist/page-smoke/RESULT.txt
-            exit 1
+            touch dist/page-smoke/FAILED
           fi
       - name: Check WPE subprocesses and runtime library ABI
         working-directory: navegador-definitivo
@@ -308,6 +308,11 @@ jobs:
       - name: Enforce complete WPE runtime before release
         working-directory: navegador-definitivo
         run: |
+          if [ -f dist/page-smoke/FAILED ]; then
+            echo 'RELEASE BLOCKED: WPE did not complete a verified HTML navigation.'
+            cat dist/page-smoke/RESULT.txt
+            exit 1
+          fi
           if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
             echo 'RELEASE BLOCKED: missing WPE subprocesses:'
             cat dist/WPE-MISSING-SUBPROCESSES.txt
