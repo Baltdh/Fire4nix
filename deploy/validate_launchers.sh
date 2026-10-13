@@ -11,4 +11,5 @@ if grep -Eq '^[[:space:]]*"\$\{FIRE4NIX_HOME:-\$APP_DIR\}/bin/fire4nix-wpe-platf
  echo "ERROR: WPE shell wrapper must not be considered native WPE binary" >&2
  exit 1
 fi
+bash "$root/deploy/test_portable_launcher.sh"
 echo "Launcher syntax and WPE wrapper regression checks passed"
