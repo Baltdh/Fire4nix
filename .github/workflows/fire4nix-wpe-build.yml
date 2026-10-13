@@ -569,22 +569,43 @@ jobs:
             navegador-definitivo/fire4nix-wpe-platform
             navegador-definitivo/dist/
           if-no-files-found: error
-      - name: Enforce complete WPE runtime before release
+      - name: Enforce CI WPE prerequisites before release
         working-directory: navegador-definitivo
         run: |
+          set -u
+          blocked=0
           if [ -f dist/page-smoke/FAILED ]; then
-            echo 'RELEASE BLOCKED: WPE did not complete a verified HTML navigation.'
+            echo 'RELEASE BLOCKED: sandboxed WPE HTML navigation not verified.'
             cat dist/page-smoke/RESULT.txt
-            if grep -q 'Bubblewrap namespace preflight exit status: 0' dist/page-smoke/BWRAP-PREFLIGHT.txt; then
-              echo 'Sandbox preflight passed; investigate WPE itself.'
-            else
-              echo 'Sandbox preflight failed: container environment blocks namespace creation.'
+            if ! grep -q 'Bubblewrap namespace preflight exit status: 0' dist/page-smoke/BWRAP-PREFLIGHT.txt; then
+              echo 'CONTAINER LIMIT: Bubblewrap cannot create namespace in this runner.'
               cat dist/page-smoke/BWRAP-PREFLIGHT.txt
             fi
-            exit 1
+            blocked=1
           fi
           if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
-            echo 'RELEASE BLOCKED: missing WPE subprocesses:'
+            echo 'RELEASE BLOCKED: missing required WebKit processes.'
             cat dist/WPE-MISSING-SUBPROCESSES.txt
+            blocked=1
+          fi
+          if [ ! -f dist/relocatable-probe/RESULT.txt ] || \
+             ! grep -q 'RELOCATION PASS: WebKit executed WPEWebProcess' dist/relocatable-probe/RESULT.txt; then
+            echo 'RELEASE BLOCKED: WebKit subprocess relocation not established.'
+            cat dist/relocatable-probe/RESULT.txt 2>/dev/null || true
+            blocked=1
+          fi
+          if [ ! -f dist/wayland-smoke/RESULT.txt ] || \
+             ! grep -q 'DIAGNOSTIC PASS: WPEPlatform created Wayland toplevel and loaded local HTML' dist/wayland-smoke/RESULT.txt; then
+            echo 'RELEASE BLOCKED: graphical WPE Wayland smoke test did not pass.'
+            cat dist/wayland-smoke/RESULT.txt 2>/dev/null || true
+            blocked=1
+          fi
+          if [ ! -s dist/WPE-ABI-REQUIREMENTS.json ]; then
+            echo 'RELEASE BLOCKED: build-origin WPE ABI report missing.'
+            blocked=1
+          fi
+          if [ "$blocked" -ne 0 ]; then
+            echo 'EXPERIMENTAL ZIP remains downloadable; it is NOT a complete ROCKNIX browser.'
             exit 1
           fi
+          echo 'CI WPE prerequisites passed; ROCKNIX physical device and target sysroot qualification still required.'
