@@ -57,6 +57,15 @@ jobs:
           readelf -h fire4nix-wpe-platform | grep -E 'Class:|Machine:'
           readelf -d fire4nix-wpe-platform | grep NEEDED
           ldd fire4nix-wpe-platform
+          python3 - <<'PY'
+          import subprocess
+          binary = 'fire4nix-wpe-platform'
+          header = subprocess.check_output(['readelf', '-h', binary], text=True)
+          assert 'ELF64' in header and 'AArch64' in header, 'Expected ELF64 AArch64'
+          deps = subprocess.check_output(['ldd', binary], text=True)
+          assert 'not found' not in deps, 'Unresolved shared libraries'
+          print('ARM64 ELF and build-container dependencies verified')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-WPE-ARM64-launcher-experimental
