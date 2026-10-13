@@ -29,11 +29,14 @@ O arquivo `WPE-ABI-REQUIREMENTS.json` identifica hashes SHA-256 e bibliotecas NE
 2. Recompilar o launcher e o WPE WebKit contra o sysroot alvo ou demonstrar compatibilidade binária completa.
 3. Verificar todas as bibliotecas NEEDED, versões de símbolos, plugins TLS/GIO, Wayland/EGL e arquitetura ARM64.
 4. Validar o caminho dos subprocessos WPE num pacote relocalizável: builds upstream podem procurar em `/usr/libexec/wpe-webkit-2.0`. O fato de configurar `WEBKIT_EXEC_PATH` **não prova** que o WebKit compilado obedece a essa variável. A implementação/patch precisa ser verificada no WebKit realmente distribuído.
+   O CI agora executa um teste separado com `strace -ff -e execve`, uma cópia dos três processos auxiliares em diretório temporário e `WEBKIT_EXEC_PATH` apontando para ele. O arquivo `dist/relocatable-probe/RESULT.txt` distingue **RELOCATION PASS**, **RELOCATION FAIL** e **RELOCATION INCONCLUSIVE**. O diagnóstico usa um HTML local e sandbox desativado somente dentro do CI; não comprova a segurança nem o funcionamento no aparelho.
 5. Carregar HTML local e página HTTPS, realizar navegação e encerramento sem crash e preservar o sandbox no ROCKNIX físico.
 6. Só então empacotar bibliotecas e subprocessos no ZIP completo. **Não distribuir um conjunto Debian como se fosse um runtime ROCKNIX certificado**, nem sobrescrever `libc` do sistema.
 
 ## Diagnóstico no aparelho
 
 Use `Fire4Nix-WPE-Diagnostico.sh` na pasta Tools. O relatório padrão é `/storage/fire4nix-wpe-diagnostic.log`. A comparação de versões de `glibc`, `GLIBCXX` e `CXXABI` é apenas uma triagem inicial, e pode ficar inconclusiva na ausência de `readelf` ou bibliotecas disponíveis na sessão.
+
+O código já possui ativação opcional para `runtime/aarch64` dentro do aplicativo, usando `WEBKIT_EXEC_PATH` e bibliotecas relativas somente após verificar arquitetura ELF, manifestos SHA-256, subprocessos e links simbólicos. Essa função é preparatória e **não basta para comprovar que o WebKit suporta diretórios relocalizáveis**.
 
 O ZIP `Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip` é **somente um launcher experimental**; não é a edição completa.
