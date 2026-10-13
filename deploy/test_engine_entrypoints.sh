@@ -8,7 +8,7 @@ cleanup() {
   rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "FAIL: engine-entrypoint test returned $rc" >&2
-    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log"; do
+    for f in "$TMP/cog.log" "$TMP/wpe.log" "$TMP/recovery.log" "$TMP/full-entry.log" "$TMP/logs/full-browser.log" "$TMP/full-trace.log"; do
       if [ -f "$f" ]; then
         echo "--- $f ---" >&2
         cat "$f" >&2
@@ -52,11 +52,17 @@ grep -q 'https://example.org/recovery' "$TMP/recovery.log"
 # Execute the full user-facing entrypoint: Fire4Nix.sh -> run_browser.sh ->
 # engine resolution -> Cog. This catches unset variables hidden by lower-level
 # helper tests, especially under set -u.
-FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/full-engine.conf" \
+if ! FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/full-engine.conf" \
     FIRE4NIX_START_PAGE="https://example.org/full-startup" \
     FIRE4NIX_LOG="$TMP/logs/full-browser.log" \
     FIRE4NIX_ENTRY_LOG="$TMP/full-entry.log" \
-    sh "$ROOT/navegador-definitivo/Fire4Nix.sh"
+    sh "$ROOT/navegador-definitivo/Fire4Nix.sh"; then
+    FIRE4NIX_ENGINE=cog FIRE4NIX_ENGINE_FILE="$TMP/config/full-engine.conf" \
+        FIRE4NIX_START_PAGE="https://example.org/full-startup" \
+        FIRE4NIX_LOG="$TMP/logs/full-browser.log" \
+        bash -x "$ROOT/navegador-definitivo/scripts/run_browser.sh" > "$TMP/full-trace.log" 2>&1 || true
+    exit 1
+fi
 grep -q 'MOCK_COG_ARGS' "$TMP/full-entry.log"
 grep -q 'https://example.org/full-startup' "$TMP/full-entry.log"
 grep -q 'Exit code: 0' "$TMP/full-entry.log"
