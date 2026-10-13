@@ -137,6 +137,33 @@ jobs:
             find /usr/local/lib/pkgconfig /usr/lib/aarch64-linux-gnu/pkgconfig -name '*wpe*.pc' -print 2>/dev/null || true
           } > dist/WPE-INSTALL-INVENTORY.txt
           cat dist/WPE-INSTALL-INVENTORY.txt
+      - name: Summarize subprocess inventory and source archive coverage
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          python3 - <<'PY'
+          from pathlib import Path
+          dist = Path("dist")
+          source = (dist / "WPE-SOURCE-SUBPROCESS-CANDIDATES.txt").read_text().splitlines()
+          installed = (dist / "WPE-SUBPROCESSES.txt").read_text().splitlines()
+          missing = (dist / "WPE-MISSING-SUBPROCESSES.txt")
+          missing_names = missing.read_text().splitlines() if missing.exists() else []
+          lines = [
+              "WPE subprocess provenance audit",
+              "Source archive subprocess candidates: " + str(len(source)),
+              "Installed subprocess entries: " + str(len(installed)),
+              "Missing required subprocesses: " + (", ".join(missing_names) if missing_names else "none"),
+              "NOTE: candidates can include alternate WebKit process names; manual inspection required.",
+          ]
+          if missing_names and not source:
+              lines.append("DIAGNOSIS: no subprocess candidates found in source tarball; rebuild or source complete WPE runtime.")
+          elif missing_names:
+              lines.append("DIAGNOSIS: candidates exist in tarball; inspect filenames, installation paths and architecture.")
+          else:
+              lines.append("DIAGNOSIS: required names present; graphical runtime still unverified.")
+          (dist / "WPE-SUBPROCESS-PROVENANCE.txt").write_text("\\n".join(lines) + "\\n")
+          print("\\n".join(lines))
+          PY
       - name: Audit ELF interpreter and linked library versions
         working-directory: navegador-definitivo
         run: |
