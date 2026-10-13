@@ -5,17 +5,30 @@ on:
   workflow_dispatch:
 jobs:
   filesystem-simulation:
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate portable startup on ARM64 Linux
+      - name: Validate portable startup, Wayland environment and recovery
         run: |
+          bash -n deploy/Fire4Nix-ROCKNIX.sh deploy/test_portable_launcher.sh deploy/test_rocknix_simulation.sh deploy/test_rocknix_failure_modes.sh
           bash deploy/test_portable_launcher.sh
           bash deploy/test_rocknix_simulation.sh
-      - name: Read ROCKNIX upstream build configuration
+          bash deploy/test_rocknix_failure_modes.sh
+      - name: Inspect official ROCKNIX build sources
         run: |
           git clone --depth 1 --filter=blob:none --sparse --branch next https://github.com/ROCKNIX/distribution.git /tmp/rocknix
           git -C /tmp/rocknix sparse-checkout set --no-cone Dockerfile Makefile
           test -f /tmp/rocknix/Dockerfile
           test -f /tmp/rocknix/Makefile
-          echo "ROCKNIX upstream build sources inspected; not a booted ROCKNIX system."
+          git -C /tmp/rocknix rev-parse HEAD > rocknix-upstream-commit.txt
+          printf 'Host architecture: %s\n' "$(uname -m)" >> rocknix-upstream-commit.txt
+          cat rocknix-upstream-commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rocknix-source-reference-${{ matrix.os }}
+          path: rocknix-upstream-commit.txt
+          if-no-files-found: error
