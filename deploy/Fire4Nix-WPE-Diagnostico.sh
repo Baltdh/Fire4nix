@@ -33,6 +33,12 @@ echo "architecture: $(uname -m)"
 echo "app: $APP"
 echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-unset}"
 echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset}"
+echo "WPE_PLATFORM=${WPE_PLATFORM:-auto}"
+echo "WPE_DISPLAY=${WPE_DISPLAY:-unset (legacy)}"
+echo "FIRE4NIX_WPE_DISPLAY=${FIRE4NIX_WPE_DISPLAY:-auto}"
+if command -v getconf >/dev/null 2>&1; then
+ echo "libc: $(getconf GNU_LIBC_VERSION 2>/dev/null || echo unknown)"
+fi
 for cmd in bash cog file readelf ldd pkg-config; do
  if command -v "$cmd" >/dev/null 2>&1; then
    echo "command $cmd: $(command -v "$cmd")"
