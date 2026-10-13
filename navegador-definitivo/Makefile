@@ -19,8 +19,11 @@ SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(SDL_PKGS) 2>/dev/null)
 SDL_LIBS := $(shell $(PKG_CONFIG) --libs $(SDL_PKGS) 2>/dev/null)
 
 WPE_PKG_NAME ?= $(shell for pkg in wpe-webkit-2.0 wpe-webkit wpewebkit; do $(PKG_CONFIG) --exists $$pkg >/dev/null 2>&1 && { printf '%s\n' $$pkg; break; }; done; printf '%s\n' wpe-webkit-2.0)
-WPE_CFLAGS ?= $(shell if [ -n "$(WPE_PKG_NAME)" ]; then $(PKG_CONFIG) --cflags $(WPE_PKG_NAME) 2>/dev/null; fi)
-WPE_LIBS ?= $(shell if [ -n "$(WPE_PKG_NAME)" ]; then $(PKG_CONFIG) --libs $(WPE_PKG_NAME) 2>/dev/null; fi)
+# The native WPEPlatform Wayland display is explicitly owned by the app.
+# Ask pkg-config for its public headers and linker flags as well as WebKit.
+WPE_PLATFORM_WAYLAND_PKG ?= wpe-platform-wayland-2.0
+WPE_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags $(WPE_PKG_NAME) $(WPE_PLATFORM_WAYLAND_PKG) 2>/dev/null)
+WPE_LIBS ?= $(shell $(PKG_CONFIG) --libs $(WPE_PKG_NAME) $(WPE_PLATFORM_WAYLAND_PKG) 2>/dev/null)
 
 TARGET = fire4nix
 
