@@ -13,6 +13,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Validate launcher syntax and wrapper safety
         run: bash deploy/validate_launchers.sh
+      - name: Forbid unsafe WebKit sandbox overrides in distributable code
+        run: |
+          if grep -R -n -F 'WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS' --include='*.sh' --include='*.cpp' --include='*.h' navegador-definitivo deploy; then
+            echo 'ERROR: disabling WebKit sandbox is permitted only in CI-only diagnostics.'
+            exit 1
+          fi
       - name: ShellCheck launcher entrypoints
         run: |
           shellcheck -s sh navegador-definitivo/Fire4Nix.sh deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh
