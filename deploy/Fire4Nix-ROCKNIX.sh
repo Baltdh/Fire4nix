@@ -51,7 +51,9 @@ find_app() {
 }
 
 LOG="${FIRE4NIX_LAUNCH_LOG:-/storage/fire4nix-launch.log}"
-[ -d /storage ] && [ -w /storage ] || LOG="${TMPDIR:-/tmp}/fire4nix-launch.log"
+if [ -z "${FIRE4NIX_LAUNCH_LOG:-}" ] && { [ ! -d /storage ] || [ ! -w /storage ]; }; then
+  LOG="${TMPDIR:-/tmp}/fire4nix-launch.log"
+fi
 APP=$(find_app) || APP=""
 (
   echo "=== Fire4Nix $(date) ==="
