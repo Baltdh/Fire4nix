@@ -45,6 +45,159 @@ jobs:
           test "$(uname -m)" = aarch64
           cd library-artifact
           sha256sum -c SHA256SUMS
+          mkdir -p ../navegador-definitivo/dist
+          tar -tzf Fire4Nix-WPE-ARM64-library.tar.gz > ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt
+          {
+            echo 'Subprocess candidates inside the original WPE library archive:'
+            grep -Ei '(^|/)(WPEWebProcess|WPENetworkProcess|WPEGPUProcess|[^/]*[Ww]eb[Pp]rocess[^/]*|[^/]*[Nn]etwork[Pp]rocess[^/]*|[^/]*[Gg][Pp][Uu][Pp]rocess[^/]*)
+          ldconfig
+          pkg-config --exists wpe-webkit-2.0
+      - name: Compile actual WPE launcher for ARM64
+        working-directory: navegador-definitivo
+        run: |
+          make wpe-platform-launcher
+          test -f fire4nix-wpe-platform
+          file fire4nix-wpe-platform
+          readelf -h fire4nix-wpe-platform | grep -E 'Class:|Machine:'
+          readelf -d fire4nix-wpe-platform | grep NEEDED
+          ldd fire4nix-wpe-platform
+          python3 - <<'PY'
+          import subprocess
+          binary = 'fire4nix-wpe-platform'
+          header = subprocess.check_output(['readelf', '-h', binary], text=True)
+          assert 'ELF64' in header and 'AArch64' in header, 'Expected ELF64 AArch64'
+          deps = subprocess.check_output(['ldd', binary], text=True)
+          assert 'not found' not in deps, 'Unresolved shared libraries'
+          print('ARM64 ELF and build-container dependencies verified')
+          PY
+      - name: Execute native ARM64 WPE launcher CLI smoke tests
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          timeout 20s ./fire4nix-wpe-platform --help > /tmp/fire4nix-help.txt
+          timeout 20s ./fire4nix-wpe-platform --version > /tmp/fire4nix-version.txt
+          grep -q 'Fire4Nix WPE launcher' /tmp/fire4nix-help.txt
+          grep -q 'Fire4Nix WPE launcher' /tmp/fire4nix-version.txt
+          if timeout 20s ./fire4nix-wpe-platform --cookies-file > /tmp/fire4nix-invalid.txt 2>&1; then
+            echo 'ERROR: missing argument unexpectedly succeeded'
+            exit 1
+          fi
+          grep -q 'Missing value for --cookies-file' /tmp/fire4nix-invalid.txt
+          echo 'ARM64 WPE binary executed successfully for CLI startup and error handling.'
+      - name: Check WPE subprocesses and runtime library ABI
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist
+          WPE_LIB="$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so"
+          test -e "$WPE_LIB"
+          file -L "$WPE_LIB" | tee dist/WPE-LIBRARY-ARCH.txt
+          readelf -h "$WPE_LIB" | tee dist/WPE-LIBRARY-ELF.txt
+          grep -q AArch64 dist/WPE-LIBRARY-ELF.txt
+          ldd "$WPE_LIB" > dist/WPE-LIBRARY-LDD.txt
+          if grep -q 'not found' dist/WPE-LIBRARY-LDD.txt; then
+            echo 'ERROR: WPE library has unresolved dependencies'
+            exit 1
+          fi
+          for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            found="$(find /usr/local/lib /usr/lib /lib /usr/local/bin /usr/bin -type f -name "$process" -print -quit 2>/dev/null || true)"
+            if [ -z "$found" ]; then
+              echo "MISSING: $process (not present in the installed WPE build)" | tee -a dist/WPE-SUBPROCESSES.txt
+              echo "$process" >> dist/WPE-MISSING-SUBPROCESSES.txt
+              continue
+            fi
+            file "$found"
+            readelf -h "$found" | grep -q AArch64
+            ldd "$found" > "dist/$process-LDD.txt"
+            if grep -q 'not found' "dist/$process-LDD.txt"; then
+              echo "ERROR: unresolved dependencies for $process"
+              exit 1
+            fi
+            echo "$process: $found" >> dist/WPE-SUBPROCESSES.txt
+          done
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'WARNING: WPE runtime is incomplete; subprocess binaries must be bundled before device release.'
+            cat dist/WPE-MISSING-SUBPROCESSES.txt
+            echo 'INCOMPLETE: WPE subprocesses absent; do not ship to ROCKNIX' > dist/WPE-RUNTIME-STATUS.txt
+          else
+            echo 'PRESENT: required WPE subprocess binaries found in build container' > dist/WPE-RUNTIME-STATUS.txt
+          fi
+      - name: Inventory actual WPE runtime installation paths
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist
+          {
+            echo 'WPE pkg-config variables:'
+            pkg-config --variable=prefix wpe-webkit-2.0
+            pkg-config --variable=libdir wpe-webkit-2.0
+            echo 'WebKit/WPE process candidates:'
+            find /usr/local /usr/lib /usr/bin /lib -type f \( -iname '*WebProcess*' -o -iname '*NetworkProcess*' -o -iname '*GPUProcess*' -o -iname '*webkit*process*' \) -print 2>/dev/null | sort || true
+            echo 'WPE executables recorded in installed package metadata:'
+            find /usr/local/lib/pkgconfig /usr/lib/aarch64-linux-gnu/pkgconfig -name '*wpe*.pc' -print 2>/dev/null || true
+          } > dist/WPE-INSTALL-INVENTORY.txt
+          cat dist/WPE-INSTALL-INVENTORY.txt
+      - name: Audit ELF interpreter and linked library versions
+        working-directory: navegador-definitivo
+        run: |
+          mkdir -p dist
+          readelf -l fire4nix-wpe-platform > dist/ELF-PROGRAM-HEADERS.txt
+          readelf --version-info fire4nix-wpe-platform > dist/ELF-SYMBOL-VERSIONS.txt
+          objdump -p fire4nix-wpe-platform > dist/ELF-DYNAMIC-INFO.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('dist/ELF-PROGRAM-HEADERS.txt').read_text()
+          match = next((line.split('Requesting program interpreter: ', 1)[1].split(']')[0] for line in text.splitlines() if 'Requesting program interpreter: ' in line), None)
+          if not match:
+              raise SystemExit('Missing ELF program interpreter')
+          interpreter = match
+          print('ARM64 ELF interpreter:', interpreter)
+          if 'aarch64' not in interpreter and 'ld-linux' not in interpreter:
+              raise SystemExit('Unexpected ELF interpreter')
+          versions = Path('dist/ELF-SYMBOL-VERSIONS.txt').read_text()
+          glibc = sorted(set(re.findall(r'GLIBC_[0-9]+[.][0-9]+', versions)))
+          print('Required GLIBC symbol versions:', ', '.join(glibc))
+          Path('dist/ELF-ABI-SUMMARY.txt').write_text(
+              'Interpreter: ' + interpreter + '\n'
+              + 'GLIBC symbols: ' + ', '.join(glibc) + '\n'
+              + 'Build environment: Debian Trixie ARM64; ROCKNIX compatibility unverified\n'
+          )
+          PY
+          grep -q '^Interpreter: ' dist/ELF-ABI-SUMMARY.txt
+          grep -q '^GLIBC symbols: ' dist/ELF-ABI-SUMMARY.txt
+          grep -q '^Build environment: ' dist/ELF-ABI-SUMMARY.txt
+      - name: Record ARM64 build evidence
+        working-directory: navegador-definitivo
+        run: |
+          mkdir -p dist
+          sha256sum fire4nix-wpe-platform > dist/SHA256SUMS
+          readelf -d fire4nix-wpe-platform > dist/ELF-DEPENDENCIES.txt
+          ldd fire4nix-wpe-platform > dist/LDD-BUILD-ENV.txt
+          echo 'ARM64 launcher only; ROCKNIX runtime compatibility unverified' > dist/BUILD-MANIFEST.txt
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'RELEASE BLOCKED: WPE subprocesses missing' >> dist/BUILD-MANIFEST.txt
+          else
+            echo 'Subprocess inventory complete in build container; ROCKNIX still unverified' >> dist/BUILD-MANIFEST.txt
+          fi
+          echo "Commit: $GITHUB_SHA" >> dist/BUILD-MANIFEST.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-launcher-experimental
+          path: |
+            navegador-definitivo/fire4nix-wpe-platform
+            navegador-definitivo/dist/
+          if-no-files-found: error
+      - name: Enforce complete WPE runtime before release
+        working-directory: navegador-definitivo
+        run: |
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'RELEASE BLOCKED: missing WPE subprocesses:'
+            cat dist/WPE-MISSING-SUBPROCESSES.txt
+            exit 1
+          fi
+ ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt || true
+          } | tee ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
           tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
           ldconfig
           pkg-config --exists wpe-webkit-2.0
