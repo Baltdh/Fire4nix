@@ -26,4 +26,6 @@ Se o aplicativo estiver em outro lugar, defina `FIRE4NIX_APP_DIR` para a pasta q
 
 Nos testes Debian ARM64 de 13/10/2026, o WPE compilado exigiu símbolos até `GLIBC_2.38`. Isso não informa a versão existente no seu R36H: somente o relatório gerado no próprio dispositivo pode fornecer esse dado. Se o ROCKNIX usar outra implementação de libc, o diagnóstico informará que a comparação não é possível.
 
+Veja também [compatibilidade do WPE com ROCKNIX RK3326](ROCKNIX-WPE-COMPATIBILITY.md), com os requisitos de biblioteca, Wayland, sandbox e os critérios para o One File Edition.
+
 **Aprovação da simulação GitHub não equivale a teste em R36H.** O navegador WPE e suas bibliotecas precisam ser compatíveis com o ROCKNIX instalado no dispositivo; o artefato de diagnóstico não prova isso.
