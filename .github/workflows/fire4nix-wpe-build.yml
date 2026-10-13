@@ -80,7 +80,7 @@ jobs:
       - name: Install ARM64 WPE build dependencies
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils bubblewrap libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev liblcms2-dev libinput-dev libenchant-2-dev libatk1.0-dev libatk-bridge2.0-dev libharfbuzz-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libsecret-1-dev libgbm-dev libdrm-dev libepoxy-dev libwoff-dev libopenjp2-7-dev libpsl-dev libhyphen-dev libseccomp-dev libsystemd-dev libudev-dev
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils bubblewrap weston libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev liblcms2-dev libinput-dev libenchant-2-dev libatk1.0-dev libatk-bridge2.0-dev libharfbuzz-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libsecret-1-dev libgbm-dev libdrm-dev libepoxy-dev libwoff-dev libopenjp2-7-dev libpsl-dev libhyphen-dev libseccomp-dev libsystemd-dev libudev-dev
       - uses: actions/checkout@v4
       - name: Retrieve previously compiled WPE ARM64 library
         uses: actions/download-artifact@v4
@@ -232,6 +232,55 @@ jobs:
             cat dist/page-smoke/RESULT.txt
             touch dist/page-smoke/FAILED
           fi
+      - name: Probe WPEPlatform Wayland surface with isolated Weston compositor
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/wayland-smoke
+          export XDG_RUNTIME_DIR="$(pwd)/dist/wayland-smoke/xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          export WAYLAND_DISPLAY=wayland-fire4nix
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/wayland-smoke/browser-runtime"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+          # Weston is deliberately headless, but WPE must be a REAL Wayland
+          # client with a WPEPlatform toplevel. This tests window creation;
+          # there is no claim of visible output or actual device validation.
+          timeout 35s weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 --width=640 --height=480 --use-pixman > dist/wayland-smoke/weston.log 2>&1 &
+          weston_pid=$!
+          trap 'kill "$weston_pid" 2>/dev/null || true; wait "$weston_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 50); do
+            if [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; then ready=1; break; fi
+            if ! kill -0 "$weston_pid" 2>/dev/null; then break; fi
+            sleep 0.2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'DIAGNOSTIC FAIL: Wayland compositor did not start' | tee dist/wayland-smoke/RESULT.txt
+            cat dist/wayland-smoke/weston.log
+            exit 0
+          fi
+          printf '%s\n' '<!doctype html><html><head><title>Wayland WPE smoke</title></head><body>Wayland surface</body></html>' > dist/wayland-smoke/index.html
+          test_url="file://$(pwd)/dist/wayland-smoke/index.html"
+          # UNSAFE SANDBOX OVERRIDE: CI-only, local HTML, not distributed.
+          # This is a graphics diagnostic, never a release approval.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 \
+            timeout 25s ./fire4nix-wpe-platform --exit-after-load "$test_url" > dist/wayland-smoke/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Wayland diagnostic launcher exit code: $status" > dist/wayland-smoke/RESULT.txt
+          if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
+            cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/wayland-smoke/browser.state
+          fi
+          if [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE surface:' dist/wayland-smoke/launcher.log && grep -q 'Fire4Nix WPE finished:' dist/wayland-smoke/launcher.log && grep -q 'event=load-finished' dist/wayland-smoke/browser.state 2>/dev/null; then
+            echo 'DIAGNOSTIC PASS: WPEPlatform created Wayland toplevel and loaded local HTML; sandbox disabled, no physical display verified.' >> dist/wayland-smoke/RESULT.txt
+          else
+            echo 'DIAGNOSTIC FAIL: no verified WPEPlatform Wayland toplevel and HTML load.' >> dist/wayland-smoke/RESULT.txt
+          fi
+          cat dist/wayland-smoke/RESULT.txt
+          cat dist/wayland-smoke/launcher.log
+          tail -40 dist/wayland-smoke/weston.log
       - name: Check WPE subprocesses and runtime library ABI
         working-directory: navegador-definitivo
         run: |
