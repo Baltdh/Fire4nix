@@ -89,6 +89,17 @@ check_elf_abi() {
   *) echo "ABI GLIBC comparison: unavailable (unknown/non-glibc libc)" ;;
  esac
 }
+for manifest in "$APP/../WPE-ABI-REQUIREMENTS.json" "$APP/WPE-ABI-REQUIREMENTS.json"; do
+ if [ -f "$manifest" ]; then
+  echo "WPE ABI manifest supplied: $manifest"
+  # Informational JSON data, not executable; parse the known GLIBC field.
+  # This does not require jq or Python to be installed on ROCKNIX.
+  wpe_floor="$(sed -n 's/.*"highest_required_glibc_across_components": "\(GLIBC_[0-9.]*\)".*/\1/p' "$manifest" 2>/dev/null | head -1)"
+  echo "WPE build-origin GLIBC floor: ${wpe_floor:-unavailable}"
+  echo "WPE ABI validation: device libraries, dynamic modules and graphics unverified"
+  break
+ fi
+done
 for cmd in bash cog file readelf ldd pkg-config; do
  if command -v "$cmd" >/dev/null 2>&1; then
    echo "command $cmd: $(command -v "$cmd")"
