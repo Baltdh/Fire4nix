@@ -156,6 +156,11 @@ jobs:
           readelf -d fire4nix-wpe-platform > dist/ELF-DEPENDENCIES.txt
           ldd fire4nix-wpe-platform > dist/LDD-BUILD-ENV.txt
           echo 'ARM64 launcher only; ROCKNIX runtime compatibility unverified' > dist/BUILD-MANIFEST.txt
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'RELEASE BLOCKED: WPE subprocesses missing' >> dist/BUILD-MANIFEST.txt
+          else
+            echo 'Subprocess inventory complete in build container; ROCKNIX still unverified' >> dist/BUILD-MANIFEST.txt
+          fi
           echo "Commit: $GITHUB_SHA" >> dist/BUILD-MANIFEST.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -164,3 +169,11 @@ jobs:
             navegador-definitivo/fire4nix-wpe-platform
             navegador-definitivo/dist/
           if-no-files-found: error
+      - name: Enforce complete WPE runtime before release
+        working-directory: navegador-definitivo
+        run: |
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'RELEASE BLOCKED: missing WPE subprocesses:'
+            cat dist/WPE-MISSING-SUBPROCESSES.txt
+            exit 1
+          fi
