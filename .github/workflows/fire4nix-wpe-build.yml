@@ -125,6 +125,29 @@ jobs:
           else
             echo 'PRESENT: required WPE subprocess binaries found in build container' > dist/WPE-RUNTIME-STATUS.txt
           fi
+      - name: Verify matching WPE subprocess directory and execution permissions
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          runtime_dir=/usr/libexec/wpe-webkit-2.0
+          mkdir -p dist
+          {
+            echo "WPE library version: $(pkg-config --modversion wpe-webkit-2.0)"
+            echo "WPE process directory: $runtime_dir"
+            for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+              candidate="$runtime_dir/$process"
+              test -f "$candidate" || { echo "MISSING: $candidate"; exit 1; }
+              test -x "$candidate" || { echo "NOT EXECUTABLE: $candidate"; exit 1; }
+              readelf -h "$candidate" | grep -q AArch64
+              echo "$process: ELF AArch64 executable"
+              ldd "$candidate" | tee "dist/$process-LDD.txt"
+              if grep -q 'not found' "dist/$process-LDD.txt"; then
+                echo "Unresolved subprocess dependencies: $process"
+                exit 1
+              fi
+            done
+          } > dist/WPE-EXECUTION-READINESS.txt
+          cat dist/WPE-EXECUTION-READINESS.txt
       - name: Inventory actual WPE runtime installation paths
         working-directory: navegador-definitivo
         run: |
