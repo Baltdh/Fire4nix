@@ -96,6 +96,10 @@ for manifest in "$APP/../WPE-ABI-REQUIREMENTS.json" "$APP/WPE-ABI-REQUIREMENTS.j
   # This does not require jq or Python to be installed on ROCKNIX.
   wpe_floor="$(sed -n 's/.*"highest_required_glibc_across_components": "\(GLIBC_[0-9.]*\)".*/\1/p' "$manifest" 2>/dev/null | head -1)"
   echo "WPE build-origin GLIBC floor: ${wpe_floor:-unavailable}"
+  for abi_family in GLIBCXX CXXABI; do
+   abi_version="$(sed -n "s/.*\"$abi_family\": \"\([A-Z0-9_.]*\)\".*/\1/p" "$manifest" 2>/dev/null | head -1)"
+   echo "WPE build-origin $abi_family requirement: ${abi_version:-unavailable}"
+  done
   case "$LIBC_VERSION" in
    "glibc "[0-9]*)
     if [ -n "$wpe_floor" ]; then
