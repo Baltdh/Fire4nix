@@ -23,25 +23,42 @@ jobs:
             echo "Unexpected ELF in wrapper path"; exit 1
           fi
   wpe-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    container:
+      image: debian:trixie-slim
     steps:
-      - uses: actions/checkout@v4
-      - name: Install WPE build dependencies
+      - name: Install ARM64 WPE build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libwpewebkit-2.0-dev libwpebackend-fdo-1.0-dev
-      - name: Compile WPE launcher for CI host (x86_64, NOT RK3326)
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+      - uses: actions/checkout@v4
+      - name: Retrieve previously compiled WPE ARM64 library
+        uses: actions/download-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-library-experimental
+          run-id: 36968610673
+          github-token: ${{ github.token }}
+          path: library-artifact
+      - name: Verify and install isolated WPE library
+        run: |
+          test "$(uname -m)" = aarch64
+          cd library-artifact
+          sha256sum -c SHA256SUMS
+          tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
+          ldconfig
+          pkg-config --exists wpe-webkit-2.0
+      - name: Compile actual WPE launcher for ARM64
         working-directory: navegador-definitivo
         run: |
           make wpe-platform-launcher
           test -f fire4nix-wpe-platform
           file fire4nix-wpe-platform
-          readelf -h fire4nix-wpe-platform
+          readelf -h fire4nix-wpe-platform | grep -E 'Class:|Machine:'
           readelf -d fire4nix-wpe-platform | grep NEEDED
           ldd fire4nix-wpe-platform
-      - name: Upload host-only WPE executable for build inspection
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: wpe-launcher-linux-x86_64-NOT-ROCKNIX
+          name: Fire4Nix-WPE-ARM64-launcher-experimental
           path: navegador-definitivo/fire4nix-wpe-platform
           if-no-files-found: error
