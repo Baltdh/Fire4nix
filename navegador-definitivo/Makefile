@@ -48,7 +48,8 @@ $(TARGET): $(OBJS)
 
 ifeq ($(strip $(WPE_LIBS)),)
 wpe-platform-launcher:
-	@echo "WPE launcher not built: pkg-config package '$(WPE_PKG_NAME)' not available."
+	@echo "ERROR: WPE pkg-config dependency '$(WPE_PKG_NAME)' is missing." >&2
+	@exit 2
 else
 wpe-platform-launcher: src/wpe/wpe_platform_launcher.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(WPE_CFLAGS) $< $(WPE_LIBS) -o fire4nix-wpe-platform
