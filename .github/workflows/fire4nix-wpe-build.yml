@@ -94,6 +94,17 @@ jobs:
           mkdir -p dist/page-smoke
           printf '%s\n' '<!doctype html><html><head><title>Fire4Nix CI smoke</title></head><body><h1>Fire4Nix</h1></body></html>' > dist/page-smoke/index.html
           test -x /usr/bin/bwrap
+          {
+            echo "Kernel: $(uname -a)"
+            echo "User namespace setting:"
+            cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
+            echo "User namespace limit:"
+            cat /proc/sys/user/max_user_namespaces 2>/dev/null || true
+            echo "Bubblewrap executable:"
+            file /usr/bin/bwrap
+            echo "Container capability status:"
+            grep -E '^(CapEff|NoNewPrivs|Seccomp):' /proc/self/status || true
+          } > dist/page-smoke/SANDBOX-ENVIRONMENT.txt
           test_url="file://$(pwd)/dist/page-smoke/index.html"
           export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/runtime"
           mkdir -p "$FIRE4NIX_RUNTIME_DIR"
@@ -103,6 +114,8 @@ jobs:
           set -e
           echo "Launcher exit status: $status" > dist/page-smoke/RESULT.txt
           cat dist/page-smoke/launcher.log
+          echo 'Sandbox environment:'
+          cat dist/page-smoke/SANDBOX-ENVIRONMENT.txt
           if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
             cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/page-smoke/final-browser.state
             cat dist/page-smoke/final-browser.state
