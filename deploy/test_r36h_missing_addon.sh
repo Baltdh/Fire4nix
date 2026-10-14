@@ -14,7 +14,10 @@ for n in $(seq -w 1 62); do
   cp /bin/true "$target"
   printf '\267\000' | dd of="$target" bs=1 seek=18 conv=notrunc 2>/dev/null
 done
-(cd "$HERE"; find lib -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+mkdir -p "$HERE/bin"
+cp /bin/true "$HERE/bin/bwrap"
+printf '\267\000' | dd of="$HERE/bin/bwrap" bs=1 seek=18 conv=notrunc 2>/dev/null
+( cd "$HERE"; find lib bin -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS )
 export FIRE4NIX_APP_DIR="$APP"
 export FIRE4NIX_ADDON_ALLOW_TEST_HOST=1
 bash "$HERE/Instalar-Complemento-R36H.sh" --check > "$TMP/check.log" 2>&1
@@ -22,6 +25,8 @@ test ! -e "$APP/runtime/lib/libfixture01.so.1"
 bash "$HERE/Instalar-Complemento-R36H.sh" --install > "$TMP/install.log" 2>&1
 grep -q '^INSTALLED:' "$TMP/install.log"
 test -f "$APP/runtime/SHA256SUMS-ADDON"
+test -f "$APP/runtime/bin/bwrap"
+grep -q 'bin/bwrap' "$APP/runtime/SHA256SUMS-ADDON"
 (cd "$APP/runtime"; sha256sum -c SHA256SUMS-ADDON >/dev/null)
 bash "$HERE/Instalar-Complemento-R36H.sh" --check > "$TMP/recheck.log" 2>&1
 if bash "$HERE/Instalar-Complemento-R36H.sh" --install > "$TMP/duplicate.log" 2>&1; then
