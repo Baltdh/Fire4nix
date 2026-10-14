@@ -36,6 +36,7 @@ required = (
     'Diagnostico.sh',
     'Teste-WPE-No-R36H.sh',
     'LEIA-ANTES-DE-TESTAR.txt',
+    'Preparar-Runtime-No-R36H.sh',
     'Fire4Nix/Fire4Nix.sh',
     'Fire4Nix/scripts/fire4nix_env.sh',
     'Fire4Nix/scripts/run_browser.sh',
@@ -61,5 +62,6 @@ with zipfile.ZipFile(file) as archive:
     binary = archive.read(prefix + 'Fire4Nix/bin/fire4nix-wpe-platform')
     assert binary[:6] == b'\x7fELF\x02\x01' and binary[18:20] == b'\xb7\x00'
     assert archive.getinfo(prefix+'Start-Fire4Nix.sh').external_attr >> 16 & 0o111
+    assert archive.getinfo(prefix+'Preparar-Runtime-No-R36H.sh').external_attr >> 16 & 0o111
 print('PASS: safe paths, binary metadata, required Tools scripts and explicit runtime limitations')
 PY
