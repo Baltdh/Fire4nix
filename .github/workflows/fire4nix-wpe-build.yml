@@ -282,7 +282,7 @@ jobs:
           trap 'rm -rf "$staged_root"' EXIT
           mkdir -p "$staged_root/lib" "$staged_root/libexec/wpe-webkit-2.0"
           webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
-          cp -L "$webkit" "$staged_root/lib/libWPEWebKit-2.0.so"
+          cp -L "$webkit" "$staged_root/lib/libWPEWebKit-2.0.so.1"
           for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
             cp "/usr/libexec/wpe-webkit-2.0/$process" "$staged_root/libexec/wpe-webkit-2.0/$process"
             chmod 755 "$staged_root/libexec/wpe-webkit-2.0/$process"
@@ -309,7 +309,7 @@ jobs:
           status=$?
           set -e
           echo "Runtime-library probe launcher status: $status" > dist/runtime-library-probe/RESULT.txt
-          if grep -Fh "$staged_root/lib/libWPEWebKit-2.0.so" dist/runtime-library-probe/ld-debug.* > dist/runtime-library-probe/LIBRARY-LOADER-EVIDENCE.txt 2>/dev/null && \
+          if grep -Fh "$staged_root/lib/libWPEWebKit-2.0.so.1" dist/runtime-library-probe/ld-debug.* > dist/runtime-library-probe/LIBRARY-LOADER-EVIDENCE.txt 2>/dev/null && \
              [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE finished:' dist/runtime-library-probe/launcher.log; then
             echo 'LIBRARY RELOCATION PASS: WPE executed local HTML with libWPEWebKit loaded from the portable directory.' >> dist/runtime-library-probe/RESULT.txt
           else
@@ -719,7 +719,7 @@ jobs:
           printf '%s\n' '<!doctype html><html><title>Packaged WPE Core</title><body>Portable Core Test</body></html>' > dist/wpe-core/smoke.html
           local_url="file://$(pwd)/dist/wpe-core/smoke.html"
           process_dir="$stage/runtime/aarch64/libexec/wpe-webkit-2.0"
-          library="$stage/runtime/aarch64/lib/libWPEWebKit-2.0.so"
+          library="$stage/runtime/aarch64/lib/libWPEWebKit-2.0.so.1"
           # NO sandbox bypass is shipped. Diagnostic exception is scoped to
           # local HTML inside GitHub CI to work around blocked user namespaces.
           set +e
