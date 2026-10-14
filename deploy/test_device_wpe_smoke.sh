@@ -20,6 +20,7 @@ cat > "$TMP/mock-wpe" <<'MOCK'
 #!/usr/bin/env bash
 printf 'MOCK_SANDBOX_OVERRIDE=%s\n' "${WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS:-unset}"
 printf 'MOCK_PLATFORM=%s\n' "${WPE_PLATFORM:-unset}"
+printf 'MOCK_WAYLAND_DISPLAY=%s\n' "${WAYLAND_DISPLAY:-unset}"
 printf 'MOCK_ARGS=%s\n' "$*"
 if [ "${WPE_PLATFORM:-}" = wayland ]; then
     printf 'Fire4Nix WPE surface: 640x480 maximize=yes fullscreen=yes\n'
@@ -83,14 +84,39 @@ FIRE4NIX_APP_DIR="$ROOT/navegador-definitivo" \
     bash "$ROOT/deploy/Fire4Nix-WPE-Teste-Real.sh" --wayland > "$TMP/wayland-pass.log"
 grep -q 'PASS: WPE loaded local HTML with sandbox override unset (wayland)' "$TMP/wayland-pass.log"
 
+# Tools may inherit wayland-0 even when the actual Sway socket is wayland-1.
+FIRE4NIX_APP_DIR="$ROOT/navegador-definitivo" \
+    FIRE4NIX_DEVICE_TEST_REPORT_DIR="$TMP/reports" \
+    FIRE4NIX_DEVICE_TEST_ALLOW_NON_ARM64=1 \
+    FIRE4NIX_WPE_PLATFORM_BINARY="$TMP/mock-wpe" \
+    XDG_RUNTIME_DIR="$TMP/xdg" WAYLAND_DISPLAY=wayland-0 \
+    bash "$ROOT/deploy/Fire4Nix-WPE-Teste-Real.sh" --wayland > "$TMP/wayland-recovered.log"
+grep -q 'Wayland socket recovered: ' "$TMP/wayland-recovered.log"
+grep -q 'Wayland socket verified: ' "$TMP/wayland-recovered.log"
+grep -q 'PASS: WPE loaded local HTML with sandbox override unset (wayland)' "$TMP/wayland-recovered.log"
+
+# The handheld may not export WAYLAND_DISPLAY to scripts from Tools.
+env -u WAYLAND_DISPLAY \
+    FIRE4NIX_APP_DIR="$ROOT/navegador-definitivo" \
+    FIRE4NIX_DEVICE_TEST_REPORT_DIR="$TMP/reports" \
+    FIRE4NIX_DEVICE_TEST_ALLOW_NON_ARM64=1 \
+    FIRE4NIX_WPE_PLATFORM_BINARY="$TMP/mock-wpe" \
+    XDG_RUNTIME_DIR="$TMP/xdg" \
+    bash "$ROOT/deploy/Fire4Nix-WPE-Teste-Real.sh" --wayland > "$TMP/wayland-unset-recovered.log"
+grep -q 'Wayland socket recovered: ' "$TMP/wayland-unset-recovered.log"
+grep -q 'PASS: WPE loaded local HTML with sandbox override unset (wayland)' "$TMP/wayland-unset-recovered.log"
+
+# A truly absent Wayland session must still be rejected instead of faking PASS.
+mkdir -p "$TMP/without-wayland"
 if env -u WAYLAND_DISPLAY \
     FIRE4NIX_APP_DIR="$ROOT/navegador-definitivo" \
     FIRE4NIX_DEVICE_TEST_REPORT_DIR="$TMP/reports" \
     FIRE4NIX_DEVICE_TEST_ALLOW_NON_ARM64=1 \
     FIRE4NIX_WPE_PLATFORM_BINARY="$TMP/mock-wpe" \
+    XDG_RUNTIME_DIR="$TMP/without-wayland" \
     bash "$ROOT/deploy/Fire4Nix-WPE-Teste-Real.sh" --wayland > "$TMP/no-wayland.log"; then
     echo 'FAIL: missing Wayland socket was accepted' >&2
     exit 1
 fi
-grep -q 'SKIP: Wayland environment variables unavailable' "$TMP/no-wayland.log"
-echo 'PASS: offline device smoke detects success/failure, strips unsafe flag and checks Wayland preconditions'
+grep -q 'SKIP: no usable Wayland socket found' "$TMP/no-wayland.log"
+echo 'PASS: offline smoke checks sandbox flag, navigation, stale/unset wayland-0 recovery and missing socket.'
