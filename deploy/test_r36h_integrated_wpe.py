@@ -31,6 +31,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="fire4nix-r36h-integrated-") as tmp:
         base = Path(tmp)
         core = base / "core"
+        core.mkdir()
+        (core / "Start-Fire4Nix.sh").write_text("#!/bin/sh\nexit 0\n")
+        (core / "Diagnostico.sh").write_text("#!/bin/sh\nexit 0\n")
         addon = base / "addon"
         runtime = core / "Fire4Nix" / "runtime" / "aarch64"
         smoke = base / "Fire4Nix-WPE-Teste-Real.sh"
@@ -69,8 +72,6 @@ def main():
                 "Fire4Nix/runtime/aarch64/SHA256SUMS-ADDON",
                 "Fire4Nix/runtime/aarch64/bin/bwrap",
             ]
-            # The staging fixture intentionally has no Start-Fire4Nix.sh.
-            expected.remove("Start-Fire4Nix.sh")
             for rel in expected:
                 assert prefix + rel in names, f"missing {rel}"
             assert len([name for name in names if "/lib/libtestaddon" in name]) == 62
