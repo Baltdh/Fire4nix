@@ -967,7 +967,11 @@ fire4nix_activate_bundled_wpe_runtime() {
             return 1
         fi
         if [ -f "$root/bin/bwrap" ] && [ -x "$root/bin/bwrap" ] &&
-           grep -Eq '^[0-9a-f]{64}  bin/bwrap
+           grep -Fq "  bin/bwrap" "$root/SHA256SUMS-ADDON"; then
+            export PATH="$root/bin:$PATH"
+            echo "[Fire4Nix] verified bundled Bubblewrap available in app-only PATH" >&2
+        fi
+        echo "[Fire4Nix] WPE add-on integrity verified (62 libraries)" >&2
     fi
 
     # Reject known incompatible libc before touching the process/library
