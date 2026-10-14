@@ -597,6 +597,26 @@ jobs:
           assert len(data["components"]) == 5
           assert "unverified" in data["qualification"].lower()
           PY
+      - name: Audit transitive ARM64 WPE dependency closure (build-origin only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          python3 ../deploy/audit_wpe_dependency_closure.py \
+            --launcher "$(pwd)/fire4nix-wpe-platform" \
+            --webkit "$webkit" \
+            --process-dir /usr/libexec/wpe-webkit-2.0 \
+            --abi dist/WPE-ABI-REQUIREMENTS.json \
+            --output dist/WPE-DEPENDENCY-CLOSURE.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path("dist/WPE-DEPENDENCY-CLOSURE.json").read_text())
+          assert result["expected_elf_machine"] == 183
+          assert len(result["components"]) == 5
+          assert result["all_system_sonames"]
+          assert "UNVERIFIED" in result["qualification"]
+          PY
       - name: Stage experimental ARM64 Tools package (launcher only)
         working-directory: navegador-definitivo
         run: |
@@ -615,6 +635,7 @@ jobs:
             --candidate dist/rocknix-candidate/Fire4Nix-ROCKNIX-Tools-CANDIDATE \
             --webkit "$webkit" \
             --process-dir /usr/libexec/wpe-webkit-2.0 \
+            --closure dist/WPE-DEPENDENCY-CLOSURE.json \
             --out dist/wpe-core
           test -s dist/wpe-core/Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip
           (cd dist/wpe-core && sha256sum -c SHA256SUMS)
