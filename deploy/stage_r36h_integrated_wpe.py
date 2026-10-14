@@ -92,6 +92,7 @@ def stage(core, addon, smoke, dest):
     addon = addon.resolve(strict=True)
     smoke = smoke.resolve(strict=True)
     dest.mkdir(parents=True, exist_ok=True)
+    dest = dest.resolve(strict=True)
 
     if not (core / "Fire4Nix" / "Fire4Nix.sh").is_file():
         raise ValueError("expected WPE Core staging tree, with Fire4Nix/Fire4Nix.sh")
