@@ -1,0 +1,25 @@
+name: Fire4Nix R36H launcher checks
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/Fire4Nix-R36H-Resgate.sh'
+      - 'scripts/test_fire4nix_resgate.sh'
+      - '.github/workflows/r36h-resgate-check.yml'
+  push:
+    paths:
+      - 'scripts/Fire4Nix-R36H-Resgate.sh'
+      - 'scripts/test_fire4nix_resgate.sh'
+      - '.github/workflows/r36h-resgate-check.yml'
+
+jobs:
+  mock-launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check POSIX shell syntax
+        run: |
+          sh -n scripts/Fire4Nix-R36H-Resgate.sh
+          sh -n scripts/test_fire4nix_resgate.sh
+      - name: Run launcher mock regressions (not a device test)
+        run: sh scripts/test_fire4nix_resgate.sh
