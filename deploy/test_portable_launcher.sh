@@ -54,6 +54,7 @@ test "$(stat -c '%a' "$tmp/diagnostic-report.log")" = 600
 # standalone launcher will run on ROCKNIX.
 mkdir -p "$tmp/Tools/Fire4Nix/bin" "$tmp/mock-bin"
 printf '%s\n' 'libc.so.6' 'libfire4nix-does-not-exist.so.999' > "$tmp/Tools/WPE-CORE-NEEDED.txt"
+printf '%s\n' 'libc.so.6' 'libfire4nix-does-not-exist.so.999' 'libfire4nix-transitive-missing.so.999' > "$tmp/Tools/WPE-CORE-ALL-NEEDED.txt"
 printf '%s\n' '{"highest_required_glibc_across_components": "GLIBC_9.99", "highest_required_cpp_abi_across_components": {"GLIBCXX":"GLIBCXX_99.99.99", "CXXABI":"CXXABI_99.99.99"}}' > "$tmp/Tools/WPE-ABI-REQUIREMENTS.json"
 cp /bin/true "$tmp/Tools/Fire4Nix/bin/fire4nix-wpe-platform"
 cat > "$tmp/mock-bin/bwrap" <<'BWRAP'
@@ -74,7 +75,8 @@ grep -F 'WPE build-origin GLIBCXX requirement: GLIBCXX_99.99.99' "$tmp/incompati
 grep -F 'WPE build-origin CXXABI requirement: CXXABI_99.99.99' "$tmp/incompatible-report.log"
 grep -F 'INCOMPATIBLE: WPE build requires GLIBC_9.99 but device reports glibc 2.0' "$tmp/incompatible-report.log"
 grep -F 'libfire4nix-does-not-exist.so.999: NOT FOUND in common paths' "$tmp/incompatible-report.log"
-grep -F 'WPE Core direct SONAMEs not located in common paths: 1' "$tmp/incompatible-report.log"
+grep -F 'libfire4nix-transitive-missing.so.999: NOT FOUND in common paths' "$tmp/incompatible-report.log"
+grep -F 'WPE Core direct and transitive SONAMEs not located in common paths: 2' "$tmp/incompatible-report.log"
 grep -F 'WPE Bubblewrap namespace preflight: FAIL (exit 77)' "$tmp/incompatible-report.log"
 grep -F 'WARNING: sandboxed WebKit subprocess startup remains unverified' "$tmp/incompatible-report.log"
 grep -F 'Device highest GLIBCXX:' "$tmp/incompatible-report.log"
