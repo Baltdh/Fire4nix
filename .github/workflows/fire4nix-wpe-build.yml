@@ -625,6 +625,7 @@ jobs:
             --closure dist/WPE-DEPENDENCY-CLOSURE.json \
             --wanted ../diagnostics/r36h-20261014/WPE-SONAMES-AUSENTES-NO-INVENTARIO.txt \
             --helper ../deploy/Instalar-Complemento-WPE-R36H.sh \
+            --bwrap /usr/bin/bwrap \
             --out dist/r36h-missing-libs
           archive=dist/r36h-missing-libs/Fire4Nix-R36H-WPE-Libs-EXPERIMENTAL.zip
           test -s "$archive"
