@@ -949,7 +949,7 @@ fire4nix_activate_bundled_wpe_runtime() {
             echo "[Fire4Nix] ERROR: invalid add-on checksum manifest" >&2
             return 1
         fi
-        if ! awk '
+        awk '
             NF {
                 hash=substr($0,1,64); separator=substr($0,65,2); filename=substr($0,67);
                 if (length(hash)!=64 || hash ~ /[^0-9a-f]/ || separator!="  " ||
