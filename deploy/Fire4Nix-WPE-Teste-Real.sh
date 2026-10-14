@@ -23,6 +23,9 @@ if [ -z "$APP" ]; then
         "$SCRIPT_DIR/navegador-definitivo" \
         "$SCRIPT_DIR" \
         "$SCRIPT_DIR/../Fire4Nix" \
+        /storage/games-internal/roms/tools/Fire4Nix \
+        /storage/games-internal/roms/tools/navegador-definitivo \
+        /storage/games-external/roms/tools/Fire4Nix \
         /storage/roms/tools/Fire4Nix \
         /storage/roms/Tools/Fire4Nix \
         /storage/roms/ports/Fire4Nix; do
