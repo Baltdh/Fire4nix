@@ -22,7 +22,7 @@ também publica o script original `Fire4Nix-WPE-Teste-Real.sh` no artefato
 
 1. Coloque o script na pasta `Tools`, ao lado da pasta `Fire4Nix` do pacote, ou use a cópia que já vem dentro do ZIP experimental.
 2. Execute normalmente pela pasta Tools ou pelo terminal com `bash Teste-WPE-No-R36H.sh`. O modo padrão é `--headless`, sem abrir uma janela gráfica.
-3. Para testar especificamente a criação da janela Wayland, execute `bash Teste-WPE-No-R36H.sh --wayland` **dentro da sessão gráfica do ROCKNIX**.
+3. Para testar especificamente a criação da janela Wayland, execute `bash Teste-WPE-No-R36H.sh --wayland` **dentro da sessão gráfica do ROCKNIX**. O teste usa um socket Wayland válido já configurado ou procura `wayland-*` no runtime da sessão (incluindo `/var/run/0-runtime-dir`). Se recuperar `wayland-1` depois de receber `wayland-0` ou nenhuma variável, registra `Wayland socket recovered` no relatório. Essa recuperação não cria uma sessão gráfica nova.
 4. O resultado é salvo em `/storage/fire4nix-device-tests/test-headless.*/RESULT.txt` (ou `test-wayland.*`). Dentro da mesma pasta estão `launcher.log` e, quando criado, `final-browser.state`. Se `/storage` não estiver disponível, o script usa `/tmp/fire4nix-device-tests/`.
 
 O teste abre apenas um arquivo HTML local, usa **o motor WPE nativo, sem fallback para Cog**, exige encerramento normal em até 45 segundos e remove configurações herdadas que desativem o sandbox. Não requer rede, root nem instalação de bibliotecas. Se o sandbox, as bibliotecas ou o motor gráfico falharem, o teste registra `FAIL` ou `SKIP` e mantém os logs. Um `PASS` comprova apenas aquele carregamento local naquele ambiente; não é uma auditoria completa de segurança nem uma certificação do navegador.
@@ -30,6 +30,7 @@ O teste abre apenas um arquivo HTML local, usa **o motor WPE nativo, sem fallbac
 ## Como interpretar
 
 - `Wayland socket: MISSING`: verificar `XDG_RUNTIME_DIR` e `WAYLAND_DISPLAY` na sessão usada pelo lançador.
+- `SKIP: no usable Wayland socket found`: execute o teste gráfico a partir da sessão ROCKNIX/Sway; o modo `--headless` pode ser utilizado sem um compositor. Nenhum resultado gráfico é aprovado quando não existe um socket ativo.
 - `command cog: MISSING`: não há fallback Cog disponível no `PATH` atual.
 - `WARNING: unresolved shared libraries`: o executável apresentado pode não conseguir iniciar devido a dependências ausentes.
 - `Fire4Nix.sh` ausente: o diagnóstico não encontrou a pasta da aplicação.
