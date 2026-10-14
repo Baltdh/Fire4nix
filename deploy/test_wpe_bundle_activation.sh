@@ -81,12 +81,12 @@ else
 fi
 GETCONF
 chmod +x "$TMP/mock-bin/getconf"
-printf '%s\n' '{"highest_required_glibc_across_components":"GLIBC_2.38"}' > "$TMP/abi.json"
+printf '%s\n' '{"highest_required_glibc_across_components":"GLIBC_2.38"}' > "$TMP/WPE-ABI-REQUIREMENTS.json"
 PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.0 reject 'host glibc older than WPE core ABI'
 grep -q 'portable WPE requires GLIBC_2.38' "$TMP/rejected.log"
 PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 probe > "$TMP/compatible-glibc.log" 2>&1
 grep -q 'checksum-verified WPE runtime activated' "$TMP/compatible-glibc.log"
-rm -f "$TMP/abi.json"
+rm -f "$TMP/WPE-ABI-REQUIREMENTS.json"
 
 # All three helper executables are mandatory.
 mv "$TMP/bundle/libexec/wpe-webkit-2.0/WPEGPUProcess" "$TMP/missing-gpu"
