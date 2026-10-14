@@ -15,8 +15,758 @@ jobs:
         run: bash deploy/validate_launchers.sh
       - name: Forbid unsafe WebKit sandbox overrides in distributable code
         run: |
-          if grep -R -n -F 'WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS' --include='*.sh' --include='*.cpp' --include='*.h' navegador-definitivo deploy; then
-            echo 'ERROR: disabling WebKit sandbox is permitted only in CI-only diagnostics.'
+          # Test fixtures may deliberately inject an unsafe flag to verify
+          # that our real device smoke explicitly UNSETS it. Shipped code may
+          # not set or propagate that override.
+          unsafe_lines="$(grep -R -n -F 'WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS' --include='*.sh' --include='*.cpp' --include='*.h' navegador-definitivo deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh deploy/Fire4Nix-WPE-Teste-Real.sh |
+            grep -v -E ':[0-9]+:[[:space:]]*unset[[:space:]]+WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS[[:space:]]*
+      - name: ShellCheck launcher entrypoints
+        run: |
+          shellcheck -s sh navegador-definitivo/Fire4Nix.sh deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh
+      - name: Verify source-only placeholders are not ELF engines
+        run: |
+          file navegador-definitivo/bin/browser.arm64 navegador-definitivo/bin/fire4nix-wpe-platform
+          if file navegador-definitivo/bin/fire4nix-wpe-platform | grep -q ELF; then
+            echo "Unexpected ELF in wrapper path"; exit 1
+          fi
+  host-sandbox-preflight:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - name: Check host namespace and Bubblewrap capabilities
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          mkdir -p host-sandbox-evidence
+          {
+            uname -a
+            echo "Host user namespace limit:"
+            cat /proc/sys/user/max_user_namespaces 2>/dev/null || true
+            echo "Host unprivileged namespace setting:"
+            cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
+            echo "Host seccomp mode:"
+            grep -E '^(NoNewPrivs|Seccomp):' /proc/self/status || true
+          } > host-sandbox-evidence/environment.txt
+          set +e
+          bwrap --unshare-user --ro-bind / / -- /bin/true > host-sandbox-evidence/bwrap.log 2>&1
+          status=$?
+          set -e
+          echo "Host Bubblewrap status: $status" | tee host-sandbox-evidence/result.txt
+          cat host-sandbox-evidence/bwrap.log
+          # Probe privileged namespace setup independently; this is diagnostics only.
+          set +e
+          timeout 15s sudo -n bwrap --unshare-user --ro-bind / / -- /bin/true > host-sandbox-evidence/bwrap-root.log 2>&1
+          root_status=$?
+          set -e
+          echo "Root Bubblewrap status: $root_status" | tee -a host-sandbox-evidence/result.txt
+          cat host-sandbox-evidence/bwrap-root.log
+          if [ "$status" -ne 0 ]; then
+            echo 'Host namespace preflight failed; no browser rendering claim.' >> host-sandbox-evidence/result.txt
+            exit 1
+          fi
+          echo 'Host namespace preflight passed; WPE HTML rendering still requires a separate test.' >> host-sandbox-evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-ARM64-host-sandbox-preflight
+          path: host-sandbox-evidence/
+          if-no-files-found: warn
+  wpe-build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    container:
+      image: debian:trixie-slim
+    steps:
+      - name: Install ARM64 WPE build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential pkg-config file binutils bubblewrap weston gdb strace libglib2.0-dev libsoup-3.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libegl-dev libgles-dev libwayland-dev libxkbcommon-dev libicu-dev libharfbuzz-dev libxml2-dev libxslt1-dev libsqlite3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev libwebp-dev libavif-dev libjxl-dev liblcms2-dev libinput-dev libenchant-2-dev libatk1.0-dev libatk-bridge2.0-dev libharfbuzz-dev libfontconfig1-dev libfreetype-dev libgcrypt20-dev libsecret-1-dev libgbm-dev libdrm-dev libepoxy-dev libwoff-dev libopenjp2-7-dev libpsl-dev libhyphen-dev libseccomp-dev libsystemd-dev libudev-dev
+      - uses: actions/checkout@v4
+      - name: Retrieve previously compiled WPE ARM64 library
+        uses: actions/download-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-library-experimental
+          run-id: 36968610673
+          github-token: ${{ github.token }}
+          path: library-artifact
+      - name: Verify and install isolated WPE library
+        run: |
+          test "$(uname -m)" = aarch64
+          cd library-artifact
+          sha256sum -c SHA256SUMS
+          mkdir -p ../navegador-definitivo/dist
+          tar -tzf Fire4Nix-WPE-ARM64-library.tar.gz > ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt
+          grep -E 'WPEWebProcess|WPENetworkProcess|WPEGPUProcess|WebProcess|NetworkProcess|GPUProcess' ../navegador-definitivo/dist/WPE-SOURCE-ARCHIVE-CONTENTS.txt > ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt || true
+          echo 'SOURCE ARCHIVE PROCESS CANDIDATES:'
+          cat ../navegador-definitivo/dist/WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
+          echo 'SOURCE ARCHIVE ENTRY TYPES:'
+          tar -tvzf Fire4Nix-WPE-ARM64-library.tar.gz | grep -E 'WPEWebProcess|WPENetworkProcess|WPEGPUProcess|WebProcess|NetworkProcess|GPUProcess' || true
+          tar -xzf Fire4Nix-WPE-ARM64-library.tar.gz -C /
+          ldconfig
+          pkg-config --exists wpe-webkit-2.0
+      - name: Compile actual WPE launcher for ARM64
+        working-directory: navegador-definitivo
+        run: |
+          make wpe-platform-launcher
+          test -f fire4nix-wpe-platform
+          file fire4nix-wpe-platform
+          readelf -h fire4nix-wpe-platform | grep -E 'Class:|Machine:'
+          readelf -d fire4nix-wpe-platform | grep NEEDED
+          ldd fire4nix-wpe-platform
+          python3 - <<'PY'
+          import subprocess
+          binary = 'fire4nix-wpe-platform'
+          header = subprocess.check_output(['readelf', '-h', binary], text=True)
+          assert 'ELF64' in header and 'AArch64' in header, 'Expected ELF64 AArch64'
+          deps = subprocess.check_output(['ldd', binary], text=True)
+          assert 'not found' not in deps, 'Unresolved shared libraries'
+          print('ARM64 ELF and build-container dependencies verified')
+          PY
+      - name: Execute native ARM64 WPE launcher CLI smoke tests
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          timeout 20s ./fire4nix-wpe-platform --help > /tmp/fire4nix-help.txt
+          timeout 20s ./fire4nix-wpe-platform --version > /tmp/fire4nix-version.txt
+          grep -q 'Fire4Nix WPE launcher' /tmp/fire4nix-help.txt
+          grep -q -- '--exit-after-load' /tmp/fire4nix-help.txt
+          grep -q 'Fire4Nix WPE launcher' /tmp/fire4nix-version.txt
+          if timeout 20s ./fire4nix-wpe-platform --cookies-file > /tmp/fire4nix-invalid.txt 2>&1; then
+            echo 'ERROR: missing argument unexpectedly succeeded'
+            exit 1
+          fi
+          grep -q 'Missing value for --cookies-file' /tmp/fire4nix-invalid.txt
+          echo 'ARM64 WPE binary executed successfully for CLI startup and error handling.'
+      - name: Exercise actual WPE page loading with isolated HTML
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/page-smoke
+          printf '%s\n' '<!doctype html><html><head><title>Fire4Nix CI smoke</title></head><body><h1>Fire4Nix</h1></body></html>' > dist/page-smoke/index.html
+          test -x /usr/bin/bwrap
+          {
+            echo "Kernel: $(uname -a)"
+            echo "User namespace setting:"
+            cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
+            echo "User namespace limit:"
+            cat /proc/sys/user/max_user_namespaces 2>/dev/null || true
+            echo "Bubblewrap executable:"
+            file /usr/bin/bwrap
+            echo "Container capability status:"
+            grep -E '^(CapEff|NoNewPrivs|Seccomp):' /proc/self/status || true
+          } > dist/page-smoke/SANDBOX-ENVIRONMENT.txt
+          # Diagnose container namespace support separately from WPE startup.
+          set +e
+          /usr/bin/bwrap --unshare-user --ro-bind / / -- /bin/true > dist/page-smoke/BWRAP-PREFLIGHT.txt 2>&1
+          bwrap_status=$?
+          set -e
+          echo "Bubblewrap namespace preflight exit status: $bwrap_status" >> dist/page-smoke/BWRAP-PREFLIGHT.txt
+          cat dist/page-smoke/BWRAP-PREFLIGHT.txt
+          test_url="file://$(pwd)/dist/page-smoke/index.html"
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/runtime"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+          export XDG_RUNTIME_DIR="$FIRE4NIX_RUNTIME_DIR/xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          if [ "$bwrap_status" -ne 0 ]; then
+            echo 'SKIPPED: sandboxed WPE cannot run in this CI container.' > dist/page-smoke/RESULT.txt
+            echo 'RELEASE BLOCKED: sandboxed HTML navigation is unverified.' >> dist/page-smoke/RESULT.txt
+            touch dist/page-smoke/FAILED
+            echo 'Skipped sandboxed launch: Bubblewrap namespace preflight failed.' > dist/page-smoke/launcher.log
+            # WebKit's documented unsafe override is used ONLY for local-page
+            # CI diagnostics. Never set it in production launchers or packages.
+            echo 'CI DIAGNOSTIC ONLY: sandbox disabled; NOT a release qualification.' > dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/diagnostic-runtime"
+            mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+            set +e
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland timeout 20s ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/page-smoke/unsandboxed-launcher.log 2>&1
+            diagnostic_status=$?
+            set -e
+            echo "Diagnostic launcher exit status: $diagnostic_status" >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            cat dist/page-smoke/unsandboxed-launcher.log
+            if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
+              cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/page-smoke/unsandboxed-browser.state
+            fi
+            if [ "$diagnostic_status" -eq 0 ] && grep -q 'Fire4Nix WPE graphics platform: headless' dist/page-smoke/unsandboxed-launcher.log && grep -q 'Fire4Nix WPE finished:' dist/page-smoke/unsandboxed-launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/unsandboxed-launcher.log && grep -q 'event=load-finished' dist/page-smoke/unsandboxed-browser.state 2>/dev/null && grep -q 'loading=0' dist/page-smoke/unsandboxed-browser.state 2>/dev/null; then
+              echo 'DIAGNOSTIC PASS: HTML loaded only with sandbox disabled; production remains BLOCKED.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            else
+              echo 'DIAGNOSTIC FAIL: HTML not verified even with sandbox disabled.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            fi
+            # Negative control: a nonexistent local page must exit with a real
+            # navigation error instead of hanging or falsely reporting success.
+            export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/page-smoke/diagnostic-failure-runtime"
+            mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+            set +e
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland timeout 15s ./fire4nix-wpe-platform --headless --exit-after-load "file://$(pwd)/dist/page-smoke/does-not-exist.html" > dist/page-smoke/unsandboxed-negative.log 2>&1
+            negative_status=$?
+            set -e
+            echo "Negative-control exit status: $negative_status" >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            if [ "$negative_status" -eq 1 ] && grep -q 'Fire4Nix WPE load failed' dist/page-smoke/unsandboxed-negative.log && grep -q 'navigation failed, exiting with error' dist/page-smoke/unsandboxed-negative.log; then
+              echo 'DIAGNOSTIC PASS: nonexistent HTML rejected promptly with exit code 1.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            else
+              echo 'DIAGNOSTIC FAIL: nonexistent HTML did not produce the expected error exit.' >> dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+              cat dist/page-smoke/unsandboxed-negative.log
+            fi
+            cat dist/page-smoke/UNSANDBOXED-DIAGNOSTIC.txt
+            exit 0
+          fi
+          set +e
+          timeout 20s ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/page-smoke/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Launcher exit status: $status" > dist/page-smoke/RESULT.txt
+          cat dist/page-smoke/launcher.log
+          echo 'Sandbox environment:'
+          cat dist/page-smoke/SANDBOX-ENVIRONMENT.txt
+          if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
+            cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/page-smoke/final-browser.state
+            cat dist/page-smoke/final-browser.state
+          fi
+          if [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE finished:' dist/page-smoke/launcher.log && ! grep -q 'Fire4Nix WPE load failed' dist/page-smoke/launcher.log && grep -q 'event=load-finished' dist/page-smoke/final-browser.state && grep -q 'loading=0' dist/page-smoke/final-browser.state; then
+            echo 'PASS: WPE reported successful local HTML load' >> dist/page-smoke/RESULT.txt
+          else
+            echo 'FAIL: no verified successful HTML load; graphical runtime not ready' >> dist/page-smoke/RESULT.txt
+            if [ "$bwrap_status" -ne 0 ]; then
+              echo 'DIAGNOSIS: Bubblewrap namespace preflight failed in GitHub container; WPE runtime result is inconclusive.' >> dist/page-smoke/RESULT.txt
+            fi
+            cat dist/page-smoke/RESULT.txt
+            touch dist/page-smoke/FAILED
+          fi
+      - name: Check whether WebKit honors relocatable subprocess directory
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/relocatable-probe/libexec/wpe-webkit-2.0
+          for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            cp "/usr/libexec/wpe-webkit-2.0/$process" "dist/relocatable-probe/libexec/wpe-webkit-2.0/$process"
+            chmod 755 "dist/relocatable-probe/libexec/wpe-webkit-2.0/$process"
+          done
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/relocatable-probe/browser-runtime"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/relocatable-probe/xdg"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf '%s\n' '<!doctype html><html><title>WPE relocation probe</title><body>Relocatable</body></html>' > dist/relocatable-probe/index.html
+          test_url="file://$(pwd)/dist/relocatable-probe/index.html"
+          process_dir="$(pwd)/dist/relocatable-probe/libexec/wpe-webkit-2.0"
+          # A valid portable WPE build must spawn its helpers from this exact
+          # directory. Setting WEBKIT_EXEC_PATH alone is NOT proof it works.
+          # Unsafe sandbox override is strictly for this isolated CI fixture.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WEBKIT_EXEC_PATH="$process_dir" WPE_PLATFORM=headless \
+            timeout 30s strace -ff -e trace=execve -o dist/relocatable-probe/exec \
+              ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/relocatable-probe/launcher.log 2>&1
+          probe_status=$?
+          set -e
+          echo "Trace probe launcher status: $probe_status" > dist/relocatable-probe/RESULT.txt
+          if grep -Fh "execve(\"$process_dir/WPEWebProcess\"" dist/relocatable-probe/exec.* >/dev/null 2>&1; then
+            echo 'RELOCATION PASS: WebKit executed WPEWebProcess from the requested portable libexec path.' >> dist/relocatable-probe/RESULT.txt
+          elif grep -Fh '/usr/libexec/wpe-webkit-2.0/WPEWebProcess' dist/relocatable-probe/exec.* >/dev/null 2>&1; then
+            echo 'RELOCATION FAIL: WebKit ignored WEBKIT_EXEC_PATH and executed the system WPEWebProcess.' >> dist/relocatable-probe/RESULT.txt
+            echo 'A relocatable WebKit build/patch is required before a complete One File Edition release.' >> dist/relocatable-probe/RESULT.txt
+          else
+            echo 'RELOCATION INCONCLUSIVE: no helper execve evidence (trace unavailable or process not spawned).' >> dist/relocatable-probe/RESULT.txt
+          fi
+          cat dist/relocatable-probe/RESULT.txt
+          tail -35 dist/relocatable-probe/launcher.log
+      - name: Probe relocation of libWPEWebKit without installing system libraries
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/runtime-library-probe
+          staged_root="$(mktemp -d /tmp/fire4nix-wpe-runtime.XXXXXX)"
+          trap 'rm -rf "$staged_root"' EXIT
+          mkdir -p "$staged_root/lib" "$staged_root/libexec/wpe-webkit-2.0"
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          cp -L "$webkit" "$staged_root/lib/libWPEWebKit-2.0.so"
+          for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            cp "/usr/libexec/wpe-webkit-2.0/$process" "$staged_root/libexec/wpe-webkit-2.0/$process"
+            chmod 755 "$staged_root/libexec/wpe-webkit-2.0/$process"
+          done
+          (
+            cd "$staged_root"
+            find lib libexec -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/runtime-library-probe/browser-runtime"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/runtime-library-probe/xdg"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf '%s\n' '<!doctype html><html><title>Portable library probe</title><body>WPE Library</body></html>' > dist/runtime-library-probe/index.html
+          test_url="file://$(pwd)/dist/runtime-library-probe/index.html"
+          # CI-only: use an isolated local HTML page and no sandbox for loader
+          # diagnostics. Never distribute or enable this override on ROCKNIX.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$staged_root/libexec/wpe-webkit-2.0" \
+            LD_LIBRARY_PATH="$staged_root/lib" LD_DEBUG=libs \
+            LD_DEBUG_OUTPUT="$(pwd)/dist/runtime-library-probe/ld-debug" \
+            timeout 25s ./fire4nix-wpe-platform --headless --exit-after-load "$test_url" > dist/runtime-library-probe/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Runtime-library probe launcher status: $status" > dist/runtime-library-probe/RESULT.txt
+          if grep -Fh "$staged_root/lib/libWPEWebKit-2.0.so" dist/runtime-library-probe/ld-debug.* > dist/runtime-library-probe/LIBRARY-LOADER-EVIDENCE.txt 2>/dev/null && \
+             [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE finished:' dist/runtime-library-probe/launcher.log; then
+            echo 'LIBRARY RELOCATION PASS: WPE executed local HTML with libWPEWebKit loaded from the portable directory.' >> dist/runtime-library-probe/RESULT.txt
+          else
+            echo 'LIBRARY RELOCATION INCONCLUSIVE/FAIL: loader origin or HTML success not verified.' >> dist/runtime-library-probe/RESULT.txt
+          fi
+          rm -f dist/runtime-library-probe/ld-debug.*
+          cat dist/runtime-library-probe/RESULT.txt
+          tail -25 dist/runtime-library-probe/launcher.log
+          # Debian runtime dependencies remain system-supplied. This is NOT
+          # proof of self-contained packaging or ROCKNIX target compatibility.
+      - name: Probe WPEPlatform Wayland surface with isolated Weston compositor
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/wayland-smoke
+          export XDG_RUNTIME_DIR="$(pwd)/dist/wayland-smoke/xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          export WAYLAND_DISPLAY=wayland-fire4nix
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/wayland-smoke/browser-runtime"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR"
+          # Weston is deliberately headless, but WPE must be a REAL Wayland
+          # client with a WPEPlatform toplevel. This tests window creation;
+          # there is no claim of visible output or actual device validation.
+          timeout 75s weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 --width=640 --height=480 --use-pixman > dist/wayland-smoke/weston.log 2>&1 &
+          weston_pid=$!
+          trap 'kill "$weston_pid" 2>/dev/null || true; wait "$weston_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 50); do
+            if [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; then ready=1; break; fi
+            if ! kill -0 "$weston_pid" 2>/dev/null; then break; fi
+            sleep 0.2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'DIAGNOSTIC FAIL: Wayland compositor did not start' | tee dist/wayland-smoke/RESULT.txt
+            cat dist/wayland-smoke/weston.log
+            exit 0
+          fi
+          printf '%s\n' '<!doctype html><html><head><title>Wayland WPE smoke</title></head><body>Wayland surface</body></html>' > dist/wayland-smoke/index.html
+          test_url="file://$(pwd)/dist/wayland-smoke/index.html"
+          # UNSAFE SANDBOX OVERRIDE: CI-only, local HTML, not distributed.
+          # This is a graphics diagnostic, never a release approval.
+          ulimit -c unlimited || true
+          cat /proc/sys/kernel/core_pattern > dist/wayland-smoke/CORE-PATTERN.txt 2>/dev/null || true
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 \
+            timeout 25s ./fire4nix-wpe-platform --exit-after-load "$test_url" > dist/wayland-smoke/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Wayland diagnostic launcher exit code: $status" > dist/wayland-smoke/RESULT.txt
+          if [ "$status" -eq 139 ]; then
+            echo 'CRASH: launcher received SIGSEGV during Wayland teardown' >> dist/wayland-smoke/RESULT.txt
+            corefile="$(find . -maxdepth 1 -type f \( -name core -o -name 'core.*' \) -print -quit 2>/dev/null || true)"
+            if [ -n "$corefile" ]; then
+              gdb -batch -ex 'set pagination off' -ex 'thread apply all bt 24' ./fire4nix-wpe-platform "$corefile" > dist/wayland-smoke/BACKTRACE.txt 2>&1 || true
+              rm -f "$corefile"
+            else
+              echo 'No local core file; inspect CORE-PATTERN.txt for host core handling.' > dist/wayland-smoke/BACKTRACE.txt
+            fi
+            cat dist/wayland-smoke/BACKTRACE.txt
+            # Many cloud kernels redirect cores outside Docker. Attempt an
+            # in-process GDB run when a local core cannot be captured.
+            if [ -z "$corefile" ]; then
+              set +e
+              WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=wayland LIBGL_ALWAYS_SOFTWARE=1 \
+                timeout 35s gdb -q -batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 24' \
+                  --args ./fire4nix-wpe-platform --exit-after-load "$test_url" > dist/wayland-smoke/GDB-RUN.txt 2>&1
+              debugger_status=$?
+              set -e
+              echo "GDB diagnostic exit code: $debugger_status" >> dist/wayland-smoke/RESULT.txt
+              tail -120 dist/wayland-smoke/GDB-RUN.txt
+            fi
+          fi
+          if [ -f "$FIRE4NIX_RUNTIME_DIR/browser.state" ]; then
+            cp "$FIRE4NIX_RUNTIME_DIR/browser.state" dist/wayland-smoke/browser.state
+          fi
+          if [ "$status" -eq 0 ] && grep -q 'Fire4Nix WPE surface:' dist/wayland-smoke/launcher.log && grep -q 'Fire4Nix WPE finished:' dist/wayland-smoke/launcher.log && grep -q 'Fire4Nix WPE early EGL termination: ok' dist/wayland-smoke/launcher.log && grep -q 'event=load-finished' dist/wayland-smoke/browser.state 2>/dev/null; then
+            echo 'DIAGNOSTIC PASS: WPEPlatform created Wayland toplevel and loaded local HTML; sandbox disabled, no physical display verified.' >> dist/wayland-smoke/RESULT.txt
+          else
+            echo 'DIAGNOSTIC FAIL: no verified WPEPlatform Wayland toplevel and HTML load.' >> dist/wayland-smoke/RESULT.txt
+          fi
+          cat dist/wayland-smoke/RESULT.txt
+          cat dist/wayland-smoke/launcher.log
+          tail -40 dist/wayland-smoke/weston.log
+      - name: Check WPE subprocesses and runtime library ABI
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist
+          WPE_LIB="$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so"
+          test -e "$WPE_LIB"
+          file -L "$WPE_LIB" | tee dist/WPE-LIBRARY-ARCH.txt
+          readelf -h "$WPE_LIB" | tee dist/WPE-LIBRARY-ELF.txt
+          grep -q AArch64 dist/WPE-LIBRARY-ELF.txt
+          ldd "$WPE_LIB" > dist/WPE-LIBRARY-LDD.txt
+          if grep -q 'not found' dist/WPE-LIBRARY-LDD.txt; then
+            echo 'ERROR: WPE library has unresolved dependencies'
+            exit 1
+          fi
+          for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            found="$(find /usr/libexec /usr/local/libexec /usr/local/lib /usr/lib /lib /usr/local/bin /usr/bin -type f -name "$process" -print -quit 2>/dev/null || true)"
+            if [ -z "$found" ]; then
+              echo "MISSING: $process (not present in the installed WPE build)" | tee -a dist/WPE-SUBPROCESSES.txt
+              echo "$process" >> dist/WPE-MISSING-SUBPROCESSES.txt
+              continue
+            fi
+            file "$found"
+            readelf -h "$found" | grep -q AArch64
+            ldd "$found" > "dist/$process-LDD.txt"
+            if grep -q 'not found' "dist/$process-LDD.txt"; then
+              echo "ERROR: unresolved dependencies for $process"
+              exit 1
+            fi
+            echo "$process: $found" >> dist/WPE-SUBPROCESSES.txt
+          done
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'WARNING: WPE runtime is incomplete; subprocess binaries must be bundled before device release.'
+            cat dist/WPE-MISSING-SUBPROCESSES.txt
+            echo 'INCOMPLETE: WPE subprocesses absent; do not ship to ROCKNIX' > dist/WPE-RUNTIME-STATUS.txt
+          else
+            echo 'PRESENT: required WPE subprocess binaries found in build container' > dist/WPE-RUNTIME-STATUS.txt
+          fi
+      - name: Verify matching WPE subprocess directory and execution permissions
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          runtime_dir=/usr/libexec/wpe-webkit-2.0
+          mkdir -p dist
+          {
+            echo "WPE library version: $(pkg-config --modversion wpe-webkit-2.0)"
+            echo "WPE process directory: $runtime_dir"
+            for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+              candidate="$runtime_dir/$process"
+              test -f "$candidate" || { echo "MISSING: $candidate"; exit 1; }
+              test -x "$candidate" || { echo "NOT EXECUTABLE: $candidate"; exit 1; }
+              readelf -h "$candidate" | grep -q AArch64
+              echo "$process: ELF AArch64 executable"
+              ldd "$candidate" | tee "dist/$process-LDD.txt"
+              if grep -q 'not found' "dist/$process-LDD.txt"; then
+                echo "Unresolved subprocess dependencies: $process"
+                exit 1
+              fi
+            done
+          } > dist/WPE-EXECUTION-READINESS.txt
+          cat dist/WPE-EXECUTION-READINESS.txt
+      - name: Inventory actual WPE runtime installation paths
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist
+          {
+            echo 'WPE pkg-config variables:'
+            pkg-config --variable=prefix wpe-webkit-2.0
+            pkg-config --variable=libdir wpe-webkit-2.0
+            echo 'WebKit/WPE process candidates:'
+            find /usr/local /usr/libexec /usr/lib /usr/bin /lib -type f \( -iname '*WebProcess*' -o -iname '*NetworkProcess*' -o -iname '*GPUProcess*' -o -iname '*webkit*process*' \) -print 2>/dev/null | sort || true
+            echo 'WPE executables recorded in installed package metadata:'
+            find /usr/local/lib/pkgconfig /usr/lib/aarch64-linux-gnu/pkgconfig -name '*wpe*.pc' -print 2>/dev/null || true
+          } > dist/WPE-INSTALL-INVENTORY.txt
+          cat dist/WPE-INSTALL-INVENTORY.txt
+      - name: Summarize subprocess inventory and source archive coverage
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          python3 - <<'PY'
+          from pathlib import Path
+          dist = Path("dist")
+          source = (dist / "WPE-SOURCE-SUBPROCESS-CANDIDATES.txt").read_text().splitlines()
+          installed_file = dist / "WPE-SUBPROCESSES.txt"
+          installed = installed_file.read_text().splitlines() if installed_file.exists() else []
+          missing = (dist / "WPE-MISSING-SUBPROCESSES.txt")
+          missing_names = missing.read_text().splitlines() if missing.exists() else []
+          lines = [
+              "WPE subprocess provenance audit",
+              "Source archive subprocess candidates: " + str(len(source)),
+              "Installed subprocess entries: " + str(len(installed)),
+              "Missing required subprocesses: " + (", ".join(missing_names) if missing_names else "none"),
+              "NOTE: candidates can include alternate WebKit process names; manual inspection required.",
+          ]
+          if missing_names and not source:
+              lines.append("DIAGNOSIS: no subprocess candidates found in source tarball; rebuild or source complete WPE runtime.")
+          elif missing_names:
+              lines.append("DIAGNOSIS: candidates exist in tarball; inspect filenames, installation paths and architecture.")
+          else:
+              lines.append("DIAGNOSIS: required names present; graphical runtime still unverified.")
+          (dist / "WPE-SUBPROCESS-PROVENANCE.txt").write_text("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
+      - name: Compare official Debian WPE runtime package without mixing binaries
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          mkdir -p dist/debian-reference
+          cd dist/debian-reference
+          apt-get download libwpewebkit-2.0-1
+          deb="$(find . -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$deb"
+          dpkg-deb -f "$deb" Package Version Architecture > PACKAGE-METADATA.txt
+          dpkg-deb -x "$deb" extracted
+          find extracted -type f \( -name WPEWebProcess -o -name WPENetworkProcess -o -name WPEGPUProcess \) -print | sort > PROCESS-FILES.txt
+          echo "Reference process candidates: $(wc -l < PROCESS-FILES.txt)"
+          if [ ! -s PROCESS-FILES.txt ]; then
+            echo 'No exact-name processes in Debian reference package; inspect extracted package layout.'
+            find extracted -type f | grep -Ei 'webkit|process|libexec' | head -80 || true
+          fi
+          while IFS= read -r candidate; do
+            file "$candidate"
+            readelf -h "$candidate" | grep -q AArch64
+          done < PROCESS-FILES.txt
+          {
+            echo 'Official Debian runtime package (reference only, NOT installed):'
+            cat PACKAGE-METADATA.txt
+            echo 'Reference executables:'
+            cat PROCESS-FILES.txt
+            echo 'Installed experimental library:'
+            pkg-config --modversion wpe-webkit-2.0
+            echo 'Debian reference library candidates:'
+            find extracted -type f -name 'libWPEWebKit-2.0.so*' -print
+            echo 'Source archive subprocess candidates:'
+            cat ../WPE-SOURCE-SUBPROCESS-CANDIDATES.txt
+            echo 'Version compatibility must be established before using reference executables.'
+            echo 'Compatibility NOT established: do not combine processes with experimental library yet.'
+          } > ../WPE-DEBIAN-REFERENCE-COMPARISON.txt
+          cat ../WPE-DEBIAN-REFERENCE-COMPARISON.txt
+          rm -rf extracted "$deb"
+      - name: Audit ELF interpreter and linked library versions
+        working-directory: navegador-definitivo
+        run: |
+          mkdir -p dist
+          readelf -l fire4nix-wpe-platform > dist/ELF-PROGRAM-HEADERS.txt
+          readelf --version-info fire4nix-wpe-platform > dist/ELF-SYMBOL-VERSIONS.txt
+          objdump -p fire4nix-wpe-platform > dist/ELF-DYNAMIC-INFO.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('dist/ELF-PROGRAM-HEADERS.txt').read_text()
+          match = next((line.split('Requesting program interpreter: ', 1)[1].split(']')[0] for line in text.splitlines() if 'Requesting program interpreter: ' in line), None)
+          if not match:
+              raise SystemExit('Missing ELF program interpreter')
+          interpreter = match
+          print('ARM64 ELF interpreter:', interpreter)
+          if 'aarch64' not in interpreter and 'ld-linux' not in interpreter:
+              raise SystemExit('Unexpected ELF interpreter')
+          versions = Path('dist/ELF-SYMBOL-VERSIONS.txt').read_text()
+          glibc = sorted(set(re.findall(r'GLIBC_[0-9]+[.][0-9]+', versions)))
+          print('Required GLIBC symbol versions:', ', '.join(glibc))
+          Path('dist/ELF-ABI-SUMMARY.txt').write_text(
+              'Interpreter: ' + interpreter + '\n'
+              + 'GLIBC symbols: ' + ', '.join(glibc) + '\n'
+              + 'Build environment: Debian Trixie ARM64; ROCKNIX compatibility unverified\n'
+          )
+          PY
+          grep -q '^Interpreter: ' dist/ELF-ABI-SUMMARY.txt
+          grep -q '^GLIBC symbols: ' dist/ELF-ABI-SUMMARY.txt
+          grep -q '^Build environment: ' dist/ELF-ABI-SUMMARY.txt
+      - name: Record ARM64 build evidence
+        working-directory: navegador-definitivo
+        run: |
+          mkdir -p dist
+          sha256sum fire4nix-wpe-platform > dist/SHA256SUMS
+          readelf -d fire4nix-wpe-platform > dist/ELF-DEPENDENCIES.txt
+          ldd fire4nix-wpe-platform > dist/LDD-BUILD-ENV.txt
+          echo 'ARM64 launcher only; ROCKNIX runtime compatibility unverified' > dist/BUILD-MANIFEST.txt
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'RELEASE BLOCKED: WPE subprocesses missing' >> dist/BUILD-MANIFEST.txt
+          else
+            echo 'Subprocess inventory complete in build container; ROCKNIX still unverified' >> dist/BUILD-MANIFEST.txt
+          fi
+          echo "Commit: $GITHUB_SHA" >> dist/BUILD-MANIFEST.txt
+      - name: Record matching WPE ABI requirements (build-origin only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          python3 ../deploy/collect_wpe_abi.py \
+            --launcher "$(pwd)/fire4nix-wpe-platform" \
+            --webkit "$webkit" \
+            --process-dir /usr/libexec/wpe-webkit-2.0 \
+            --output dist/WPE-ABI-REQUIREMENTS.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("dist/WPE-ABI-REQUIREMENTS.json").read_text())
+          assert data["expected_elf_machine"] == 183
+          assert len(data["components"]) == 5
+          assert "unverified" in data["qualification"].lower()
+          PY
+      - name: Stage experimental ARM64 Tools package (launcher only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          FIRE4NIX_WPE_ABI_MANIFEST="$(pwd)/dist/WPE-ABI-REQUIREMENTS.json" bash ../deploy/stage_rocknix_candidate.sh "$(pwd)/fire4nix-wpe-platform" "$(pwd)/dist/rocknix-candidate"
+          cd dist/rocknix-candidate
+          sha256sum -c SHA256SUMS
+          test -s Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip
+          echo 'NOTE: this archive does not contain WPE runtime libraries. NOT A RELEASE.'
+      - name: Stage WPE Core experimental ZIP from matching ELF components
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          python3 ../deploy/stage_wpe_core_candidate.py \
+            --candidate dist/rocknix-candidate/Fire4Nix-ROCKNIX-Tools-CANDIDATE \
+            --webkit "$webkit" \
+            --process-dir /usr/libexec/wpe-webkit-2.0 \
+            --out dist/wpe-core
+          test -s dist/wpe-core/Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip
+          (cd dist/wpe-core && sha256sum -c SHA256SUMS)
+          (cd dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL && sha256sum -c SHA256SUMS)
+          (cd dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL/Fire4Nix/runtime/aarch64 && sha256sum -c SHA256SUMS)
+      - name: Exercise packaged WPE Core on ARM64 (CI diagnostics only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          stage="$(pwd)/dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL/Fire4Nix"
+          export APP_DIR="$stage"
+          export FIRE4NIX_HOME="$stage"
+          export FIRE4NIX_WPE_PLATFORM_BINARY="$stage/bin/fire4nix-wpe-platform"
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/runtime"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/xdg"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf '%s\n' '<!doctype html><html><title>Packaged WPE Core</title><body>Portable Core Test</body></html>' > dist/wpe-core/smoke.html
+          local_url="file://$(pwd)/dist/wpe-core/smoke.html"
+          process_dir="$stage/runtime/aarch64/libexec/wpe-webkit-2.0"
+          library="$stage/runtime/aarch64/lib/libWPEWebKit-2.0.so"
+          # NO sandbox bypass is shipped. Diagnostic exception is scoped to
+          # local HTML inside GitHub CI to work around blocked user namespaces.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=headless \
+            LD_DEBUG=libs LD_DEBUG_OUTPUT="$(pwd)/dist/wpe-core/smoke/ld" \
+            timeout 30s strace -ff -e trace=execve \
+              -o dist/wpe-core/smoke/exec \
+              bash -c 'source "$APP_DIR/scripts/fire4nix_env.sh"; fire4nix_launch_wpe_platform "$1" --headless --exit-after-load' bash "$local_url" \
+                > dist/wpe-core/smoke/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Packaged WPE Core CI-only launch exit: $status" > dist/wpe-core/smoke/RESULT.txt
+          if [ "$status" -eq 0 ] &&
+             grep -q 'checksum-verified WPE runtime activated:' dist/wpe-core/smoke/launcher.log &&
+             grep -q 'Fire4Nix WPE finished:' dist/wpe-core/smoke/launcher.log &&
+             grep -Fh "execve(\"$process_dir/WPEWebProcess\"" dist/wpe-core/smoke/exec.* >/dev/null 2>&1 &&
+             grep -Fh "$library" dist/wpe-core/smoke/ld.* > dist/wpe-core/smoke/LOADER-EVIDENCE.txt 2>/dev/null; then
+            echo 'DIAGNOSTIC PASS: packaged checksum-verified WPE Core loaded local HTML and relocated BOTH library and WebProcess.' >> dist/wpe-core/smoke/RESULT.txt
+          else
+            echo 'DIAGNOSTIC FAIL: packaged WPE core end-to-end relocation not verified.' >> dist/wpe-core/smoke/RESULT.txt
+          fi
+          rm -f dist/wpe-core/smoke/ld.*
+          cat dist/wpe-core/smoke/RESULT.txt
+          tail -40 dist/wpe-core/smoke/launcher.log
+          # This is NOT a complete runtime and NOT a ROCKNIX hardware test.
+          # A failing diagnostic must not silently qualify a release.
+          grep -q 'DIAGNOSTIC PASS:' dist/wpe-core/smoke/RESULT.txt
+      - name: Exercise actual Tools startup with packaged WPE Core (CI only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          candidate="$(pwd)/dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL"
+          export FIRE4NIX_HOME="$candidate/Fire4Nix"
+          export FIRE4NIX_APP_DIR="$candidate/Fire4Nix"
+          export FIRE4NIX_WPE_PLATFORM_BINARY="$candidate/Fire4Nix/bin/fire4nix-wpe-platform"
+          export FIRE4NIX_ENGINE=wpe-platform
+          export FIRE4NIX_START_PAGE="file://$(pwd)/dist/wpe-core/smoke.html"
+          export FIRE4NIX_ENGINE_FILE="$(pwd)/dist/wpe-core/smoke/tools-engine.conf"
+          export FIRE4NIX_LAUNCH_LOG="$(pwd)/dist/wpe-core/smoke/tools-launch.log"
+          export FIRE4NIX_ENTRY_LOG="$(pwd)/dist/wpe-core/smoke/tools-entry.log"
+          export FIRE4NIX_CONFIG_DIR="$(pwd)/dist/wpe-core/smoke/tools-config"
+          export FIRE4NIX_DATA_ROOT="$(pwd)/dist/wpe-core/smoke/tools-data"
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/tools-runtime"
+          export FIRE4NIX_LOG_DIR="$(pwd)/dist/wpe-core/smoke/tools-logs"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/xdg"
+          mkdir -p "$FIRE4NIX_DATA_ROOT" "$FIRE4NIX_LOG_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=headless \
+            timeout 25s sh "$candidate/Start-Fire4Nix.sh" --headless --exit-after-load
+          status=$?
+          set -e
+          echo "Tools entrypoint exit status: $status" > dist/wpe-core/smoke/TOOLS-RESULT.txt
+          if [ "$status" -eq 0 ] &&
+             grep -q 'Browser exit code: 0' "$FIRE4NIX_LAUNCH_LOG" &&
+             grep -q 'checksum-verified WPE runtime activated:' "$FIRE4NIX_ENTRY_LOG" &&
+             grep -q 'Fire4Nix WPE finished:' "$FIRE4NIX_ENTRY_LOG"; then
+            echo 'DIAGNOSTIC PASS: actual Tools -> Fire4Nix.sh -> run_browser.sh -> staged WPE Core loaded HTML.' >> dist/wpe-core/smoke/TOOLS-RESULT.txt
+          else
+            echo 'DIAGNOSTIC FAIL: actual Tools entrypoint did not complete WPE navigation.' >> dist/wpe-core/smoke/TOOLS-RESULT.txt
+          fi
+          cat dist/wpe-core/smoke/TOOLS-RESULT.txt
+          tail -45 "$FIRE4NIX_LAUNCH_LOG" 2>/dev/null || true
+          tail -45 "$FIRE4NIX_ENTRY_LOG" 2>/dev/null || true
+          grep -q 'DIAGNOSTIC PASS:' dist/wpe-core/smoke/TOOLS-RESULT.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-ROCKNIX-ARM64-WPE-Core-INCOMPLETE-EXPERIMENTAL
+          path: |
+            navegador-definitivo/dist/wpe-core/Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip
+            navegador-definitivo/dist/wpe-core/SHA256SUMS
+            navegador-definitivo/dist/wpe-core/STATUS.txt
+            navegador-definitivo/dist/wpe-core/smoke/RESULT.txt
+            navegador-definitivo/dist/wpe-core/smoke/TOOLS-RESULT.txt
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-ARM64-Tools-launcher-only-EXPERIMENTAL
+          path: |
+            navegador-definitivo/dist/rocknix-candidate/Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip
+            navegador-definitivo/dist/rocknix-candidate/SHA256SUMS
+            navegador-definitivo/dist/rocknix-candidate/STATUS.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE-ARM64-launcher-experimental
+          path: |
+            navegador-definitivo/fire4nix-wpe-platform
+            navegador-definitivo/dist/
+          if-no-files-found: error
+      - name: Enforce CI WPE prerequisites before release
+        working-directory: navegador-definitivo
+        run: |
+          set -u
+          blocked=0
+          if [ -f dist/page-smoke/FAILED ]; then
+            echo 'RELEASE BLOCKED: sandboxed WPE HTML navigation not verified.'
+            cat dist/page-smoke/RESULT.txt
+            if ! grep -q 'Bubblewrap namespace preflight exit status: 0' dist/page-smoke/BWRAP-PREFLIGHT.txt; then
+              echo 'CONTAINER LIMIT: Bubblewrap cannot create namespace in this runner.'
+              cat dist/page-smoke/BWRAP-PREFLIGHT.txt
+            fi
+            blocked=1
+          fi
+          if [ -s dist/WPE-MISSING-SUBPROCESSES.txt ]; then
+            echo 'RELEASE BLOCKED: missing required WebKit processes.'
+            cat dist/WPE-MISSING-SUBPROCESSES.txt
+            blocked=1
+          fi
+          if [ ! -f dist/relocatable-probe/RESULT.txt ] || \
+             ! grep -q 'RELOCATION PASS: WebKit executed WPEWebProcess' dist/relocatable-probe/RESULT.txt; then
+            echo 'RELEASE BLOCKED: WebKit subprocess relocation not established.'
+            cat dist/relocatable-probe/RESULT.txt 2>/dev/null || true
+            blocked=1
+          fi
+          if [ ! -f dist/wayland-smoke/RESULT.txt ] || \
+             ! grep -q 'DIAGNOSTIC PASS: WPEPlatform created Wayland toplevel and loaded local HTML' dist/wayland-smoke/RESULT.txt; then
+            echo 'RELEASE BLOCKED: graphical WPE Wayland smoke test did not pass.'
+            cat dist/wayland-smoke/RESULT.txt 2>/dev/null || true
+            blocked=1
+          fi
+          if [ ! -s dist/WPE-ABI-REQUIREMENTS.json ]; then
+            echo 'RELEASE BLOCKED: build-origin WPE ABI report missing.'
+            blocked=1
+          fi
+          if [ "$blocked" -ne 0 ]; then
+            echo 'EXPERIMENTAL ZIP remains downloadable; it is NOT a complete ROCKNIX browser.'
+            exit 1
+          fi
+          echo 'CI WPE prerequisites passed; ROCKNIX physical device and target sysroot qualification still required.'
+ || true)"
+          if [ -n "$unsafe_lines" ]; then
+            echo 'ERROR: enabling or propagating the unsafe WebKit sandbox override in distributed code.'
+            printf '%s\n' "$unsafe_lines"
             exit 1
           fi
       - name: ShellCheck launcher entrypoints
