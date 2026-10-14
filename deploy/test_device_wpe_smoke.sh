@@ -21,6 +21,9 @@ cat > "$TMP/mock-wpe" <<'MOCK'
 printf 'MOCK_SANDBOX_OVERRIDE=%s\n' "${WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS:-unset}"
 printf 'MOCK_PLATFORM=%s\n' "${WPE_PLATFORM:-unset}"
 printf 'MOCK_ARGS=%s\n' "$*"
+if [ "${WPE_PLATFORM:-}" = wayland ]; then
+    printf 'Fire4Nix WPE surface: 640x480 maximize=yes fullscreen=yes\n'
+fi
 if [ "${FIRE4NIX_TEST_MOCK_FAIL:-0}" = 1 ]; then
     echo 'Fire4Nix WPE load failed'
     exit 12
@@ -61,6 +64,24 @@ if grep -q 'PASS: WPE loaded' "$TMP/fail.log"; then
     echo 'FAIL: WPE failure reported success' >&2
     exit 1
 fi
+
+# A genuine Wayland socket preflight should allow the graphical test path.
+# Mock logs simulate successful surface creation, not actual GPU rendering.
+mkdir -p "$TMP/xdg"
+python3 - "$TMP/xdg/wayland-1" <<'PY'
+import socket
+import sys
+listener = socket.socket(socket.AF_UNIX)
+listener.bind(sys.argv[1])
+listener.close()
+PY
+FIRE4NIX_APP_DIR="$ROOT/navegador-definitivo" \
+    FIRE4NIX_DEVICE_TEST_REPORT_DIR="$TMP/reports" \
+    FIRE4NIX_DEVICE_TEST_ALLOW_NON_ARM64=1 \
+    FIRE4NIX_WPE_PLATFORM_BINARY="$TMP/mock-wpe" \
+    XDG_RUNTIME_DIR="$TMP/xdg" WAYLAND_DISPLAY=wayland-1 \
+    bash "$ROOT/deploy/Fire4Nix-WPE-Teste-Real.sh" --wayland > "$TMP/wayland-pass.log"
+grep -q 'PASS: WPE loaded local HTML with sandbox override unset (wayland)' "$TMP/wayland-pass.log"
 
 if env -u WAYLAND_DISPLAY \
     FIRE4NIX_APP_DIR="$ROOT/navegador-definitivo" \
