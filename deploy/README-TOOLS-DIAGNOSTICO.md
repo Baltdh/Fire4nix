@@ -13,6 +13,20 @@ O script mostra arquitetura, kernel, caminhos de aplicação, Wayland, presença
 
 Se o aplicativo estiver em outro lugar, defina `FIRE4NIX_APP_DIR` para a pasta que contém `Fire4Nix.sh`. Para alterar o local do relatório, defina `FIRE4NIX_DIAGNOSTIC_LOG`.
 
+## Novo teste real do WPE no R36H (sem desativar o sandbox)
+
+O arquivo `Teste-WPE-No-R36H.sh` já acompanha os ZIPs experimentais
+(launcher-only e WPE Core). O workflow **ROCKNIX environment simulation**
+também publica o script original `Fire4Nix-WPE-Teste-Real.sh` no artefato
+`Fire4Nix-ROCKNIX-Tools-Teste-WPE-Real`.
+
+1. Coloque o script na pasta `Tools`, ao lado da pasta `Fire4Nix` do pacote, ou use a cópia que já vem dentro do ZIP experimental.
+2. Execute normalmente pela pasta Tools ou pelo terminal com `bash Teste-WPE-No-R36H.sh`. O modo padrão é `--headless`, sem abrir uma janela gráfica.
+3. Para testar especificamente a criação da janela Wayland, execute `bash Teste-WPE-No-R36H.sh --wayland` **dentro da sessão gráfica do ROCKNIX**.
+4. O resultado é salvo em `/storage/fire4nix-device-tests/test-headless.*/RESULT.txt` (ou `test-wayland.*`). Dentro da mesma pasta estão `launcher.log` e, quando criado, `final-browser.state`. Se `/storage` não estiver disponível, o script usa `/tmp/fire4nix-device-tests/`.
+
+O teste abre apenas um arquivo HTML local, usa **o motor WPE nativo, sem fallback para Cog**, exige encerramento normal em até 45 segundos e remove configurações herdadas que desativem o sandbox. Não requer rede, root nem instalação de bibliotecas. Se o sandbox, as bibliotecas ou o motor gráfico falharem, o teste registra `FAIL` ou `SKIP` e mantém os logs. Um `PASS` comprova apenas aquele carregamento local naquele ambiente; não é uma auditoria completa de segurança nem uma certificação do navegador.
+
 ## Como interpretar
 
 - `Wayland socket: MISSING`: verificar `XDG_RUNTIME_DIR` e `WAYLAND_DISPLAY` na sessão usada pelo lançador.
