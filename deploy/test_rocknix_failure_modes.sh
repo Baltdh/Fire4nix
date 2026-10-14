@@ -3,7 +3,19 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+ status=$?
+ if [ "$status" -ne 0 ]; then
+   echo "FAIL: ROCKNIX failure-mode test exit=$status" >&2
+   for log in "$TMP"/*.log; do
+     [ -f "$log" ] || continue
+     echo "=== $log ===" >&2
+     tail -80 "$log" >&2
+   done
+ fi
+ rm -rf "$TMP"
+}
+trap cleanup EXIT
 mkdir -p "$TMP/app" "$TMP/data" "$TMP/runtime"
 cp "$ROOT/deploy/Fire4Nix-ROCKNIX.sh" "$TMP/app/Start.sh"
 chmod +x "$TMP/app/Start.sh"
