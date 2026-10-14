@@ -43,6 +43,24 @@ for src in "$HERE/lib/"*; do
   count=$((count + 1))
 done
 [ "$count" -eq 62 ] || { echo "ERROR: expected 62 files, got $count"; exit 5; }
+HAS_BWRAP=0
+if [ -e "$HERE/bin/bwrap" ] || [ -L "$HERE/bin/bwrap" ]; then
+  [ -f "$HERE/bin/bwrap" ] && [ ! -L "$HERE/bin/bwrap" ] || {
+    echo 'ERROR: invalid bundled bwrap helper'; exit 5;
+  }
+  head="$(LC_ALL=C od -An -tx1 -N6 "$HERE/bin/bwrap" | tr -d '[:space:]')"
+  machine="$(LC_ALL=C od -An -tx1 -j18 -N2 "$HERE/bin/bwrap" | tr -d '[:space:]')"
+  [ "$head" = 7f454c460201 ] && [ "$machine" = b700 ] || {
+    echo 'ERROR: bwrap is not ARM64 ELF64'; exit 5;
+  }
+  if [ -e "$ROOT/bin/bwrap" ] || [ -L "$ROOT/bin/bwrap" ]; then
+    [ -f "$ROOT/bin/bwrap" ] && [ ! -L "$ROOT/bin/bwrap" ] &&
+      cmp -s "$HERE/bin/bwrap" "$ROOT/bin/bwrap" || {
+      echo 'ERROR: existing different bwrap; refusing overwrite'; exit 5;
+    }
+  fi
+  HAS_BWRAP=1
+fi
 echo "PASS: $count ARM64 libraries checked; no system libraries modified"
 if [ "$MODE" = --check ]; then
   echo 'CHECK ONLY: no files changed. Use --install to apply inside Fire4Nix.'
@@ -74,8 +92,17 @@ for src in "$HERE/lib/"*; do
     chmod 600 "$dest"
   fi
 done
+if [ "$HAS_BWRAP" = 1 ]; then
+  mkdir -p "$ROOT/bin"
+  if [ ! -e "$ROOT/bin/bwrap" ]; then
+    cp -- "$HERE/bin/bwrap" "$ROOT/bin/bwrap"
+    printf '%s\n' "$ROOT/bin/bwrap" >> "$installed_list"
+    chmod 700 "$ROOT/bin/bwrap"
+  fi
+fi
 ( cd "$ROOT"
   for src in "$HERE/lib/"*; do sha256sum "lib/$(basename "$src")"; done
+  if [ "$HAS_BWRAP" = 1 ]; then sha256sum bin/bwrap; fi
 ) > "$TEMP"
 ( cd "$ROOT"; sha256sum -c "$(basename "$TEMP")" >/dev/null ) || {
   echo 'ERROR: failed post-install checksum verification'; exit 7;
