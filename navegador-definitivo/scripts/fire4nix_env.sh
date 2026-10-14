@@ -695,6 +695,51 @@ fire4nix_cog_platform_name() {
 # Optional, checksum-verified portable WPE runtime. The experimental
 # launcher-only ZIP has no runtime tree and this function is a no-op there.
 # No ROOTFS/system libraries are ever copied or overwritten.
+# Check a *confirmed* loader ABI mismatch before changing LD_LIBRARY_PATH.
+# If the system lacks getconf we report uncertainty and defer to the device
+# diagnostics; never try to install/replace system glibc from this launcher.
+fire4nix_portable_wpe_glibc_preflight() {
+    local root="${FIRE4NIX_HOME:-$APP_DIR}"
+    local abi_file="$root/../WPE-ABI-REQUIREMENTS.json"
+    [ -f "$abi_file" ] || return 0
+    if ! command -v sed >/dev/null 2>&1; then
+        echo "[Fire4Nix] WPE ABI requirements unverified: sed unavailable" >&2
+        return 0
+    fi
+    local requirement host_version needed
+    requirement="$(sed -n 's/.*"highest_required_glibc_across_components":[[:space:]]*"\(GLIBC_[0-9.]*\)".*/\1/p' "$abi_file" 2>/dev/null | head -1)"
+    [ -n "$requirement" ] || {
+        echo "[Fire4Nix] WPE ABI manifest has no GLIBC version floor: $abi_file" >&2
+        return 0
+    }
+    if ! command -v getconf >/dev/null 2>&1; then
+        echo "[Fire4Nix] WPE ABI compatibility unverified: getconf unavailable" >&2
+        return 0
+    fi
+    host_version="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
+    case "$host_version" in
+        "glibc "[0-9]*)
+            host_version="${host_version#glibc }"
+            needed="${requirement#GLIBC_}"
+            if ! awk -v need="$needed" -v host="$host_version" 'BEGIN {
+                split(need,n,"."); split(host,h,".");
+                for (i=1; i<=3; i++) {
+                    if ((n[i]+0)>(h[i]+0)) exit 1
+                    if ((n[i]+0)<(h[i]+0)) exit 0
+                }
+                exit 0
+            }'; then
+                echo "[Fire4Nix] ERROR: portable WPE requires $requirement but ROCKNIX has glibc $host_version" >&2
+                return 1
+            fi
+            ;;
+        *)
+            echo "[Fire4Nix] WPE glibc ABI compatibility unverified: unknown libc" >&2
+            ;;
+    esac
+    return 0
+}
+
 fire4nix_activate_bundled_wpe_runtime() {
     local root="${FIRE4NIX_BUNDLED_WPE_ROOT:-${FIRE4NIX_HOME:-$APP_DIR}/runtime/aarch64}"
     if [ ! -d "$root" ]; then
@@ -823,6 +868,12 @@ fire4nix_activate_bundled_wpe_runtime() {
     done
     if ! (cd "$root" && sha256sum -c SHA256SUMS >/dev/null 2>&1); then
         echo "[Fire4Nix] ERROR: bundled WPE checksum mismatch" >&2
+        return 1
+    fi
+
+    # Reject known incompatible libc before touching the process/library
+    # loader environment; Cog fallback remains available.
+    if ! fire4nix_portable_wpe_glibc_preflight; then
         return 1
     fi
 
