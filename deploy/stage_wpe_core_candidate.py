@@ -99,6 +99,27 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine):
         dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     manifest(runtime, runtime / "SHA256SUMS")
 
+    # Needed-by records are obtained from the exact matching five ELF files.
+    # This inventory deliberately does not claim to resolve transitive
+    # dependencies or dynamically loaded graphics/multimedia plugins.
+    provided = {"libWPEWebKit-2.0.so"}
+    direct_needed_by = {
+        role: sorted(set(abi["components"][role].get("needed", [])))
+        for role in ("launcher", "WPEWebKit", *PROCESSES)
+    }
+    external = sorted(set(dep for values in direct_needed_by.values()
+                          for dep in values if dep not in provided))
+    (target / "WPE-CORE-SYSTEM-DEPENDENCIES.json").write_text(
+        json.dumps({
+            "schema": "fire4nix-wpe-core-needed-v1",
+            "qualification": "direct ELF NEEDED only; ROCKNIX device ABI, transitive and dlopen dependencies NOT verified",
+            "bundled_sonames": sorted(provided),
+            "direct_needed_by": direct_needed_by,
+            "system_or_additional_bundle_dependencies": external,
+        }, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
     (target / "LEIA-ANTES-DE-TESTAR.txt").write_text(
         "Fire4Nix WPE CORE — EXPERIMENTAL PARA ROCKNIX/R36H\n\n"
         "Inclui launcher ARM64, libWPEWebKit-2.0.so e 3 processos WebKit.\n"
@@ -107,6 +128,8 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine):
         "NAO foram empacotados ou validados. Bibliotecas compartilhadas de\n"
         "sistema precisam existir no ROCKNIX e ser compativeis.\n"
         "Os hashes do runtime sao verificados ANTES de ativar LD_LIBRARY_PATH.\n"
+        "WPE-CORE-SYSTEM-DEPENDENCIES.json lista bibliotecas diretamente\n"
+        "necessarias da build; nao garante disponibilidade no ROCKNIX.\n"
         "GLIBC/libc, loaders do sistema e bibliotecas de drivers NAO sao copiadas.\n\n"
         "1. Extraia a pasta deste ZIP dentro de Tools.\n"
         "2. Execute Diagnostico.sh para verificar arquitetura/ABI/Wayland.\n"
