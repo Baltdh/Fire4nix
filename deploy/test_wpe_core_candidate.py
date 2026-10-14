@@ -82,7 +82,10 @@ def main():
                     "runtime manifest absent from ZIP")
             require(any(n.endswith("WPE-ABI-REQUIREMENTS.json") for n in names),
                     "ABI audit absent from ZIP")
+            needed_text = z.read(target.name + "/WPE-CORE-NEEDED.txt").decode().splitlines()
+            require("libc.so.6" in needed_text, "missing plain-text system dependency")
             needed = json.loads(z.read(target.name + "/WPE-CORE-SYSTEM-DEPENDENCIES.json"))
+            require(needed_text == needed["system_or_additional_bundle_dependencies"], "flat dependencies do not match JSON source")
             require(needed["schema"] == "fire4nix-wpe-core-needed-v1", "needed inventory schema")
             require("libc.so.6" in needed["system_or_additional_bundle_dependencies"],
                     "unbundled libc not inventoried")
