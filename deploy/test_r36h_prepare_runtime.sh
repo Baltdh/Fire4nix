@@ -4,7 +4,19 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL: R36H runtime preparation mock exit $status" >&2
+    for log in "$TMP"/*.log "$TMP/logs"/*.log; do
+      [ -f "$log" ] || continue
+      echo "--- $log ---" >&2
+      tail -70 "$log" >&2
+    done
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 APP="$TMP/Tools/Fire4Nix"
 mkdir -p "$APP/runtime/libexec/wpe-webkit-2.0" "$APP/runtime/lib" "$APP/scripts" "$APP/bin" "$TMP/mock-bin" "$TMP/logs"
 printf '#!/bin/sh\n' > "$APP/scripts/fire4nix_env.sh"
