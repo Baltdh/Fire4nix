@@ -17,8 +17,18 @@ if [ -z "${WAYLAND_DISPLAY:-}" ]; then
 fi
 echo "Resolved Wayland=${WAYLAND_DISPLAY:-unset} XDG=${XDG_RUNTIME_DIR:-unset}"
 BASE=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
-for candidate in "$BASE" "$BASE/navegador-definitivo" "$BASE/Fire4Nix" "$BASE/../navegador-definitivo" /storage/roms/ports/Fire4Nix; do
+for candidate in \
+  "$BASE/Fire4Nix" \
+  "$BASE/navegador-definitivo" \
+  "$BASE/../Fire4Nix" \
+  "$BASE/../navegador-definitivo" \
+  /storage/games-internal/roms/tools/Fire4Nix \
+  /storage/games-external/roms/tools/Fire4Nix \
+  /storage/roms/ports/Fire4Nix \
+  "$BASE"; do
+  # Root Tools script can be a wrapper. Never launch it recursively.
   [ -f "$candidate/Fire4Nix.sh" ] || continue
+  [ -f "$candidate/scripts/run_browser.sh" ] || continue
   echo "App=$candidate"
   cd "$candidate" || exit 1
   bash ./Fire4Nix.sh "$@"
@@ -26,5 +36,6 @@ for candidate in "$BASE" "$BASE/navegador-definitivo" "$BASE/Fire4Nix" "$BASE/..
   echo "Fire4Nix exited: $rc"
   exit "$rc"
 done
-echo "ERROR: Fire4Nix.sh not found"
+echo "ERROR: Fire4Nix application incomplete or missing (expected Fire4Nix/scripts/run_browser.sh)"
+echo "Expected Tools: /storage/games-internal/roms/tools/Fire4Nix"
 exit 3
