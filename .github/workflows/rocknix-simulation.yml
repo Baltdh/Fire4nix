@@ -16,12 +16,19 @@ jobs:
         run: |
           bash -n deploy/Fire4Nix-ROCKNIX.sh deploy/test_portable_launcher.sh deploy/test_rocknix_simulation.sh deploy/test_rocknix_failure_modes.sh
           sh -n deploy/Fire4Nix-WPE-Diagnostico.sh
+          echo '=== test: test_portable_launcher.sh ==='
           bash deploy/test_portable_launcher.sh
+          echo '=== test: test_rocknix_simulation.sh ==='
           bash deploy/test_rocknix_simulation.sh
+          echo '=== test: test_rocknix_failure_modes.sh ==='
           bash deploy/test_rocknix_failure_modes.sh
+          echo '=== test: test_engine_entrypoints.sh ==='
           bash deploy/test_engine_entrypoints.sh
+          echo '=== test: test_wpe_bundle_activation.sh ==='
           bash deploy/test_wpe_bundle_activation.sh
+          echo '=== test: test_r36h_prepare_runtime.sh ==='
           bash deploy/test_r36h_prepare_runtime.sh
+          echo '=== test: test_wpe_environment_isolation.sh ==='
           bash deploy/test_wpe_environment_isolation.sh
       - name: Publish standalone Tools diagnostic
         if: matrix.os == 'ubuntu-24.04-arm'
