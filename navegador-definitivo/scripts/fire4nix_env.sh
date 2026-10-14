@@ -1329,22 +1329,23 @@ fire4nix_launch_wpe_platform() {
     export FIRE4NIX_WPE_PLATFORM_MODE="$wpe_mode"
 
     if [ -n "$native_binary" ]; then
-        fire4nix_wpe_runtime_env
-        if ! fire4nix_activate_bundled_wpe_runtime; then
-            echo "[Fire4Nix] bundled WPE preflight failed; refusing partial runtime" >&2
-            # Do not launch a native executable against an incomplete bundle.
-            # A Cog fallback, if installed, is still allowed below.
-            native_binary=""
-        fi
-        # Keep the shell alive to recover from an immediate WPE startup failure.
-        # A browser that crashes after running normally should not unexpectedly
-        # reopen the user's session in a different engine.
+        # Isolate runtime loader paths to the native WPE subprocess only.
+        # On a fast failure, Cog must inherit the original environment,
+        # not the experimental WPE LD_LIBRARY_PATH/WEBKIT_EXEC_PATH/GIO paths.
+        # A subshell also prevents partially activated bundles from leaking
+        # their loader settings into the fallback engine.
         local started_at="$SECONDS" native_status
-        if [ -n "$native_binary" ] && "$native_binary" "$url" "$@"; then
+        if (
+            fire4nix_wpe_runtime_env
+            if ! fire4nix_activate_bundled_wpe_runtime; then
+                echo "[Fire4Nix] bundled WPE preflight failed; refusing partial runtime" >&2
+                exit 126
+            fi
+            "$native_binary" "$url" "$@"
+        ); then
             return 0
         else
             native_status=$?
-            if [ -z "$native_binary" ]; then native_status=126; fi
         fi
         case "$native_status" in
             130|143)
