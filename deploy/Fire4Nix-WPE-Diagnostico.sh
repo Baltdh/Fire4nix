@@ -206,6 +206,45 @@ for f in "$APP/fire4nix-wpe-platform" "$APP/bin/wpe-platform-launcher" "$APP/bin
    esac
  fi
 done
+# Report the Debian build's direct ELF NEEDED library names. This does
+# not modify LD_LIBRARY_PATH or try to load a foreign binary on ROCKNIX.
+NEEDED_FILE="$APP/../WPE-CORE-NEEDED.txt"
+if [ -f "$NEEDED_FILE" ]; then
+ echo "WPE Core external direct dependencies (lookup in common ROCKNIX paths):"
+ LINKER_CACHE=""
+ if command -v ldconfig >/dev/null 2>&1; then
+  LINKER_CACHE="$(ldconfig -p 2>/dev/null || true)"
+ fi
+ unresolved=0
+ while IFS= read -r soname || [ -n "$soname" ]; do
+  # Do not interpret an arbitrary package metadata value as a shell path.
+  case "$soname" in
+   ''|*[!A-Za-z0-9._+-]*)
+    echo "WARNING: invalid WPE dependency SONAME in metadata"
+    continue
+    ;;
+  esac
+  library_found=""
+  for library_dir in \
+    /usr/lib /lib /usr/lib64 /lib64 /usr/local/lib \
+    /usr/lib/aarch64-linux-gnu /lib/aarch64-linux-gnu; do
+   if [ -f "$library_dir/$soname" ]; then
+    library_found="$library_dir/$soname"
+    break
+   fi
+  done
+  if [ -n "$library_found" ]; then
+   echo "$soname: found $library_found"
+  elif [ -n "$LINKER_CACHE" ] && printf '%s\n' "$LINKER_CACHE" | grep -Fq "$soname ("; then
+   echo "$soname: listed by ldconfig (loader resolution not verified)"
+  else
+   echo "$soname: NOT FOUND in common paths (other paths may exist)"
+   unresolved=$((unresolved + 1))
+  fi
+ done < "$NEEDED_FILE"
+ echo "WPE Core direct SONAMEs not located in common paths: $unresolved"
+ echo "NOTE: this does not check transitive libraries, versions or dlopen plugins"
+fi
 echo "WPE subprocess inventory (system paths):"
 for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
  found=""
