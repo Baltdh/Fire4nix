@@ -15,11 +15,15 @@ jobs:
         run: bash deploy/validate_launchers.sh
       - name: Forbid unsafe WebKit sandbox overrides in distributable code
         run: |
-          # Test fixtures may deliberately inject an unsafe flag to verify
-          # that our real device smoke explicitly UNSETS it. Shipped code may
-          # not set or propagate that override.
-          unsafe_lines="$(grep -R -n -F 'WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS' --include='*.sh' --include='*.cpp' --include='*.h' navegador-definitivo deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh deploy/Fire4Nix-WPE-Teste-Real.sh |
-            grep -v -E ':[0-9]+:[[:space:]]*unset[[:space:]]+WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS[[:space:]]*
+          # The device smoke test must unset an unsafe inherited flag. All
+          # other references to that option in shipped shell/native code fail.
+          matches="$(grep -R -n -F 'WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS' --include='*.sh' --include='*.cpp' --include='*.h' navegador-definitivo deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh deploy/Fire4Nix-WPE-Teste-Real.sh || true)"
+          violations="$(printf '%s\n' "$matches" | grep -v -F 'unset WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS' || true)"
+          if [ -n "$violations" ]; then
+            echo 'ERROR: unsafe WebKit sandbox override must not be enabled or propagated in shipped code.'
+            printf '%s\n' "$violations"
+            exit 1
+          fi
       - name: ShellCheck launcher entrypoints
         run: |
           shellcheck -s sh navegador-definitivo/Fire4Nix.sh deploy/Fire4Nix-ROCKNIX.sh deploy/Fire4Nix-WPE-Diagnostico.sh
