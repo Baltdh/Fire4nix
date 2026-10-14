@@ -238,8 +238,13 @@ done
 # Report the Debian build's direct ELF NEEDED library names. This does
 # not modify LD_LIBRARY_PATH or try to load a foreign binary on ROCKNIX.
 NEEDED_FILE="$APP/../WPE-CORE-NEEDED.txt"
+NEEDED_SCOPE="direct"
+if [ -f "$APP/../WPE-CORE-ALL-NEEDED.txt" ]; then
+ NEEDED_FILE="$APP/../WPE-CORE-ALL-NEEDED.txt"
+ NEEDED_SCOPE="direct and transitive"
+fi
 if [ -f "$NEEDED_FILE" ]; then
- echo "WPE Core external direct dependencies (lookup in common ROCKNIX paths):"
+ echo "WPE Core external $NEEDED_SCOPE dependencies (build-origin; lookup in common ROCKNIX paths):"
  LINKER_CACHE=""
  if command -v ldconfig >/dev/null 2>&1; then
   LINKER_CACHE="$(ldconfig -p 2>/dev/null || true)"
@@ -271,8 +276,8 @@ if [ -f "$NEEDED_FILE" ]; then
    unresolved=$((unresolved + 1))
   fi
  done < "$NEEDED_FILE"
- echo "WPE Core direct SONAMEs not located in common paths: $unresolved"
- echo "NOTE: this does not check transitive libraries, versions or dlopen plugins"
+ echo "WPE Core $NEEDED_SCOPE SONAMEs not located in common paths: $unresolved"
+ echo "NOTE: this does not prove loader ABI compatibility or detect dlopen plugins"
 fi
 echo "WPE subprocess inventory (system paths):"
 for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
