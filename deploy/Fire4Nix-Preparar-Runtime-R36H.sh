@@ -63,7 +63,9 @@ else
   echo 'Creating first-use SHA256 baseline (NOT source authentication)...'
   TMP="$ROOT/.SHA256SUMS.$$.tmp"
   trap 'rm -f "$TMP"' EXIT
-  (cd "$ROOT"; find lib libexec share -type f -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 -r sha256sum) > "$TMP"
+  (cd "$ROOT"; for folder in lib libexec share; do
+     [ ! -d "$folder" ] || find "$folder" -type f -print0
+   done | LC_ALL=C sort -z | xargs -0 -r sha256sum) > "$TMP"
   [ -s "$TMP" ] || { echo 'ERROR: empty SHA256 manifest'; exit 6; }
   chmod 600 "$TMP"
   mv "$TMP" "$ROOT/SHA256SUMS"
@@ -83,12 +85,18 @@ missing=0
 if [ -f "$NATIVE" ] && command -v ldd >/dev/null 2>&1; then
   for target in "$NATIVE" "$WPE" "$PROC/WPEWebProcess" "$PROC/WPENetworkProcess" "$PROC/WPEGPUProcess"; do
     echo "Checking dynamic dependencies: $target"
+    status=0
     if command -v timeout >/dev/null 2>&1; then
-      result="$(timeout 40s ldd "$target" 2>&1)" || true
+      result="$(timeout 40s ldd "$target" 2>&1)" || status=$?
     else
-      result="$(ldd "$target" 2>&1)" || true
+      result="$(ldd "$target" 2>&1)" || status=$?
     fi
     errors="$(printf '%s\n' "$result" | grep -E 'not found|version .* not found|error while loading' || true)"
+    if [ "$status" -ne 0 ]; then
+      echo "WARNING: ldd returned $status for $target (not verified)"
+      printf '%s\n' "$result" | tail -12
+      missing=1
+    fi
     if [ -n "$errors" ]; then
       printf '%s\n' "$errors"
       missing=1
