@@ -109,6 +109,15 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine):
     }
     external = sorted(set(dep for values in direct_needed_by.values()
                           for dep in values if dep not in provided))
+    # ROCKNIX-side diagnostics should not need Python or a JSON parser.
+    # Each entry is a literal ELF DT_NEEDED soname from this Debian build,
+    # never a pathname, command or source of installation instructions.
+    import re
+    if any(not re.fullmatch(r"[A-Za-z0-9_.+-]+", name) for name in external):
+        raise ValueError("unsafe system dependency SONAME in WPE ABI inventory")
+    (target / "WPE-CORE-NEEDED.txt").write_text(
+        "".join(name + "\n" for name in external), encoding="utf-8"
+    )
     (target / "WPE-CORE-SYSTEM-DEPENDENCIES.json").write_text(
         json.dumps({
             "schema": "fire4nix-wpe-core-needed-v1",
@@ -129,6 +138,7 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine):
         "sistema precisam existir no ROCKNIX e ser compativeis.\n"
         "Os hashes do runtime sao verificados ANTES de ativar LD_LIBRARY_PATH.\n"
         "WPE-CORE-SYSTEM-DEPENDENCIES.json lista bibliotecas diretamente\n"
+        "WPE-CORE-NEEDED.txt inclui a lista para diagnostico sem Python.\n"
         "necessarias da build; nao garante disponibilidade no ROCKNIX.\n"
         "GLIBC/libc, loaders do sistema e bibliotecas de drivers NAO sao copiadas.\n\n"
         "1. Extraia a pasta deste ZIP dentro de Tools.\n"
