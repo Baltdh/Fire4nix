@@ -85,19 +85,41 @@ if [ "$(uname -m 2>/dev/null)" != aarch64 ] &&
 fi
 
 if [ "$MODE" = wayland ]; then
-    if [ -z "${XDG_RUNTIME_DIR:-}" ] ||
-       [ -z "${WAYLAND_DISPLAY:-}" ]; then
-        echo 'SKIP: Wayland environment variables unavailable' >> "$REPORT"
+    # ROCKNIX/Sway commonly runs on wayland-1. Tools can inherit a stale
+    # wayland-0 or no WAYLAND_DISPLAY at all. Prefer an explicitly requested
+    # valid socket, then search only known local session runtime directories.
+    WAYLAND_SOCKET=""
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        case "$WAYLAND_DISPLAY" in
+            /*) candidate_socket="$WAYLAND_DISPLAY" ;;
+            *) candidate_socket="${XDG_RUNTIME_DIR:-/nonexistent}/$WAYLAND_DISPLAY" ;;
+        esac
+        if [ -S "$candidate_socket" ]; then WAYLAND_SOCKET="$candidate_socket"; fi
+    fi
+    if [ -z "$WAYLAND_SOCKET" ]; then
+        original_display="${WAYLAND_DISPLAY:-unset}"
+        original_runtime="${XDG_RUNTIME_DIR:-unset}"
+        uid="$(id -u 2>/dev/null || echo 0)"
+        for candidate_dir in \
+            "${XDG_RUNTIME_DIR:-/nonexistent}" \
+            "/run/user/$uid" \
+            /var/run/0-runtime-dir; do
+            [ -d "$candidate_dir" ] || continue
+            for candidate_socket in "$candidate_dir"/wayland-*; do
+                [ -S "$candidate_socket" ] || continue
+                WAYLAND_SOCKET="$candidate_socket"
+                export XDG_RUNTIME_DIR="$candidate_dir"
+                export WAYLAND_DISPLAY="${candidate_socket##*/}"
+                echo "Wayland socket recovered: $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY (previous $original_runtime/$original_display)" >> "$REPORT"
+                break 2
+            done
+        done
+    fi
+    if [ -z "$WAYLAND_SOCKET" ] || [ ! -S "$WAYLAND_SOCKET" ]; then
+        echo 'SKIP: no usable Wayland socket found in ROCKNIX session runtime paths' >> "$REPORT"
         finish 2
     fi
-    case "$WAYLAND_DISPLAY" in
-        /*) WAYLAND_SOCKET="$WAYLAND_DISPLAY" ;;
-        *) WAYLAND_SOCKET="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ;;
-    esac
-    if [ ! -S "$WAYLAND_SOCKET" ]; then
-        echo "SKIP: active Wayland socket unavailable: $WAYLAND_SOCKET" >> "$REPORT"
-        finish 2
-    fi
+    echo "Wayland socket verified: $WAYLAND_SOCKET" >> "$REPORT"
 else
     export XDG_RUNTIME_DIR="$RUN/xdg"
     mkdir -p "$XDG_RUNTIME_DIR"
