@@ -177,13 +177,42 @@ for manifest in "$APP/../WPE-ABI-REQUIREMENTS.json" "$APP/WPE-ABI-REQUIREMENTS.j
   break
  fi
 done
-for cmd in bash cog file readelf ldd pkg-config; do
+for cmd in bash cog bwrap file readelf ldd pkg-config timeout; do
  if command -v "$cmd" >/dev/null 2>&1; then
    echo "command $cmd: $(command -v "$cmd")"
  else
    echo "command $cmd: MISSING"
  fi
 done
+echo "WPE sandbox prerequisites:"
+if [ -f /proc/sys/kernel/unprivileged_userns_clone ]; then
+ echo "kernel.unprivileged_userns_clone: $(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo unknown)"
+else
+ echo "kernel.unprivileged_userns_clone: unavailable"
+fi
+if [ -f /proc/sys/user/max_user_namespaces ]; then
+ echo "user.max_user_namespaces: $(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo unknown)"
+fi
+if command -v bwrap >/dev/null 2>&1; then
+ # This launches only a no-op shell under read-only binds, never the browser.
+ # Keep it time-limited on devices providing the standard timeout utility.
+ if command -v timeout >/dev/null 2>&1; then
+  timeout 5s bwrap --unshare-user --ro-bind / / -- /bin/sh -c ':' >/dev/null 2>&1
+  sandbox_status=$?
+ else
+  bwrap --unshare-user --ro-bind / / -- /bin/sh -c ':' >/dev/null 2>&1
+  sandbox_status=$?
+ fi
+ if [ "$sandbox_status" -eq 0 ]; then
+  echo "WPE Bubblewrap namespace preflight: PASS (not proof of full sandbox)"
+ else
+  echo "WPE Bubblewrap namespace preflight: FAIL (exit $sandbox_status)"
+  echo "WARNING: sandboxed WebKit subprocess startup remains unverified"
+ fi
+else
+ echo "WPE Bubblewrap namespace preflight: UNAVAILABLE (bwrap not found)"
+ echo "WARNING: sandboxed WebKit subprocess startup remains unverified"
+fi
 if [ ! -f "$APP/Fire4Nix.sh" ]; then
  echo "WARNING: no Fire4Nix.sh found at application path; put diagnostic beside the app or set FIRE4NIX_APP_DIR"
 fi
