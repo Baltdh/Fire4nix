@@ -98,7 +98,7 @@ def stage(core, addon, smoke, dest):
         raise ValueError("expected WPE Core staging tree, with Fire4Nix/Fire4Nix.sh")
     runtime = core / "Fire4Nix" / "runtime" / "aarch64"
     original_core_checksums = read_checksums(runtime, runtime / "SHA256SUMS")
-    for relative in ("lib/libWPEWebKit-2.0.so", *(
+    for relative in ("lib/libWPEWebKit-2.0.so.1", *(
         "libexec/wpe-webkit-2.0/" + name for name in HELPERS
     )):
         if relative not in original_core_checksums or not elf_arm64(runtime / relative):
