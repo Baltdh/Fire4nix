@@ -62,7 +62,7 @@ def stage(closure, wanted, out, helper, bwrap=None):
     if bwrap is not None:
         with bwrap.open("rb") as handle:
             header = handle.read(20)
-        if len(header) < 20 or header[:6] != b"\\x7fELF\\x02\\x01" or header[18:20] != b"\\xb7\\x00":
+        if len(header) < 20 or header[:6] != b"\x7fELF\x02\x01" or header[18:20] != b"\xb7\x00":
             raise ValueError("Bubblewrap is not ARM64 ELF64")
         (root / "bin").mkdir()
         shutil.copyfile(bwrap, root / "bin/bwrap")
