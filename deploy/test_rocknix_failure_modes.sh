@@ -14,7 +14,7 @@ run() {
 }
 # Missing browser should be a controlled failure, never silent success.
 if run; then echo "FAIL: missing app accepted"; exit 1; fi
-grep -q 'Fire4Nix.sh not found' "$LOG"
+grep -q 'ERROR: Fire4Nix application was not found in Tools' "$LOG"
 # A browser failure must be propagated and logged.
 cat > "$TMP/app/Fire4Nix.sh" <<'APP'
 #!/usr/bin/env bash
