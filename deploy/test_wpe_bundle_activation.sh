@@ -54,6 +54,20 @@ reject() {
 write_manifest
 probe > "$TMP/valid.log" 2>&1
 grep -q 'checksum-verified WPE runtime activated' "$TMP/valid.log"
+# The production core ZIP uses a Python-generated checksum manifest rather
+# than GNU sha256sum output. Both must pass the same safe path validation.
+python3 - "$TMP/bundle" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+items = sorted(p for folder in ("lib", "libexec") for p in (root / folder).rglob("*") if p.is_file())
+(root / "SHA256SUMS").write_text(
+    "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}\n" for p in items)
+)
+PY
+probe > "$TMP/python-manifest.log" 2>&1
+grep -q 'checksum-verified WPE runtime activated' "$TMP/python-manifest.log"
 
 # All three helper executables are mandatory.
 mv "$TMP/bundle/libexec/wpe-webkit-2.0/WPEGPUProcess" "$TMP/missing-gpu"
@@ -90,6 +104,11 @@ rm "$TMP/bundle/lib/malicious.so"
 # Explicitly reject checksum path traversal before sha256sum reads it.
 printf '%064d  ../../etc/passwd\n' 0 >> "$TMP/bundle/SHA256SUMS"
 reject 'checksum manifest traversal'
+write_manifest
+# Reject explicit './' components in manifest paths even with valid hashes.
+sed 's@  lib/libWPEWebKit@  lib/./libWPEWebKit@' "$TMP/bundle/SHA256SUMS" > "$TMP/malformed-dot"
+cp "$TMP/malformed-dot" "$TMP/bundle/SHA256SUMS"
+reject 'checksum manifest dot segment'
 write_manifest
 
 # Bit flips must fail integrity verification.
