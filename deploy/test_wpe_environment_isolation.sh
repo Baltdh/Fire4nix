@@ -77,6 +77,17 @@ grep -Fqx 'COG_EXEC=original-exec-path' "$TMP/preflight.log"
 grep -Fqx 'COG_GIO=original-gio-path' "$TMP/preflight.log"
 grep -Fqx 'COG_GST=original-gst-path' "$TMP/preflight.log"
 
+# A missing Cog is NOT the cause of a native segfault. Preserve the
+# original WPE exit=139 instead of replacing it with misleading exit=127.
+mv "$TMP/bin/cog" "$TMP/bin/cog.disabled"
+set +e
+run_case MOCK_WPE_STATUS=139 > "$TMP/no-cog.log" 2>&1
+no_cog_status=$?
+set -e
+test "$no_cog_status" -eq 139
+grep -q 'WPE exited with 139; Cog is not installed' "$TMP/no-cog.log"
+mv "$TMP/bin/cog.disabled" "$TMP/bin/cog"
+
 run_case MOCK_WPE_STATUS=0 > "$TMP/success.log" 2>&1
 grep -q '^WPE_STARTED=1$' "$TMP/success.log"
 if grep -q '^COG_STARTED=1$' "$TMP/success.log"; then
