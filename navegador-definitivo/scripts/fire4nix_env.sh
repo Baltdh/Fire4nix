@@ -998,10 +998,16 @@ fire4nix_activate_bundled_wpe_runtime() {
         local dependency_output="" dependency_target
         for dependency_target in "$binary_for_ldd" "$library" "$process_dir/WPEWebProcess" "$process_dir/WPENetworkProcess" "$process_dir/WPEGPUProcess"; do
             [ -f "$dependency_target" ] || continue
+            # ROCKNIX may find a SONAME but reject its GLIBCXX/CXXABI
+            # versions or fail at symbol resolution. A plain 'not found'
+            # check misses those device-specific loader failures.
             dependency_output="$(ldd "$dependency_target" 2>&1)" || true
-            if printf '%s\n' "$dependency_output" | grep -q 'not found'; then
-                echo "[Fire4Nix] ERROR: missing runtime dependencies for $dependency_target:" >&2
-                printf '%s\n' "$dependency_output" | grep 'not found' >&2 || true
+            local dependency_errors
+            dependency_errors="$(printf '%s\n' "$dependency_output" |
+                grep -E 'not found|version .+ not found|undefined symbol:|symbol lookup error|error while loading shared libraries:' || true)"
+            if [ -n "$dependency_errors" ]; then
+                echo "[Fire4Nix] ERROR: WPE dynamic loader rejected $dependency_target:" >&2
+                printf '%s\n' "$dependency_errors" >&2
                 return 1
             fi
         done
@@ -1011,6 +1017,9 @@ fire4nix_activate_bundled_wpe_runtime() {
     fi
     if [ -d "$lib_dir/gstreamer-1.0" ]; then
         export GST_PLUGIN_PATH="$lib_dir/gstreamer-1.0${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
+    fi
+    if ! command -v bwrap >/dev/null 2>&1; then
+        echo "[Fire4Nix] WARNING: bwrap missing; WPE sandbox startup on ROCKNIX may fail. Sandbox remains enabled." >&2
     fi
     export FIRE4NIX_WPE_RUNTIME_ACTIVATED=1
     echo "[Fire4Nix] checksum-verified WPE runtime activated: $root" >&2
