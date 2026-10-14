@@ -65,6 +65,33 @@ env -u FIRE4NIX_BUNDLED_WPE_ROOT FIRE4NIX_HOME="$TMP/app" bash -c '
 ' bash "$TMP/app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh" "$TMP/bundle" > "$TMP/legacy.log" 2>&1
 grep -q 'detected ROCKNIX legacy WPE layout:' "$TMP/legacy.log"
 grep -q 'checksum-verified WPE runtime activated:' "$TMP/legacy.log"
+# A valid add-on may expose bundled bwrap to WPE without changing ROCKNIX
+# PATH globally, while any add-on tampering must block WPE activation.
+mkdir -p "$TMP/bundle/bin"
+for i in $(seq -w 1 62); do
+  file="$TMP/bundle/lib/libaddon-$i.so.1"
+  cp /bin/true "$file"
+  printf '\267\000' | dd of="$file" bs=1 seek=18 conv=notrunc 2>/dev/null
+done
+cp /bin/true "$TMP/bundle/bin/bwrap"
+printf '\267\000' | dd of="$TMP/bundle/bin/bwrap" bs=1 seek=18 conv=notrunc 2>/dev/null
+(
+  cd "$TMP/bundle"
+  for i in $(seq -w 1 62); do sha256sum "lib/libaddon-$i.so.1"; done
+  sha256sum bin/bwrap
+) > "$TMP/bundle/SHA256SUMS-ADDON"
+FIRE4NIX_BUNDLED_WPE_ROOT="$TMP/bundle" bash -c '
+  APP_DIR="$1"
+  source "$2"
+  fire4nix_activate_bundled_wpe_runtime
+  test "$(command -v bwrap)" = "$FIRE4NIX_BUNDLED_WPE_ROOT/bin/bwrap"
+' bash "$TMP/app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh" > "$TMP/addon-valid.log" 2>&1
+grep -q 'verified bundled Bubblewrap available' "$TMP/addon-valid.log"
+printf X >> "$TMP/bundle/bin/bwrap"
+reject 'modified bundled bwrap fails checksum check'
+rm -f "$TMP/bundle/bin/bwrap" "$TMP/bundle/SHA256SUMS-ADDON"
+rm -f "$TMP/bundle/lib"/libaddon-*.so.1
+
 # The production core ZIP uses a Python-generated checksum manifest rather
 # than GNU sha256sum output. Both must pass the same safe path validation.
 python3 - "$TMP/bundle" <<'PY'
