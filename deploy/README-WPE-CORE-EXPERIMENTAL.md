@@ -9,6 +9,7 @@ O pacote `Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip` é um **experimento 
 - `WPEWebProcess`, `WPENetworkProcess` e `WPEGPUProcess`
 - `runtime/aarch64/SHA256SUMS` para validar o runtime antes de modificar `LD_LIBRARY_PATH`
 - `WPE-ABI-REQUIREMENTS.json` com versões exigidas de GLIBC, GLIBCXX e CXXABI
+- `WPE-CORE-SYSTEM-DEPENDENCIES.json`, listando os nomes das bibliotecas exigidas diretamente pelos cinco ELF e que **não** estão presentes no WPE Core. Dependências indiretas e módulos carregados dinamicamente não estão incluídos nessa lista.
 
 **Não inclui** todas as bibliotecas transitivas e módulos gráficos/multimídia. Não substitui `libc`, `glibc` ou loaders do ROCKNIX e não concede `sudo`. Pode não abrir no R36H mesmo passando nos testes do GitHub.
 
