@@ -58,7 +58,7 @@ def manifest(root, output):
     output.write_text("".join(rows), encoding="utf-8")
 
 
-def stage(source_candidate, webkit, process_dir, output_dir, machine):
+def stage(source_candidate, webkit, process_dir, output_dir, machine, closure_report=None):
     source = source_candidate.resolve(strict=True)
     if not (source / "Fire4Nix" / "Fire4Nix.sh").is_file():
         raise ValueError("expected launcher-only Tools staging tree containing Fire4Nix.sh")
@@ -129,6 +129,36 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine):
         encoding="utf-8",
     )
 
+    if closure_report is not None:
+        # Closure metadata is generated from the same five trusted ARM64 CI
+        # binaries. Keep all system dependencies external to this candidate.
+        closure = json.loads(closure_report.read_text())
+        if closure.get("schema") != "fire4nix-wpe-dependency-closure-v1" or closure.get("expected_elf_machine") != machine:
+            raise ValueError("dependency closure schema or architecture mismatch")
+        if set(closure.get("components", {})) != set(paths):
+            raise ValueError("dependency closure missing/adding ELF roles")
+        all_needed = closure.get("all_system_sonames", [])
+        transitive = closure.get("transitive_only_sonames", [])
+        if (not isinstance(all_needed, list) or not isinstance(transitive, list) or
+                len(all_needed) != len(set(all_needed)) or len(transitive) != len(set(transitive)) or
+                any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.+-]+", name)
+                    for name in all_needed + transitive)):
+            raise ValueError("invalid or duplicate SONAME in dependency closure")
+        if (set(external) - set(all_needed) or set(transitive) - set(all_needed) or
+                "libWPEWebKit-2.0.so" in all_needed or
+                not isinstance(closure.get("qualification"), str) or
+                "UNVERIFIED" not in closure["qualification"]):
+            raise ValueError("dependency closure incomplete or incorrectly qualified")
+        (target / "WPE-CORE-DEPENDENCY-CLOSURE.json").write_text(
+            json.dumps(closure, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        (target / "WPE-CORE-ALL-NEEDED.txt").write_text(
+            "".join(name + "\n" for name in sorted(all_needed)), encoding="utf-8"
+        )
+        (target / "WPE-CORE-TRANSITIVE-NEEDED.txt").write_text(
+            "".join(name + "\n" for name in sorted(transitive)), encoding="utf-8"
+        )
+
     (target / "LEIA-ANTES-DE-TESTAR.txt").write_text(
         "Fire4Nix WPE CORE — EXPERIMENTAL PARA ROCKNIX/R36H\n\n"
         "Inclui launcher ARM64, libWPEWebKit-2.0.so e 3 processos WebKit.\n"
@@ -138,7 +168,9 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine):
         "sistema precisam existir no ROCKNIX e ser compativeis.\n"
         "Os hashes do runtime sao verificados ANTES de ativar LD_LIBRARY_PATH.\n"
         "WPE-CORE-SYSTEM-DEPENDENCIES.json lista bibliotecas diretamente\n"
-        "WPE-CORE-NEEDED.txt inclui a lista para diagnostico sem Python.\n"
+        "WPE-CORE-NEEDED.txt inclui a lista direta para diagnostico sem Python.\n"
+        "WPE-CORE-ALL-NEEDED.txt (quando presente) inclui dependencias\n"
+        "transitivas detectadas no Debian; nao e garantia de compatibilidade.\n"
         "necessarias da build; nao garante disponibilidade no ROCKNIX.\n"
         "GLIBC/libc, loaders do sistema e bibliotecas de drivers NAO sao copiadas.\n\n"
         "1. Extraia a pasta deste ZIP dentro de Tools.\n"
@@ -182,9 +214,10 @@ def main(argv=None):
     parser.add_argument("--process-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--machine", type=int, default=183, help="AArch64=183, other values for fixture tests only")
+    parser.add_argument("--closure", type=Path, help="trusted build-origin transitive dependency report")
     args = parser.parse_args(argv)
     try:
-        stage(args.candidate, args.webkit, args.process_dir, args.out, args.machine)
+        stage(args.candidate, args.webkit, args.process_dir, args.out, args.machine, args.closure)
     except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
         print(f"WPE core staging FAILED: {exc}", file=sys.stderr)
         return 1
