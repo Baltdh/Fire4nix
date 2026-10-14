@@ -11,6 +11,25 @@ O pacote combinado para SD, entregue ao usuário nesta etapa, foi montado com do
 
 O ZIP de primeiro teste contém `Tools/Fire4Nix.sh`, `Tools/Fire4Nix-Diagnostico.sh` e a pasta `Tools/Fire4Nix/`. A biblioteca WPE de origem Debian foi incluída como **arquivo regular** `runtime/lib/libWPEWebKit-2.0.so.1` para dispensar links simbólicos no cartão SD FAT/exFAT. Os processos ficam em `runtime/libexec/wpe-webkit-2.0/`, e o lançador exporta `WEBKIT_EXEC_PATH` e `LD_LIBRARY_PATH` exclusivamente para seu próprio processo.
 
+### Caminho confirmado no R36H (foto de 14/10/2026)
+
+O gerenciador de arquivos mostrou a pasta **`/storage/games-internal/roms/tools`**, contendo:
+
+- `Fire4Nix.sh` — script de entrada da pasta Tools;
+- `Fire4Nix-Diagnostico.sh` — diagnóstico da edição de primeiro teste;
+- `Fire4Nix/` — diretório onde devem estar o navegador e suas bibliotecas;
+- outras pastas de versões antigas/testes (não misturar automaticamente).
+
+Se o script da raiz fizer a descoberta do aplicativo, **ele deve priorizar `tools/Fire4Nix/Fire4Nix.sh`**, nunca reexecutar a si próprio. O teste de regressão `deploy/test_portable_launcher.sh` reproduz essa estrutura e verifica que uma pasta ausente gera erro explícito em vez de recursão.
+
+**Sem retirar o cartão SD:** abra o `Terminal-R36-Tools-v4.1.sh` e execute:
+
+```sh
+sh /storage/games-internal/roms/tools/Fire4Nix-Diagnostico.sh
+```
+
+Depois, no gerenciador de arquivos, consulte `/storage/Fire4Nix-diagnostico.log` e `/storage/Fire4Nix-primeiro-teste.log`. Esses nomes pertencem ao pacote combinado de primeiro teste. Se a instalação usar o inicializador portátil separado, procure também `/storage/fire4nix-launch.log` e `/storage/fire4nix-entry.log`. O log deve ser coletado **no dispositivo**, pois um resultado verde no CI não confirma quais arquivos foram copiados para o cartão.
+
 ### Como instalar
 
 Extraia o conteúdo para a pasta Tools usada pelo ROCKNIX. Se a raiz do cartão já possuir `roms/tools/`, coloque lá o conteúdo de `Tools/`; evite `Tools/Tools/`. Execute `Fire4Nix.sh` no menu correspondente. O endereço inicial é um arquivo `inicio.html` offline, sem depender de rede.
