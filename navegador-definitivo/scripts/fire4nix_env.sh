@@ -740,6 +740,68 @@ fire4nix_portable_wpe_glibc_preflight() {
     return 0
 }
 
+# Reject a *known* too-old system C++ runtime before LD_LIBRARY_PATH changes.
+# This check only covers GLIBCXX/CXXABI exported versions from libstdc++,
+# not dlopen modules, ELF transitive dependencies or device graphics drivers.
+fire4nix_portable_wpe_cpp_abi_preflight() {
+    local app_root="${FIRE4NIX_HOME:-$APP_DIR}"
+    local abi_file="$app_root/../WPE-ABI-REQUIREMENTS.json"
+    [ -f "$abi_file" ] || return 0
+
+    if ! command -v readelf >/dev/null 2>&1; then
+        echo "[Fire4Nix] C++ ABI requirements unverified: readelf unavailable" >&2
+        return 0
+    fi
+    local system_cpp="" cpp_path
+    for cpp_path in /usr/lib/libstdc++.so.6 /usr/lib64/libstdc++.so.6 /lib/libstdc++.so.6 \
+        /lib64/libstdc++.so.6 /usr/lib/aarch64-linux-gnu/libstdc++.so.6 \
+        /lib/aarch64-linux-gnu/libstdc++.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6; do
+        if [ -f "$cpp_path" ]; then system_cpp="$cpp_path"; break; fi
+    done
+    if [ -z "$system_cpp" ]; then
+        echo "[Fire4Nix] C++ ABI requirements unverified: system libstdc++ not found in known paths" >&2
+        return 0
+    fi
+
+    local provided family requirement versions maximum
+    provided="$(readelf --version-info "$system_cpp" 2>/dev/null)" || {
+        echo "[Fire4Nix] C++ ABI requirements unverified: readelf cannot inspect system libstdc++" >&2
+        return 0
+    }
+    for family in GLIBCXX CXXABI; do
+        requirement="$(sed -n "s/.*\"$family\":[[:space:]]*\"\(${family}_[0-9.]*\)\".*/\1/p" "$abi_file" 2>/dev/null | head -1)"
+        [ -n "$requirement" ] || continue
+        versions="$(printf '%s\n' "$provided" | grep -Eo "${family}_[0-9]+([.][0-9]+)+" || true)"
+        maximum="$(printf '%s\n' "$versions" | awk -F_ '{ print $2 }' | awk -F. '
+            NF>=2 {
+                a=$1+0; b=$2+0; c=$3+0; d=$4+0
+                if (!seen || a>aa || (a==aa && b>bb) ||
+                    (a==aa && b==bb && c>cc) ||
+                    (a==aa && b==bb && c==cc && d>dd)) {
+                    aa=a; bb=b; cc=c; dd=d; best=$0; seen=1
+                }
+            }
+            END { if (seen) print best }
+        ')"
+        if [ -z "$maximum" ]; then
+            echo "[Fire4Nix] C++ ABI $family unverified: no versions in system library" >&2
+            continue
+        fi
+        if ! awk -v need="${requirement#*_}" -v host="$maximum" 'BEGIN {
+            split(need,n,"."); split(host,h,".")
+            for (i=1; i<=4; i++) {
+                if ((n[i]+0)>(h[i]+0)) exit 1
+                if ((n[i]+0)<(h[i]+0)) exit 0
+            }
+            exit 0
+        }'; then
+            echo "[Fire4Nix] ERROR: portable WPE requires $requirement but ROCKNIX has ${family}_$maximum" >&2
+            return 1
+        fi
+    done
+    return 0
+}
+
 fire4nix_activate_bundled_wpe_runtime() {
     local root="${FIRE4NIX_BUNDLED_WPE_ROOT:-${FIRE4NIX_HOME:-$APP_DIR}/runtime/aarch64}"
     if [ ! -d "$root" ]; then
@@ -874,6 +936,9 @@ fire4nix_activate_bundled_wpe_runtime() {
     # Reject known incompatible libc before touching the process/library
     # loader environment; Cog fallback remains available.
     if ! fire4nix_portable_wpe_glibc_preflight; then
+        return 1
+    fi
+    if ! fire4nix_portable_wpe_cpp_abi_preflight; then
         return 1
     fi
 
