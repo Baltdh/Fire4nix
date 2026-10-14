@@ -62,8 +62,20 @@ def main():
         require(baseline.returncode == 0, "baseline candidate failed: " + baseline.stderr)
         candidate = stage_dir / "Fire4Nix-ROCKNIX-Tools-CANDIDATE"
         out = root / "core-out"
+        closure = {
+            "schema": "fire4nix-wpe-dependency-closure-v1",
+            "expected_elf_machine": 183,
+            "qualification": "Debian ARM64 build origin; ROCKNIX UNVERIFIED",
+            "components": {role: {} for role in ROLES},
+            "all_system_sonames": ["libc.so.6", "libextra.so.2"],
+            "transitive_only_sonames": ["libextra.so.2"],
+            "build_provider_paths": {"libc.so.6": "/usr/lib/libc.so.6",
+                                     "libextra.so.2": "/usr/lib/libextra.so.2"},
+        }
+        closure_path = root / "closure.json"
+        closure_path.write_text(json.dumps(closure))
         options = ("--candidate", candidate, "--webkit", library, "--process-dir", proc,
-                   "--out", out)
+                   "--closure", closure_path, "--out", out)
         success = run(sys.executable, BUILDER, *options)
         require(success.returncode == 0, "WPE core stage failed: " + success.stderr)
         archive = out / "Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip"
@@ -89,6 +101,13 @@ def main():
             require("unset WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS" in smoke_content,
                     "device smoke must strip inherited sandbox override")
             require("--exit-after-load" in smoke_content, "device smoke missing termination protocol")
+            closure_data = json.loads(z.read(target.name + "/WPE-CORE-DEPENDENCY-CLOSURE.json"))
+            require(closure_data["schema"] == "fire4nix-wpe-dependency-closure-v1",
+                    "closure schema missing")
+            all_names = z.read(target.name + "/WPE-CORE-ALL-NEEDED.txt").decode().splitlines()
+            only_transitive = z.read(target.name + "/WPE-CORE-TRANSITIVE-NEEDED.txt").decode().splitlines()
+            require(all_names == ["libc.so.6", "libextra.so.2"], "full dependency names missing")
+            require(only_transitive == ["libextra.so.2"], "transitive-only names missing")
             needed_text = z.read(target.name + "/WPE-CORE-NEEDED.txt").decode().splitlines()
             require("libc.so.6" in needed_text, "missing plain-text system dependency")
             needed = json.loads(z.read(target.name + "/WPE-CORE-SYSTEM-DEPENDENCIES.json"))
@@ -106,6 +125,20 @@ def main():
         require(check.returncode == 0, "invalid runtime integrity manifest")
         check = run("bash", "-c", 'cd "$1" && sha256sum -c SHA256SUMS', "bash", target)
         require(check.returncode == 0, "invalid outer integrity manifest")
+        # No unsanitized path or incomplete closure may enter a signed candidate.
+        wrong_closure = dict(closure)
+        wrong_closure["expected_elf_machine"] = 62
+        closure_path.write_text(json.dumps(wrong_closure))
+        rejected = run(sys.executable, BUILDER, *options)
+        require(rejected.returncode != 0 and "closure schema or architecture" in rejected.stderr,
+                "foreign-architecture closure accepted")
+        wrong_closure["expected_elf_machine"] = 183
+        wrong_closure["all_system_sonames"] = ["lib../../evil.so"]
+        closure_path.write_text(json.dumps(wrong_closure))
+        rejected = run(sys.executable, BUILDER, *options)
+        require(rejected.returncode != 0 and "invalid or duplicate SONAME" in rejected.stderr,
+                "unsafe SONAME accepted in closure")
+        closure_path.write_text(json.dumps(closure))
         shutil.copy2(source, proc / "WPEWebProcess")
         with (proc / "WPEWebProcess").open("ab") as f:
             f.write(b"tampering!")
@@ -115,7 +148,7 @@ def main():
         (proc / "WPENetworkProcess").unlink()
         missing = run(sys.executable, BUILDER, *options)
         require(missing.returncode != 0, "missing helper process accepted")
-        print("PASS: core bundle ZIP, ELF/ABI checks, runtime checksums, warnings, tampering and missing process")
+        print("PASS: WPE Core ZIP, closure inventory, tampering, ELF/ABI, checksums and subprocess validation")
 
 
 if __name__ == "__main__":
