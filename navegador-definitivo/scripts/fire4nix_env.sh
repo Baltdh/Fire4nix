@@ -803,7 +803,16 @@ fire4nix_portable_wpe_cpp_abi_preflight() {
 }
 
 fire4nix_activate_bundled_wpe_runtime() {
-    local root="${FIRE4NIX_BUNDLED_WPE_ROOT:-${FIRE4NIX_HOME:-$APP_DIR}/runtime/aarch64}"
+    local app_root="${FIRE4NIX_HOME:-$APP_DIR}"
+    local root="${FIRE4NIX_BUNDLED_WPE_ROOT:-$app_root/runtime/aarch64}"
+    # Physical R36H logs (2026-10-14) show runtime/lib directly, not
+    # runtime/aarch64/lib. Accept both verified layouts without moving files.
+    if [ -z "${FIRE4NIX_BUNDLED_WPE_ROOT:-}" ] && [ ! -d "$root" ] &&
+       [ -d "$app_root/runtime/lib" ] &&
+       [ -d "$app_root/runtime/libexec/wpe-webkit-2.0" ]; then
+        root="$app_root/runtime"
+        echo "[Fire4Nix] detected ROCKNIX legacy WPE layout: $root" >&2
+    fi
     if [ ! -d "$root" ]; then
         if [ -n "${FIRE4NIX_BUNDLED_WPE_ROOT:-}" ]; then
             echo "[Fire4Nix] ERROR: explicitly selected WPE runtime is missing: $root" >&2
@@ -946,6 +955,25 @@ fire4nix_activate_bundled_wpe_runtime() {
     # mode. Setting it alone does not patch an unmodified WebKit release.
     export WEBKIT_EXEC_PATH="$process_dir"
     export LD_LIBRARY_PATH="$lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    # A missing transitive shared library previously manifested as a silent
+    # SIGSEGV or generic Cog exit=127. Check the complete direct ELF loader
+    # resolution for the actual ARM64 executable, and preserve details in log.
+    if command -v ldd >/dev/null 2>&1; then
+        local binary_for_ldd="${FIRE4NIX_WPE_PLATFORM_BINARY:-}"
+        if [ -z "$binary_for_ldd" ]; then
+            binary_for_ldd="$(fire4nix_wpe_platform_binary)"
+        fi
+        local dependency_output="" dependency_target
+        for dependency_target in "$binary_for_ldd" "$library" "$process_dir/WPEWebProcess" "$process_dir/WPENetworkProcess" "$process_dir/WPEGPUProcess"; do
+            [ -f "$dependency_target" ] || continue
+            dependency_output="$(ldd "$dependency_target" 2>&1)" || true
+            if printf '%s\n' "$dependency_output" | grep -q 'not found'; then
+                echo "[Fire4Nix] ERROR: missing runtime dependencies for $dependency_target:" >&2
+                printf '%s\n' "$dependency_output" | grep 'not found' >&2 || true
+                return 1
+            fi
+        done
+    fi
     if [ -d "$lib_dir/gio/modules" ]; then
         export GIO_EXTRA_MODULES="$lib_dir/gio/modules${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
     fi
@@ -1360,6 +1388,10 @@ fire4nix_launch_wpe_platform() {
     fi
 
     if ! command -v cog >/dev/null 2>&1; then
+        if [ -n "${native_binary:-}" ]; then
+            echo "[Fire4Nix] ERROR: WPE exited with $native_status; Cog is not installed. Preserving WPE status." >&2
+            return "$native_status"
+        fi
         echo "[Fire4Nix] ERROR: no native WPE binary and Cog is not installed" >&2
         return 127
     fi
