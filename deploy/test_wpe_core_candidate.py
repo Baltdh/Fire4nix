@@ -82,6 +82,13 @@ def main():
                     "runtime manifest absent from ZIP")
             require(any(n.endswith("WPE-ABI-REQUIREMENTS.json") for n in names),
                     "ABI audit absent from ZIP")
+            smoke = target.name + "/Teste-WPE-No-R36H.sh"
+            require(smoke in names, "offline sandbox-preserving hardware smoke test absent")
+            require(z.getinfo(smoke).external_attr >> 16 & 0o111, "hardware smoke entrypoint not executable")
+            smoke_content = z.read(smoke).decode()
+            require("unset WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS" in smoke_content,
+                    "device smoke must strip inherited sandbox override")
+            require("--exit-after-load" in smoke_content, "device smoke missing termination protocol")
             needed_text = z.read(target.name + "/WPE-CORE-NEEDED.txt").decode().splitlines()
             require("libc.so.6" in needed_text, "missing plain-text system dependency")
             needed = json.loads(z.read(target.name + "/WPE-CORE-SYSTEM-DEPENDENCIES.json"))
