@@ -2,7 +2,7 @@
 # Candidate add-on for app-local libraries. No /usr/lib writes or sandbox bypass.
 set -euo pipefail
 umask 077
-MODE="$1"
+MODE="${1:---check}"
 case "$MODE" in --check|--install) ;; *) echo 'Use: bash Instalar-Complemento-R36H.sh --check|--install'; exit 2 ;; esac
 HERE="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 APP="${FIRE4NIX_APP_DIR:-}"
