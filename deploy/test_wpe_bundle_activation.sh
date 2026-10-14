@@ -69,6 +69,25 @@ PY
 probe > "$TMP/python-manifest.log" 2>&1
 grep -q 'checksum-verified WPE runtime activated' "$TMP/python-manifest.log"
 
+# A known too-old device libc must be rejected *before* LD_LIBRARY_PATH is
+# activated; newer versions must not be erroneously rejected.
+mkdir -p "$TMP/mock-bin"
+cat > "$TMP/mock-bin/getconf" <<'GETCONF'
+#!/bin/sh
+if [ "${1:-}" = GNU_LIBC_VERSION ]; then
+  printf 'glibc %s\n' "${MOCK_GLIBC_VERSION:-2.0}"
+else
+  exit 1
+fi
+GETCONF
+chmod +x "$TMP/mock-bin/getconf"
+printf '%s\n' '{"highest_required_glibc_across_components":"GLIBC_2.38"}' > "$TMP/abi.json"
+PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.0 reject 'host glibc older than WPE core ABI'
+grep -q 'portable WPE requires GLIBC_2.38' "$TMP/rejected.log"
+PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 probe > "$TMP/compatible-glibc.log" 2>&1
+grep -q 'checksum-verified WPE runtime activated' "$TMP/compatible-glibc.log"
+rm -f "$TMP/abi.json"
+
 # All three helper executables are mandatory.
 mv "$TMP/bundle/libexec/wpe-webkit-2.0/WPEGPUProcess" "$TMP/missing-gpu"
 reject 'missing WPEGPUProcess'
@@ -114,4 +133,4 @@ write_manifest
 # Bit flips must fail integrity verification.
 printf X >> "$TMP/bundle/lib/libWPEWebKit-2.0.so"
 reject 'checksum mismatch'
-printf '%s\n' 'PASS: optional WPE runtime activation, architecture, integrity, symlink and libc safety checks'
+printf '%s\n' 'PASS: WPE runtime activation, ABI fail-fast, architecture, Python checksums, symlink and libc safety checks'
