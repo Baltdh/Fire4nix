@@ -28,12 +28,13 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE/Fire4Nix/bin" "$STAGE/Fire4Nix/scripts"
 cp "$ROOT/deploy/Fire4Nix-ROCKNIX.sh" "$STAGE/Start-Fire4Nix.sh"
 cp "$ROOT/deploy/Fire4Nix-WPE-Diagnostico.sh" "$STAGE/Diagnostico.sh"
+cp "$ROOT/deploy/Fire4Nix-WPE-Teste-Real.sh" "$STAGE/Teste-WPE-No-R36H.sh"
 cp "$ROOT/navegador-definitivo/Fire4Nix.sh" "$STAGE/Fire4Nix/Fire4Nix.sh"
 for script in fire4nix_env.sh run_browser.sh wpe_platform_launch.sh wpe_cog_launch.sh; do
     cp "$ROOT/navegador-definitivo/scripts/$script" "$STAGE/Fire4Nix/scripts/$script"
 done
 cp "$BINARY" "$STAGE/Fire4Nix/bin/fire4nix-wpe-platform"
-chmod 755 "$STAGE/Start-Fire4Nix.sh" "$STAGE/Diagnostico.sh" \
+chmod 755 "$STAGE/Start-Fire4Nix.sh" "$STAGE/Diagnostico.sh" "$STAGE/Teste-WPE-No-R36H.sh" \
     "$STAGE/Fire4Nix/Fire4Nix.sh" "$STAGE/Fire4Nix/bin/fire4nix-wpe-platform" \
     "$STAGE/Fire4Nix/scripts/"*.sh
 
@@ -50,6 +51,9 @@ Debian e NAO significa que elas estejam instaladas no dispositivo.
 
 1. Extraia a pasta Fire4Nix-ROCKNIX-Tools-CANDIDATE para a pasta Tools.
 2. Execute Diagnostico.sh e consulte /storage/fire4nix-wpe-diagnostic.log.
+   Para testar o motor WPE sem Cog: execute Teste-WPE-No-R36H.sh.
+   Esse teste usa somente HTML local e nao desativa o sandbox do WebKit.
+   O resultado fica em /storage/fire4nix-device-tests/ ou /tmp.
 3. Se o runtime WebKit ja estiver instalado e compativel no aparelho,
    experimente Start-Fire4Nix.sh. Caso contrario, a inicializacao podera
    falhar ou tentar Cog, caso ele esteja presente.
