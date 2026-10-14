@@ -942,6 +942,33 @@ fire4nix_activate_bundled_wpe_runtime() {
         return 1
     fi
 
+    # Optional R36H add-on is separately integrity-pinned. The original
+    # SHA256SUMS is never rewritten when the add-on is installed.
+    if [ -e "$root/SHA256SUMS-ADDON" ] || [ -L "$root/SHA256SUMS-ADDON" ]; then
+        if [ ! -f "$root/SHA256SUMS-ADDON" ] || [ -L "$root/SHA256SUMS-ADDON" ]; then
+            echo "[Fire4Nix] ERROR: invalid add-on checksum manifest" >&2
+            return 1
+        fi
+        if ! awk '
+            NF {
+                hash=substr($0,1,64); separator=substr($0,65,2); filename=substr($0,67);
+                if (length(hash)!=64 || hash ~ /[^0-9a-f]/ || separator!="  " ||
+                    filename !~ /^lib\/[A-Za-z0-9_.+-]+$/ ||
+                    filename ~ /\/\.\./ || filename ~ /\\/) bad=1;
+                entries++;
+            }
+            END { if (bad || entries != 62) exit 1 }
+        ' "$root/SHA256SUMS-ADDON" || {
+            echo "[Fire4Nix] ERROR: malformed WPE add-on integrity manifest" >&2
+            return 1
+        }
+        if ! (cd "$root" && sha256sum -c SHA256SUMS-ADDON >/dev/null 2>&1); then
+            echo "[Fire4Nix] ERROR: WPE add-on integrity check failed" >&2
+            return 1
+        fi
+        echo "[Fire4Nix] WPE add-on integrity verified (62 libraries)" >&2
+    fi
+
     # Reject known incompatible libc before touching the process/library
     # loader environment; Cog fallback remains available.
     if ! fire4nix_portable_wpe_glibc_preflight; then
