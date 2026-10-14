@@ -36,7 +36,7 @@ def check_elf(path, name):
         raise ValueError(f"ELF SONAME mismatch for {name}: {path}")
 
 
-def stage(closure, wanted, out, helper):
+def stage(closure, wanted, out, helper, bwrap=None):
     data = json.loads(closure.read_text())
     if data.get("schema") != "fire4nix-wpe-dependency-closure-v1" or data.get("expected_elf_machine") != 183:
         raise ValueError("invalid build-origin dependency closure")
@@ -59,6 +59,14 @@ def stage(closure, wanted, out, helper):
             raise ValueError(f"missing CI provider for {name}")
         check_elf(source, name)
         shutil.copyfile(source, libs / name)
+    if bwrap is not None:
+        with bwrap.open("rb") as handle:
+            header = handle.read(20)
+        if len(header) < 20 or header[:6] != b"\\x7fELF\\x02\\x01" or header[18:20] != b"\\xb7\\x00":
+            raise ValueError("Bubblewrap is not ARM64 ELF64")
+        (root / "bin").mkdir()
+        shutil.copyfile(bwrap, root / "bin/bwrap")
+        (root / "bin/bwrap").chmod(0o755)
     install = helper.read_text()
     (root / "Instalar-Complemento-R36H.sh").write_text(install)
     (root / "Instalar-Complemento-R36H.sh").chmod(0o755)
@@ -89,9 +97,10 @@ def main():
     parser = argparse.ArgumentParser()
     for arg in ("closure", "wanted", "out", "helper"):
         parser.add_argument("--" + arg, required=True, type=Path)
+    parser.add_argument("--bwrap", type=Path)
     args = parser.parse_args()
     try:
-        stage(args.closure, args.wanted, args.out, args.helper)
+        stage(args.closure, args.wanted, args.out, args.helper, args.bwrap)
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         print("ADDON BUILD BLOCKED: " + str(exc), file=sys.stderr)
         return 1
