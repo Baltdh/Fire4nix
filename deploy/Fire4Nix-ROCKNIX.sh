@@ -32,16 +32,24 @@ find_app() {
 
   script_dir=$(resolve_launcher_dir "$0") || return 1
   for candidate in \
-    "$script_dir" \
-    "$script_dir/navegador-definitivo" \
     "$script_dir/Fire4Nix" \
-    "$script_dir/../navegador-definitivo" \
+    "$script_dir/navegador-definitivo" \
     "$script_dir/../Fire4Nix" \
+    "$script_dir/../navegador-definitivo" \
+    /storage/games-internal/roms/tools/Fire4Nix \
+    /storage/games-internal/roms/tools/navegador-definitivo \
+    /storage/games-external/roms/tools/Fire4Nix \
     /storage/roms/ports/Fire4Nix \
     /storage/roms/ports/fire4nix \
     /storage/roms/ports/Fire4nix \
     /storage/roms/ports/navegador-definitivo \
-    /storage/roms/tools/Fire4Nix; do
+    /storage/roms/tools/Fire4Nix \
+    "$script_dir"; do
+    # If this launcher was named Fire4Nix.sh in the Tools directory,
+    # don't re-enter the same file as if it were the browser application.
+    if [ "$candidate" = "$script_dir" ] && [ "$(basename -- "$0")" = "Fire4Nix.sh" ]; then
+      continue
+    fi
     if [ -f "$candidate/Fire4Nix.sh" ]; then
       (CDPATH="" cd -- "$candidate" && pwd -P)
       return $?
@@ -59,7 +67,13 @@ APP=$(find_app) || APP=""
   echo "=== Fire4Nix $(date) ==="
   echo "arch=$(uname -m) uid=$(id -u) app=$APP"
   if [ -z "$APP" ] || [ ! -f "$APP/Fire4Nix.sh" ]; then
-    echo "ERROR: Fire4Nix.sh not found. Keep the launcher next to the application folder, or set FIRE4NIX_APP_DIR."
+    echo "ERROR: Fire4Nix application was not found in Tools."
+    echo "Expected a sibling folder named Fire4Nix containing Fire4Nix.sh."
+    echo "Detected Tools path: $(resolve_launcher_dir "$0" 2>/dev/null || echo unknown)"
+    exit 3
+  fi
+  if [ "$(basename -- "$0")" = "Fire4Nix.sh" ] && [ "$APP/Fire4Nix.sh" = "$(resolve_launcher_dir "$0" 2>/dev/null)/Fire4Nix.sh" ]; then
+    echo "ERROR: recursive launcher path detected; refusing to call the same Tools script."
     exit 3
   fi
   if ! command -v bash >/dev/null 2>&1; then
