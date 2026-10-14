@@ -18,5 +18,11 @@
 - Offer one-time SHA256 baseline builder for the installed runtime, explicitly noting this is not publisher authenticity validation.
 - Keep system libc/loader and WebKit sandbox unchanged.
 
+## Additional finding from matching WPE ELF and ROCKNIX library inventory
+- Read-only `readelf -d` inspection of the bundled `libWPEWebKit-2.0.so.1` confirms a direct `DT_NEEDED libxml2.so.2`; the active ROCKNIX system library has SONAME `libxml2.so.16`.
+- The device's collected library inventory explicitly contains `/usr/lib/compat/libxml2.so.2` (but `ldconfig -p` did not list `libxml2.so.2` in its default cache). The add-on's missing-libraries set therefore did not include that library.
+- Commit `24207250` adds narrowly scoped discovery of an ARM64, SONAME-matched `libxml2.so.2` via ROCKNIX's compatibility path **for native WPE only**; this does not replace system libraries and does not affect Terminal-R36 or Cog.
+- The regression checks also reject a deliberately mismatched ELF machine or SONAME. The simulated tests do **not** prove the real WPE works until an ARM64 device smoke passes with sandbox on.
+
 ## Still outstanding
 Validate the complete runtime dependency closure against ROCKNIX, provide missing ARM64 libs safely without overwriting graphics/system libraries, test sandbox and hardware WPE Wayland display. If 139 persists, capture a native backtrace. Do not claim the browser works on the R36H until a real page loads securely.
