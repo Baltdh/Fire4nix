@@ -799,7 +799,7 @@ fire4nix_activate_bundled_wpe_runtime() {
             if (length(hash)!=64 || hash ~ /[^0-9a-f]/ || separator!="  " ||
                 filename !~ /^(lib|libexec|share)\// ||
                 filename ~ /(^|\/)\.\.(\/|$)/ || filename ~ /\\/ ||
-                filename ~ /(^|\/)\.\/(|$)/) bad=1;
+                filename ~ /(^|\/)\.(\/|$)/) bad=1;
             entries++;
         }
         END { if (bad || !entries) exit 1 }
