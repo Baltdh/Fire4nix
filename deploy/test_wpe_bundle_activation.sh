@@ -54,6 +54,17 @@ reject() {
 write_manifest
 probe > "$TMP/valid.log" 2>&1
 grep -q 'checksum-verified WPE runtime activated' "$TMP/valid.log"
+# Physical R36H logs use runtime/lib, not runtime/aarch64/lib.
+ln -s "$TMP/bundle" "$TMP/app/runtime"
+env -u FIRE4NIX_BUNDLED_WPE_ROOT FIRE4NIX_HOME="$TMP/app" bash -c '
+    APP_DIR="$1"
+    source "$2"
+    fire4nix_activate_bundled_wpe_runtime
+    test "$FIRE4NIX_WPE_RUNTIME_ACTIVATED" = 1
+    test "$WEBKIT_EXEC_PATH" = "$3/libexec/wpe-webkit-2.0"
+' bash "$TMP/app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh" "$TMP/bundle" > "$TMP/legacy.log" 2>&1
+grep -q 'detected ROCKNIX legacy WPE layout:' "$TMP/legacy.log"
+grep -q 'checksum-verified WPE runtime activated:' "$TMP/legacy.log"
 # The production core ZIP uses a Python-generated checksum manifest rather
 # than GNU sha256sum output. Both must pass the same safe path validation.
 python3 - "$TMP/bundle" <<'PY'
@@ -166,4 +177,4 @@ write_manifest
 # Bit flips must fail integrity verification.
 printf X >> "$TMP/bundle/lib/libWPEWebKit-2.0.so"
 reject 'checksum mismatch'
-printf '%s\n' 'PASS: WPE runtime activation, GLIBC/GLIBCXX/CXXABI ABI fail-fast, architecture, checksums, symlink and libc safety checks'
+printf '%s\n' 'PASS: WPE runtime activation, verified legacy layout, GLIBC/GLIBCXX/CXXABI, checksums, symlinks and libc checks'
