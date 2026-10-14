@@ -681,6 +681,29 @@ jobs:
               assert archive.read(root.name + '/WPE-CORE-ALL-NEEDED.txt').decode().splitlines() == all_names
           print('WPE Core transitive dependency evidence verified:', len(all_names), 'system SONAMEs')
           PY
+      - name: Stage integrated R36H WPE and app-local add-on (EXPERIMENTAL)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          python3 ../deploy/stage_r36h_integrated_wpe.py \
+            --core dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL \
+            --addon dist/r36h-missing-libs/Fire4Nix-R36H-WPE-Libs-EXPERIMENTAL \
+            --smoke ../deploy/Fire4Nix-WPE-Teste-Real.sh \
+            --out dist/r36h-integrated
+          (cd dist/r36h-integrated && sha256sum -c SHA256SUMS)
+          (cd dist/r36h-integrated/Fire4Nix-R36H-TOOLS-INTEGRATED-EXPERIMENTAL && sha256sum -c SHA256SUMS)
+          (cd dist/r36h-integrated/Fire4Nix-R36H-TOOLS-INTEGRATED-EXPERIMENTAL/Fire4Nix/runtime/aarch64 && sha256sum -c SHA256SUMS && sha256sum -c SHA256SUMS-ADDON)
+          test -s dist/r36h-integrated/Fire4Nix-R36H-TOOLS-INTEGRATED-EXPERIMENTAL.zip
+          echo 'EXPERIMENTAL: neither hardware Wayland nor sandbox is certified.'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-R36H-OneFile-EXPERIMENTAL
+          path: |
+            navegador-definitivo/dist/r36h-integrated/Fire4Nix-R36H-TOOLS-INTEGRATED-EXPERIMENTAL.zip
+            navegador-definitivo/dist/r36h-integrated/STATUS.txt
+            navegador-definitivo/dist/r36h-integrated/SHA256SUMS
+          if-no-files-found: warn
       - name: Exercise packaged WPE Core on ARM64 (CI diagnostics only)
         working-directory: navegador-definitivo
         run: |
