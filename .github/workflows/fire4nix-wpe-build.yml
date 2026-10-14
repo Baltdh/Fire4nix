@@ -601,6 +601,73 @@ jobs:
           sha256sum -c SHA256SUMS
           test -s Fire4Nix-ROCKNIX-ARM64-launcher-only-EXPERIMENTAL.zip
           echo 'NOTE: this archive does not contain WPE runtime libraries. NOT A RELEASE.'
+      - name: Stage WPE Core experimental ZIP from matching ELF components
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          webkit="$(readlink -f "$(pkg-config --variable=libdir wpe-webkit-2.0)/libWPEWebKit-2.0.so")"
+          python3 ../deploy/stage_wpe_core_candidate.py \
+            --candidate dist/rocknix-candidate/Fire4Nix-ROCKNIX-Tools-CANDIDATE \
+            --webkit "$webkit" \
+            --process-dir /usr/libexec/wpe-webkit-2.0 \
+            --out dist/wpe-core
+          test -s dist/wpe-core/Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip
+          (cd dist/wpe-core && sha256sum -c SHA256SUMS)
+          (cd dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL && sha256sum -c SHA256SUMS)
+          (cd dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL/Fire4Nix/runtime/aarch64 && sha256sum -c SHA256SUMS)
+      - name: Exercise packaged WPE Core on ARM64 (CI diagnostics only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          stage="$(pwd)/dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL/Fire4Nix"
+          export APP_DIR="$stage"
+          export FIRE4NIX_HOME="$stage"
+          export FIRE4NIX_WPE_PLATFORM_BINARY="$stage/bin/fire4nix-wpe-platform"
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/runtime"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/xdg"
+          mkdir -p "$FIRE4NIX_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          printf '%s\n' '<!doctype html><html><title>Packaged WPE Core</title><body>Portable Core Test</body></html>' > dist/wpe-core/smoke.html
+          local_url="file://$(pwd)/dist/wpe-core/smoke.html"
+          process_dir="$stage/runtime/aarch64/libexec/wpe-webkit-2.0"
+          library="$stage/runtime/aarch64/lib/libWPEWebKit-2.0.so"
+          # NO sandbox bypass is shipped. Diagnostic exception is scoped to
+          # local HTML inside GitHub CI to work around blocked user namespaces.
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=headless \
+            LD_DEBUG=libs LD_DEBUG_OUTPUT="$(pwd)/dist/wpe-core/smoke/ld" \
+            timeout 30s strace -ff -e trace=execve \
+              -o dist/wpe-core/smoke/exec \
+              bash -c 'source "$APP_DIR/scripts/fire4nix_env.sh"; fire4nix_launch_wpe_platform "$1" --headless --exit-after-load' bash "$local_url" \
+                > dist/wpe-core/smoke/launcher.log 2>&1
+          status=$?
+          set -e
+          echo "Packaged WPE Core CI-only launch exit: $status" > dist/wpe-core/smoke/RESULT.txt
+          if [ "$status" -eq 0 ] &&
+             grep -q 'checksum-verified WPE runtime activated:' dist/wpe-core/smoke/launcher.log &&
+             grep -q 'Fire4Nix WPE finished:' dist/wpe-core/smoke/launcher.log &&
+             grep -Fh "execve(\"$process_dir/WPEWebProcess\"" dist/wpe-core/smoke/exec.* >/dev/null 2>&1 &&
+             grep -Fh "$library" dist/wpe-core/smoke/ld.* > dist/wpe-core/smoke/LOADER-EVIDENCE.txt 2>/dev/null; then
+            echo 'DIAGNOSTIC PASS: packaged checksum-verified WPE Core loaded local HTML and relocated BOTH library and WebProcess.' >> dist/wpe-core/smoke/RESULT.txt
+          else
+            echo 'DIAGNOSTIC FAIL: packaged WPE core end-to-end relocation not verified.' >> dist/wpe-core/smoke/RESULT.txt
+          fi
+          rm -f dist/wpe-core/smoke/ld.*
+          cat dist/wpe-core/smoke/RESULT.txt
+          tail -40 dist/wpe-core/smoke/launcher.log
+          # This is NOT a complete runtime and NOT a ROCKNIX hardware test.
+          # A failing diagnostic must not silently qualify a release.
+          grep -q 'DIAGNOSTIC PASS:' dist/wpe-core/smoke/RESULT.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-ROCKNIX-ARM64-WPE-Core-INCOMPLETE-EXPERIMENTAL
+          path: |
+            navegador-definitivo/dist/wpe-core/Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip
+            navegador-definitivo/dist/wpe-core/SHA256SUMS
+            navegador-definitivo/dist/wpe-core/STATUS.txt
+            navegador-definitivo/dist/wpe-core/smoke/RESULT.txt
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-ROCKNIX-ARM64-Tools-launcher-only-EXPERIMENTAL
