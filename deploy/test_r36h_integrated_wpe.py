@@ -38,7 +38,7 @@ def main():
         binpath.parent.mkdir(parents=True)
         binpath.write_text("#!/bin/sh\nexit 0\n")
         mock_arm64(core / "Fire4Nix" / "bin" / "fire4nix-wpe-platform")
-        core_files = [runtime / "lib" / "libWPEWebKit-2.0.so"] + [
+        core_files = [runtime / "lib" / "libWPEWebKit-2.0.so.1"] + [
             runtime / "libexec" / "wpe-webkit-2.0" / name
             for name in mod.HELPERS
         ]
