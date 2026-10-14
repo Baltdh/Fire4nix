@@ -802,6 +802,42 @@ fire4nix_portable_wpe_cpp_abi_preflight() {
     return 0
 }
 
+# ROCKNIX 20261001 (RK3326) has libxml2.so.16 in /usr/lib but
+# provides ABI-compatible libxml2.so.2 separately under /usr/lib/compat.
+# Debian-built WPE 2.54 expects the older SONAME. Restrict this adjustment
+# to the WPE subshell; never replace system libraries or change Cog's loader.
+fire4nix_wpe_enable_rocknix_xml2_compat() {
+    local wpe_library="${1:-}" bundled_lib_dir="${2:-}"
+    [ -f "$wpe_library" ] && [ -d "$bundled_lib_dir" ] || return 0
+    [ ! -f "$bundled_lib_dir/libxml2.so.2" ] || return 0
+    command -v readelf >/dev/null 2>&1 || return 0
+    if ! readelf -d "$wpe_library" 2>/dev/null | grep -Fq 'Shared library: [libxml2.so.2]'; then
+        return 0
+    fi
+    local candidate="${FIRE4NIX_WPE_COMPAT_LIBXML2:-/usr/lib/compat/libxml2.so.2}"
+    if [ ! -f "$candidate" ]; then
+        echo "[Fire4Nix] WARNING: WPE requires libxml2.so.2; ROCKNIX compat provider missing: $candidate" >&2
+        return 0
+    fi
+    # Do not inject a wrongly named or wrong-architecture object into
+    # LD_LIBRARY_PATH. The following check is static; ldd validates versions.
+    local header machine
+    header="$(LC_ALL=C od -An -tx1 -N6 "$candidate" 2>/dev/null | tr -d '[:space:]')" || return 0
+    machine="$(LC_ALL=C od -An -tx1 -j18 -N2 "$candidate" 2>/dev/null | tr -d '[:space:]')" || return 0
+    if [ "$header" != 7f454c460201 ] || [ "$machine" != b700 ] ||
+       ! readelf -d "$candidate" 2>/dev/null | grep -Fq 'Library soname: [libxml2.so.2]'; then
+        echo "[Fire4Nix] WARNING: ROCKNIX compat libxml2.so.2 is not a matching ARM64 ELF" >&2
+        return 0
+    fi
+    local compat_dir
+    compat_dir="$(CDPATH='' cd -- "$(dirname -- "$candidate")" && pwd -P)" || return 0
+    case ":${LD_LIBRARY_PATH:-}:" in
+        *":$compat_dir:"*) ;;
+        *) export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$compat_dir" ;;
+    esac
+    echo "[Fire4Nix] using ROCKNIX libxml2.so.2 compatibility provider: $candidate" >&2
+}
+
 fire4nix_activate_bundled_wpe_runtime() {
     local app_root="${FIRE4NIX_HOME:-$APP_DIR}"
     local root="${FIRE4NIX_BUNDLED_WPE_ROOT:-$app_root/runtime/aarch64}"
@@ -987,6 +1023,7 @@ fire4nix_activate_bundled_wpe_runtime() {
     # mode. Setting it alone does not patch an unmodified WebKit release.
     export WEBKIT_EXEC_PATH="$process_dir"
     export LD_LIBRARY_PATH="$lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fire4nix_wpe_enable_rocknix_xml2_compat "$library" "$lib_dir"
     # A missing transitive shared library previously manifested as a silent
     # SIGSEGV or generic Cog exit=127. Check the complete direct ELF loader
     # resolution for the actual ARM64 executable, and preserve details in log.
