@@ -38,7 +38,7 @@ probe() {
   FIRE4NIX_BUNDLED_WPE_ROOT="$TMP/bundle" bash -c '
     APP_DIR="$1"
     source "$2"
-    fire4nix_activate_bundled_wpe_runtime
+    fire4nix_activate_bundled_wpe_runtime || exit $?
     test "$FIRE4NIX_WPE_RUNTIME_ACTIVATED" = 1
     test "$WEBKIT_EXEC_PATH" = "$FIRE4NIX_BUNDLED_WPE_ROOT/libexec/wpe-webkit-2.0"
     case "$LD_LIBRARY_PATH" in "$FIRE4NIX_BUNDLED_WPE_ROOT/lib"*) ;; *) exit 1;; esac
@@ -59,7 +59,7 @@ ln -s "$TMP/bundle" "$TMP/app/runtime"
 env -u FIRE4NIX_BUNDLED_WPE_ROOT FIRE4NIX_HOME="$TMP/app" bash -c '
     APP_DIR="$1"
     source "$2"
-    fire4nix_activate_bundled_wpe_runtime
+    fire4nix_activate_bundled_wpe_runtime || exit $?
     test "$FIRE4NIX_WPE_RUNTIME_ACTIVATED" = 1
     test "$WEBKIT_EXEC_PATH" = "$3/libexec/wpe-webkit-2.0"
 ' bash "$TMP/app" "$ROOT/navegador-definitivo/scripts/fire4nix_env.sh" "$TMP/bundle" > "$TMP/legacy.log" 2>&1
