@@ -19,6 +19,7 @@ jobs:
           bash deploy/test_portable_launcher.sh
           bash deploy/test_rocknix_simulation.sh
           bash deploy/test_rocknix_failure_modes.sh
+          bash deploy/test_wayland_bootstrap.sh
           bash deploy/test_engine_entrypoints.sh
           bash deploy/test_wpe_bundle_activation.sh
           bash deploy/test_wpe_environment_isolation.sh
