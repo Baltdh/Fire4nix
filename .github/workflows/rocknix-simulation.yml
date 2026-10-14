@@ -21,6 +21,7 @@ jobs:
           bash deploy/test_rocknix_failure_modes.sh
           bash deploy/test_engine_entrypoints.sh
           bash deploy/test_wpe_bundle_activation.sh
+          bash deploy/test_wpe_environment_isolation.sh
       - name: Publish standalone Tools diagnostic
         if: matrix.os == 'ubuntu-24.04-arm'
         uses: actions/upload-artifact@v4
