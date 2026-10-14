@@ -89,7 +89,7 @@ for src in "$HERE/lib/"*; do
   if [ ! -e "$dest" ]; then
     cp -- "$src" "$dest"
     printf '%s\n' "$dest" >> "$installed_list"
-    chmod 600 "$dest"
+    chmod 644 "$dest"
   fi
 done
 if [ "$HAS_BWRAP" = 1 ]; then
@@ -97,7 +97,7 @@ if [ "$HAS_BWRAP" = 1 ]; then
   if [ ! -e "$ROOT/bin/bwrap" ]; then
     cp -- "$HERE/bin/bwrap" "$ROOT/bin/bwrap"
     printf '%s\n' "$ROOT/bin/bwrap" >> "$installed_list"
-    chmod 700 "$ROOT/bin/bwrap"
+    chmod 755 "$ROOT/bin/bwrap"
   fi
 fi
 ( cd "$ROOT"
