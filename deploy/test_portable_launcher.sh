@@ -40,6 +40,8 @@ mkdir -p "$tmp/Tools/Fire4Nix"
 cp "$root/deploy/Fire4Nix-ROCKNIX.sh" "$tmp/Tools/Fire4Nix/Start.sh"
 cp "$root/deploy/Fire4Nix-WPE-Diagnostico.sh" "$tmp/Tools/Fire4Nix-WPE-Diagnostico.sh"
 cp "$tmp/external/downloads/Fire4Nix/Fire4Nix.sh" "$tmp/Tools/Fire4Nix/Fire4Nix.sh"
+mkdir -p "$tmp/Tools/Fire4Nix/scripts"
+printf '%s\n' '#!/bin/bash' > "$tmp/Tools/Fire4Nix/scripts/run_browser.sh"
 chmod +x "$tmp/Tools/Fire4Nix/Start.sh"
 FIRE4NIX_LAUNCH_LOG="$log" FIRE4NIX_DATA_ROOT="$tmp/data" "$tmp/Tools/Fire4Nix/Start.sh"
 test "$(grep -c 'PORTABLE_TEST_OK' "$log")" -eq 4
@@ -99,4 +101,33 @@ if grep -Fq 'INCOMPATIBLE:' "$tmp/compatible-report.log"; then
   echo 'FAIL: compatible build reported incompatible' >&2
   exit 1
 fi
-echo 'Portable, Tools and ABI compatibility diagnostics passed'
+# Reproduce the actual SD layout reported by the user:
+# games-internal/roms/tools/Fire4Nix.sh (root wrapper) next to Fire4Nix/
+# The wrapper MUST launch the nested app instead of calling itself recursively.
+sd_tools="$tmp/storage/games-internal/roms/tools"
+mkdir -p "$sd_tools/Fire4Nix/scripts"
+cp "$root/deploy/Fire4Nix-ROCKNIX.sh" "$sd_tools/Fire4Nix.sh"
+cp "$tmp/external/downloads/Fire4Nix/Fire4Nix.sh" "$sd_tools/Fire4Nix/Fire4Nix.sh"
+printf '%s\n' '#!/bin/bash' > "$sd_tools/Fire4Nix/scripts/run_browser.sh"
+chmod +x "$sd_tools/Fire4Nix.sh"
+FIRE4NIX_LAUNCH_LOG="$tmp/real-layout-launch.log" FIRE4NIX_DATA_ROOT="$tmp/data" \
+    sh "$sd_tools/Fire4Nix.sh"
+grep -F 'PORTABLE_TEST_OK' "$tmp/real-layout-launch.log"
+grep -F 'Browser exit code: 0' "$tmp/real-layout-launch.log"
+grep -F "app=$sd_tools/Fire4Nix" "$tmp/real-layout-launch.log"
+# Diagnostic launched from the same SD Tools root must identify nested app.
+cp "$root/deploy/Fire4Nix-WPE-Diagnostico.sh" "$sd_tools/Fire4Nix-Diagnostico.sh"
+FIRE4NIX_DIAGNOSTIC_LOG="$tmp/real-layout-diagnostic.log" \
+    sh "$sd_tools/Fire4Nix-Diagnostico.sh" > /dev/null
+grep -F "app: $sd_tools/Fire4Nix" "$tmp/real-layout-diagnostic.log"
+grep -F 'app scripts/run_browser.sh: OK' "$tmp/real-layout-diagnostic.log"
+# No nested browser means return an explicit failure instead of self-executing
+# the Tools root Fire4Nix.sh forever.
+rm "$sd_tools/Fire4Nix/Fire4Nix.sh"
+if FIRE4NIX_LAUNCH_LOG="$tmp/missing-nested.log" FIRE4NIX_DATA_ROOT="$tmp/data" \
+    sh "$sd_tools/Fire4Nix.sh"; then
+  echo 'FAIL: root launcher ran without nested browser app' >&2
+  exit 1
+fi
+grep -F 'ERROR: Fire4Nix application was not found in Tools' "$tmp/missing-nested.log"
+echo 'Portable launcher, exact games-internal Tools layout, and ABI diagnostics passed'
