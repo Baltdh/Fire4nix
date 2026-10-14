@@ -28,6 +28,13 @@ jobs:
           name: Fire4Nix-ROCKNIX-Tools-Diagnostico
           path: deploy/Fire4Nix-WPE-Diagnostico.sh
           if-no-files-found: error
+      - name: Publish offline WPE hardware smoke test for Tools
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-Tools-Teste-WPE-Real
+          path: deploy/Fire4Nix-WPE-Teste-Real.sh
+          if-no-files-found: error
       - name: Inspect official ROCKNIX build sources
         run: |
           git clone --depth 1 --filter=blob:none --sparse --branch next https://github.com/ROCKNIX/distribution.git /tmp/rocknix
