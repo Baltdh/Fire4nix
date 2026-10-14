@@ -49,7 +49,17 @@ fi
 chmod 700 "$BASE" 2>/dev/null || true
 if ! command -v timeout >/dev/null 2>&1 ||
    ! command -v mktemp >/dev/null 2>&1; then
-    echo 'ERROR: timeout and mktemp are required to run a bounded device test' >&2
+    # A Tools-launched terminal may close immediately. Save this failure even
+    # when mktemp is unavailable, so the user can inspect it afterward.
+    error_report="$BASE/PREFLIGHT-ERROR.txt"
+    {
+        echo 'Fire4Nix WPE device preflight FAILED'
+        echo 'Missing required timeout or mktemp command; browser NOT started'
+        echo "timeout: $(command -v timeout 2>/dev/null || echo MISSING)"
+        echo "mktemp: $(command -v mktemp 2>/dev/null || echo MISSING)"
+    } > "$error_report"
+    cat "$error_report" >&2
+    echo "Error report saved: $error_report" >&2
     exit 2
 fi
 RUN="$(mktemp -d "$BASE/test-$MODE.XXXXXXXX")" || exit 2
