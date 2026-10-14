@@ -9,20 +9,25 @@ find_app_for_diagnostic() {
  fi
  script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P)" || script_dir=.
  for candidate in \
-   "$script_dir" \
    "$script_dir/Fire4Nix" \
    "$script_dir/navegador-definitivo" \
    "$script_dir/../Fire4Nix" \
    "$script_dir/../navegador-definitivo" \
+   /storage/games-internal/roms/tools/Fire4Nix \
+   /storage/games-internal/roms/tools/navegador-definitivo \
+   /storage/games-external/roms/tools/Fire4Nix \
    /storage/roms/tools/Fire4Nix \
    /storage/roms/Tools/Fire4Nix \
-   /storage/roms/ports/Fire4Nix; do
-   if [ -f "$candidate/Fire4Nix.sh" ]; then
+   /storage/roms/ports/Fire4Nix \
+   "$script_dir"; do
+   # A Tools-root Fire4Nix.sh may be the launcher, not the browser.
+   # Prefer the actual application directory with scripts/run_browser.sh.
+   if [ -f "$candidate/Fire4Nix.sh" ] && [ -f "$candidate/scripts/run_browser.sh" ]; then
      (CDPATH='' cd -- "$candidate" && pwd -P)
      return 0
    fi
  done
- printf '%s\n' /storage/roms/ports/Fire4Nix
+ printf '%s\n' "$script_dir/Fire4Nix"
 }
 run_diagnostic() {
 APP="$(find_app_for_diagnostic)"
@@ -31,6 +36,17 @@ echo "checked_at: $(date 2>/dev/null || printf unknown)"
 echo "kernel: $(uname -r 2>/dev/null || printf unknown)"
 echo "architecture: $(uname -m)"
 echo "app: $APP"
+echo "tools_script: $0"
+if [ -f "$APP/scripts/run_browser.sh" ]; then
+ echo "app scripts/run_browser.sh: OK"
+else
+ echo "app scripts/run_browser.sh: MISSING (launcher-only or incomplete application)"
+fi
+if [ -f "$APP/bin/fire4nix-wpe-platform" ]; then
+ echo "native WPE engine: present"
+else
+ echo "native WPE engine: MISSING"
+fi
 echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-unset}"
 echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset}"
 echo "WPE_PLATFORM=${WPE_PLATFORM:-auto}"
