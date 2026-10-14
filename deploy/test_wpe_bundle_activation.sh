@@ -159,6 +159,24 @@ PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 MOCK_CPP_ABI_MODERN=1 reject 
 grep -q 'requires CXXABI_1.3.15' "$TMP/rejected.log"
 rm -f "$TMP/WPE-ABI-REQUIREMENTS.json"
 
+# Regression for the physical R36H loader failure: a library may exist,
+# yet request an unavailable version of a symbol. The loader error must be
+# reported BEFORE WPE launches or falsely falls back to Cog.
+cat > "$TMP/mock-bin/ldd" <<'LDD'
+#!/bin/sh
+if [ "${MOCK_WPE_BAD_SYMBOL_VERSION:-0}" = 1 ]; then
+  echo '/usr/lib/libstdc++.so.6: version `GLIBCXX_3.4.99\x27 not found (required by libWPEWebKit-2.0.so.1)'
+else
+  echo 'libWPEWebKit-2.0.so.1 => /usr/lib/libWPEWebKit-2.0.so.1 (0x1)'
+fi
+LDD
+chmod +x "$TMP/mock-bin/ldd"
+PATH="$TMP/mock-bin:$PATH" MOCK_WPE_BAD_SYMBOL_VERSION=1 reject 'versioned ELF dependency rejection'
+grep -q 'WPE dynamic loader rejected' "$TMP/rejected.log"
+grep -q 'GLIBCXX_3.4.99' "$TMP/rejected.log"
+PATH="$TMP/mock-bin:$PATH" MOCK_WPE_BAD_SYMBOL_VERSION=0 probe > "$TMP/compatible-loader.log" 2>&1
+grep -q 'checksum-verified WPE runtime activated' "$TMP/compatible-loader.log"
+
 # All three helper executables are mandatory.
 mv "$TMP/bundle/libexec/wpe-webkit-2.0/WPEGPUProcess" "$TMP/missing-gpu"
 reject 'missing WPEGPUProcess'
