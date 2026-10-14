@@ -209,24 +209,41 @@ fi
 if [ -f /proc/sys/user/max_user_namespaces ]; then
  echo "user.max_user_namespaces: $(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo unknown)"
 fi
-if command -v bwrap >/dev/null 2>&1; then
- # This launches only a no-op shell under read-only binds, never the browser.
- # Keep it time-limited on devices providing the standard timeout utility.
+SANDBOX_BINARY="$(command -v bwrap 2>/dev/null || true)"
+SANDBOX_LIBPATH=""
+for bundle in "$APP/runtime/aarch64" "$APP/runtime"; do
+ if [ -x "$bundle/bin/bwrap" ] && [ -d "$bundle/lib" ]; then
+  SANDBOX_BINARY="$bundle/bin/bwrap"
+  SANDBOX_LIBPATH="$bundle/lib"
+  echo "WPE Bubblewrap source: $SANDBOX_BINARY (app-only)"
+  break
+ fi
+done
+if [ -n "$SANDBOX_BINARY" ]; then
+ sandbox_status=0
+ # Diagnostic tests only a no-op user namespace. No browser and no sudo.
  if command -v timeout >/dev/null 2>&1; then
-  timeout 5s bwrap --unshare-user --ro-bind / / -- /bin/sh -c ':' >/dev/null 2>&1
-  sandbox_status=$?
+  if [ -n "$SANDBOX_LIBPATH" ]; then
+   sandbox_detail="$(env LD_LIBRARY_PATH="$SANDBOX_LIBPATH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" timeout 5s "$SANDBOX_BINARY" --unshare-user --ro-bind / / -- /bin/sh -c ':' 2>&1)" || sandbox_status=$?
+  else
+   sandbox_detail="$(timeout 5s "$SANDBOX_BINARY" --unshare-user --ro-bind / / -- /bin/sh -c ':' 2>&1)" || sandbox_status=$?
+  fi
  else
-  bwrap --unshare-user --ro-bind / / -- /bin/sh -c ':' >/dev/null 2>&1
-  sandbox_status=$?
+  if [ -n "$SANDBOX_LIBPATH" ]; then
+   sandbox_detail="$(env LD_LIBRARY_PATH="$SANDBOX_LIBPATH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$SANDBOX_BINARY" --unshare-user --ro-bind / / -- /bin/sh -c ':' 2>&1)" || sandbox_status=$?
+  else
+   sandbox_detail="$("$SANDBOX_BINARY" --unshare-user --ro-bind / / -- /bin/sh -c ':' 2>&1)" || sandbox_status=$?
+  fi
  fi
  if [ "$sandbox_status" -eq 0 ]; then
   echo "WPE Bubblewrap namespace preflight: PASS (not proof of full sandbox)"
  else
   echo "WPE Bubblewrap namespace preflight: FAIL (exit $sandbox_status)"
+  printf '%s\n' "$sandbox_detail" | head -8
   echo "WARNING: sandboxed WebKit subprocess startup remains unverified"
  fi
 else
- echo "WPE Bubblewrap namespace preflight: UNAVAILABLE (bwrap not found)"
+ echo "WPE Bubblewrap namespace preflight: UNAVAILABLE (system and app bwrap missing)"
  echo "WARNING: sandboxed WebKit subprocess startup remains unverified"
 fi
 if [ ! -f "$APP/Fire4Nix.sh" ]; then
