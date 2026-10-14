@@ -21,7 +21,9 @@ O pacote `Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip` é um **experimento 
 3. Execute primeiro `Diagnostico.sh` e verifique `/storage/fire4nix-wpe-diagnostic.log`. Se aparecer `INCOMPATIBLE` ou `not found`, **não instale bibliotecas do Debian no sistema** para contornar o aviso.
 4. Somente se a verificação for compatível, teste `Start-Fire4Nix.sh`. Se ele fechar, consulte os logs do Fire4Nix e envie o relatório de diagnóstico. Procure especialmente os avisos `INCOMPATIBLE` (versões de GLIBC/GLIBCXX/CXXABI) e `NOT FOUND in common paths` (SONAME ainda não localizado; não comprova ausência absoluta).
 
-O inicializador ativa o runtime apenas se os três processos e a biblioteca WPE forem ELF64 ARM64, seus caminhos permanecerem dentro da pasta do aplicativo e os hashes estiverem corretos. Ele não desativa o sandbox.
+O inicializador ativa o runtime apenas se os três processos e a biblioteca WPE forem ELF64 ARM64, seus caminhos permanecerem dentro da pasta do aplicativo, os hashes estiverem corretos e as versões conhecidamente incompatíveis de `GLIBC`, `GLIBCXX` ou `CXXABI` forem rejeitadas. Ele não desativa o sandbox.
+
+O diagnóstico também verifica se há `bwrap` e tenta criar um namespace com um comando sem efeito, limitado a cinco segundos quando `timeout` estiver disponível. O resultado `PASS` não comprova o sandbox completo do WebKit; `FAIL` e `UNAVAILABLE` apontam uma possível causa de falha na abertura. A ausência de `readelf`, `ldconfig` ou alguma biblioteca em locais comuns produz um aviso, não uma conclusão definitiva.
 
 ## Critérios técnicos restantes
 
