@@ -641,6 +641,26 @@ jobs:
           (cd dist/wpe-core && sha256sum -c SHA256SUMS)
           (cd dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL && sha256sum -c SHA256SUMS)
           (cd dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL/Fire4Nix/runtime/aarch64 && sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import zipfile
+          root = Path('dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL')
+          closure = json.loads((root / 'WPE-CORE-DEPENDENCY-CLOSURE.json').read_text())
+          all_names = (root / 'WPE-CORE-ALL-NEEDED.txt').read_text().splitlines()
+          transitive = (root / 'WPE-CORE-TRANSITIVE-NEEDED.txt').read_text().splitlines()
+          assert closure['schema'] == 'fire4nix-wpe-dependency-closure-v1'
+          assert all_names == sorted(closure['all_system_sonames'])
+          assert transitive == sorted(closure['transitive_only_sonames'])
+          assert len(closure['components']) == 5
+          assert 'UNVERIFIED' in closure['qualification']
+          zip_path = Path('dist/wpe-core/Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip')
+          with zipfile.ZipFile(zip_path) as archive:
+              assert archive.testzip() is None
+              assert root.name + '/WPE-CORE-DEPENDENCY-CLOSURE.json' in archive.namelist()
+              assert archive.read(root.name + '/WPE-CORE-ALL-NEEDED.txt').decode().splitlines() == all_names
+          print('WPE Core transitive dependency evidence verified:', len(all_names), 'system SONAMEs')
+          PY
       - name: Exercise packaged WPE Core on ARM64 (CI diagnostics only)
         working-directory: navegador-definitivo
         run: |
