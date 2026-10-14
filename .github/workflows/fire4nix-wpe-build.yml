@@ -617,6 +617,25 @@ jobs:
           assert result["all_system_sonames"]
           assert "UNVERIFIED" in result["qualification"]
           PY
+      - name: Stage R36H missing-dependency add-on (experimental)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          python3 ../deploy/stage_r36h_missing_wpe_libs.py \
+            --closure dist/WPE-DEPENDENCY-CLOSURE.json \
+            --wanted ../diagnostics/r36h-20261014/WPE-SONAMES-AUSENTES-NO-INVENTARIO.txt \
+            --helper ../deploy/Instalar-Complemento-WPE-R36H.sh \
+            --out dist/r36h-missing-libs
+          archive=dist/r36h-missing-libs/Fire4Nix-R36H-WPE-Libs-EXPERIMENTAL.zip
+          test -s "$archive"
+          (cd dist/r36h-missing-libs/Fire4Nix-R36H-WPE-Libs-EXPERIMENTAL && sha256sum -c SHA256SUMS)
+          echo 'EXPERIMENTAL: library add-on is NOT validated on real ROCKNIX'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-R36H-Missing-WPE-Libs-EXPERIMENTAL
+          path: navegador-definitivo/dist/r36h-missing-libs/Fire4Nix-R36H-WPE-Libs-EXPERIMENTAL.zip
+          if-no-files-found: warn
       - name: Stage experimental ARM64 Tools package (launcher only)
         working-directory: navegador-definitivo
         run: |
