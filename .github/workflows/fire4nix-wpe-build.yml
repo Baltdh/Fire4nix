@@ -658,6 +658,44 @@ jobs:
           # This is NOT a complete runtime and NOT a ROCKNIX hardware test.
           # A failing diagnostic must not silently qualify a release.
           grep -q 'DIAGNOSTIC PASS:' dist/wpe-core/smoke/RESULT.txt
+      - name: Exercise actual Tools startup with packaged WPE Core (CI only)
+        working-directory: navegador-definitivo
+        run: |
+          set -eu
+          candidate="$(pwd)/dist/wpe-core/Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL"
+          export FIRE4NIX_HOME="$candidate/Fire4Nix"
+          export FIRE4NIX_APP_DIR="$candidate/Fire4Nix"
+          export FIRE4NIX_WPE_PLATFORM_BINARY="$candidate/Fire4Nix/bin/fire4nix-wpe-platform"
+          export FIRE4NIX_ENGINE=wpe-platform
+          export FIRE4NIX_START_PAGE="file://$(pwd)/dist/wpe-core/smoke.html"
+          export FIRE4NIX_ENGINE_FILE="$(pwd)/dist/wpe-core/smoke/tools-engine.conf"
+          export FIRE4NIX_LAUNCH_LOG="$(pwd)/dist/wpe-core/smoke/tools-launch.log"
+          export FIRE4NIX_ENTRY_LOG="$(pwd)/dist/wpe-core/smoke/tools-entry.log"
+          export FIRE4NIX_CONFIG_DIR="$(pwd)/dist/wpe-core/smoke/tools-config"
+          export FIRE4NIX_DATA_ROOT="$(pwd)/dist/wpe-core/smoke/tools-data"
+          export FIRE4NIX_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/tools-runtime"
+          export FIRE4NIX_LOG_DIR="$(pwd)/dist/wpe-core/smoke/tools-logs"
+          export XDG_RUNTIME_DIR="$(pwd)/dist/wpe-core/smoke/xdg"
+          mkdir -p "$FIRE4NIX_DATA_ROOT" "$FIRE4NIX_LOG_DIR" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          set +e
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WPE_PLATFORM=headless \
+            timeout 25s sh "$candidate/Start-Fire4Nix.sh" --headless --exit-after-load
+          status=$?
+          set -e
+          echo "Tools entrypoint exit status: $status" > dist/wpe-core/smoke/TOOLS-RESULT.txt
+          if [ "$status" -eq 0 ] &&
+             grep -q 'Browser exit code: 0' "$FIRE4NIX_LAUNCH_LOG" &&
+             grep -q 'checksum-verified WPE runtime activated:' "$FIRE4NIX_ENTRY_LOG" &&
+             grep -q 'Fire4Nix WPE finished:' "$FIRE4NIX_ENTRY_LOG"; then
+            echo 'DIAGNOSTIC PASS: actual Tools -> Fire4Nix.sh -> run_browser.sh -> staged WPE Core loaded HTML.' >> dist/wpe-core/smoke/TOOLS-RESULT.txt
+          else
+            echo 'DIAGNOSTIC FAIL: actual Tools entrypoint did not complete WPE navigation.' >> dist/wpe-core/smoke/TOOLS-RESULT.txt
+          fi
+          cat dist/wpe-core/smoke/TOOLS-RESULT.txt
+          tail -45 "$FIRE4NIX_LAUNCH_LOG" 2>/dev/null || true
+          tail -45 "$FIRE4NIX_ENTRY_LOG" 2>/dev/null || true
+          grep -q 'DIAGNOSTIC PASS:' dist/wpe-core/smoke/TOOLS-RESULT.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -667,6 +705,7 @@ jobs:
             navegador-definitivo/dist/wpe-core/SHA256SUMS
             navegador-definitivo/dist/wpe-core/STATUS.txt
             navegador-definitivo/dist/wpe-core/smoke/RESULT.txt
+            navegador-definitivo/dist/wpe-core/smoke/TOOLS-RESULT.txt
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
