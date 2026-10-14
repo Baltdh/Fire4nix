@@ -94,6 +94,8 @@ def stage(core, addon, smoke, dest):
     dest.mkdir(parents=True, exist_ok=True)
     dest = dest.resolve(strict=True)
 
+    if not (core / "Start-Fire4Nix.sh").is_file() or not (core / "Diagnostico.sh").is_file():
+        raise ValueError("core candidate lacks Tools startup and diagnostics")
     if not (core / "Fire4Nix" / "Fire4Nix.sh").is_file():
         raise ValueError("expected WPE Core staging tree, with Fire4Nix/Fire4Nix.sh")
     runtime = core / "Fire4Nix" / "runtime" / "aarch64"
@@ -156,7 +158,7 @@ def stage(core, addon, smoke, dest):
         "O sandbox fica ativo. Nao use sudo ou variaveis de desativacao do sandbox.\n"
         "INCOMPATIBILIDADE POSSVEL: bibliotecas transitorias, GIO, TLS e drivers.\n"
         "NAO foi comprovada abertura no R36H fisico; os testes GitHub nao bastam.\n\n"
-        "1. Extraia esta pasta dentro de /storage/games-internal/roms/tools/.\n"
+        "1. Extraia o ZIP e copie o CONTEUDO desta pasta para /storage/games-internal/roms/tools/.\n"
         "2. Evite misturar com pastas antigas, nem instalar em Tools/Tools.\n"
         "3. Rode Diagnostico.sh. Consulte /storage/fire4nix-wpe-diagnostic.log.\n"
         "4. Rode Testar-WPE-ROCKNIX.sh --headless, depois --wayland.\n"
