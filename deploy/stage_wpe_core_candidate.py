@@ -19,6 +19,9 @@ import zipfile
 PROCESSES = ("WPEWebProcess", "WPENetworkProcess", "WPEGPUProcess")
 ARCHIVE_ROOT = "Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL"
 ARCHIVE_NAME = "Fire4Nix-ROCKNIX-ARM64-WPE-CORE-EXPERIMENTAL.zip"
+# The loader resolves DT_NEEDED by SONAME, not by the developer .so link.
+# FAT/exFAT packages cannot rely on Unix symlinks, so ship the exact name.
+WPE_SONAME = "libWPEWebKit-2.0.so.1"
 
 
 def check_elf(path, machine):
@@ -74,6 +77,10 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine, closure_re
     if not required_roles.issubset(abi.get("components", {})):
         raise ValueError("WPE ABI manifest lacks one or more required ELF roles")
 
+    actual_soname = abi["components"]["WPEWebKit"].get("soname")
+    if actual_soname and actual_soname != [WPE_SONAME]:
+        raise ValueError(f"unexpected WPE SONAME: {actual_soname}")
+
     paths = {"launcher": source / "Fire4Nix" / "bin" / "fire4nix-wpe-platform",
              "WPEWebKit": webkit.resolve(strict=True)}
     paths.update({proc: (process_dir / proc).resolve(strict=True) for proc in PROCESSES})
@@ -92,7 +99,7 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine, closure_re
     exec_dir = runtime / "libexec" / "wpe-webkit-2.0"
     lib.mkdir(parents=True)
     exec_dir.mkdir(parents=True)
-    shutil.copy2(paths["WPEWebKit"], lib / "libWPEWebKit-2.0.so")
+    shutil.copy2(paths["WPEWebKit"], lib / WPE_SONAME)
     for process in PROCESSES:
         dest = exec_dir / process
         shutil.copy2(paths[process], dest)
@@ -102,7 +109,7 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine, closure_re
     # Needed-by records are obtained from the exact matching five ELF files.
     # This inventory deliberately does not claim to resolve transitive
     # dependencies or dynamically loaded graphics/multimedia plugins.
-    provided = {"libWPEWebKit-2.0.so"}
+    provided = {WPE_SONAME}
     direct_needed_by = {
         role: sorted(set(abi["components"][role].get("needed", [])))
         for role in ("launcher", "WPEWebKit", *PROCESSES)
@@ -145,7 +152,7 @@ def stage(source_candidate, webkit, process_dir, output_dir, machine, closure_re
                     for name in all_needed + transitive)):
             raise ValueError("invalid or duplicate SONAME in dependency closure")
         if (set(external) - set(all_needed) or set(transitive) - set(all_needed) or
-                "libWPEWebKit-2.0.so" in all_needed or
+                WPE_SONAME in all_needed or
                 not isinstance(closure.get("qualification"), str) or
                 "UNVERIFIED" not in closure["qualification"]):
             raise ValueError("dependency closure incomplete or incorrectly qualified")
