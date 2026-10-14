@@ -634,6 +634,33 @@ fire4nix_is_legacy_engine_label() {
     esac
     return 1
 }
+# Shared by the normal entrypoint and direct WPE/Cog launchers.
+fire4nix_wayland_socket_exists() { [ -S "$1" ]; }
+fire4nix_wayland_socket_path() {
+    case "${WAYLAND_DISPLAY:-}" in
+        /*) printf '%s\n' "$WAYLAND_DISPLAY" ;;
+        '') return 1 ;;
+        *) printf '%s/%s\n' "${XDG_RUNTIME_DIR:-}" "$WAYLAND_DISPLAY" ;;
+    esac
+}
+fire4nix_recover_wayland_session() {
+    local socket runtime
+    socket="$(fire4nix_wayland_socket_path)" || socket=''
+    if [ -n "$socket" ] && fire4nix_wayland_socket_exists "$socket"; then
+        return 0
+    fi
+    for runtime in "${XDG_RUNTIME_DIR:-/nonexistent}" /var/run/0-runtime-dir "/run/user/$(id -u)"; do
+        for socket in "$runtime"/wayland-*; do
+            fire4nix_wayland_socket_exists "$socket" || continue
+            export XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="${socket##*/}"
+            printf '[Fire4Nix] recovered Wayland socket: %s\n' "$socket" >&2
+            return 0
+        done
+    done
+    # No compositor was found. Do not invent a successful session.
+    return 0
+}
+
 fire4nix_wpe_display_name() {
     case "${FIRE4NIX_WPE_DISPLAY:-auto}" in
         wpe-display-wayland|wayland|wl)
@@ -649,7 +676,7 @@ fire4nix_wpe_display_name() {
             return 0
             ;;
         auto)
-            if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+            if [ -n "${WAYLAND_DISPLAY:-}" ] && fire4nix_wayland_socket_exists "$(fire4nix_wayland_socket_path)"; then
                 printf '%s\n' "wpe-display-wayland"
                 return 0
             fi
@@ -676,7 +703,7 @@ fire4nix_cog_platform_name() {
             return 0
             ;;
         auto)
-            if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+            if [ -n "${WAYLAND_DISPLAY:-}" ] && fire4nix_wayland_socket_exists "$(fire4nix_wayland_socket_path)"; then
                 printf '%s\n' "wl"
                 return 0
             fi
@@ -1360,6 +1387,10 @@ fire4nix_launch_wpe_platform() {
     fi
 
     if ! command -v cog >/dev/null 2>&1; then
+        if [ -n "${native_status:-}" ]; then
+            echo "[Fire4Nix] ERROR: WPE failed (exit $native_status); Cog fallback is not installed" >&2
+            return "$native_status"
+        fi
         echo "[Fire4Nix] ERROR: no native WPE binary and Cog is not installed" >&2
         return 127
     fi
@@ -1795,6 +1826,7 @@ fire4nix_bootstrap_environment() {
         . "$FIRE4NIX_REFERENCE_ENV" 2>/dev/null || true
     fi
     fire4nix_apply_reference_environment "$(fire4nix_resolve_reference_root "$app_dir")"
+    fire4nix_recover_wayland_session
     fire4nix_sync_progress_context
 }
 fire4nix_log_reference_summary() {
