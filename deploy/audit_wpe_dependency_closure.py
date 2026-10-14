@@ -109,7 +109,7 @@ def inspect(roots, manifest, machine):
             "needed": sorted(required),
             "resolved_providers": providers,
         }
-    bundled = {"libWPEWebKit-2.0.so"}
+    bundled = {"libWPEWebKit-2.0.so.1"}  # actual SONAME in DT_NEEDED
     # These are names to check on a matching device, NOT instructions to copy
     # Debian libraries onto ROCKNIX.
     closure = sorted(set(all_sonames) - bundled)
