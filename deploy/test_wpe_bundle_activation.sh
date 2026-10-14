@@ -86,6 +86,39 @@ PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.0 reject 'host glibc older than 
 grep -q 'portable WPE requires GLIBC_2.38' "$TMP/rejected.log"
 PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 probe > "$TMP/compatible-glibc.log" 2>&1
 grep -q 'checksum-verified WPE runtime activated' "$TMP/compatible-glibc.log"
+# C++ runtime symbol floors must be evaluated independently of GLIBC.
+# Mock readelf's version output so ARM64/x86_64 runners exercise the same
+# boundary, without installing any foreign libstdc++ on the system.
+cat > "$TMP/mock-bin/readelf" <<'READELF'
+#!/bin/sh
+if [ "${1:-}" = "--version-info" ]; then
+  if [ "${MOCK_CPP_ABI_MODERN:-0}" = 1 ]; then
+    printf '%s\n' 'Name: GLIBCXX_3.4.32' 'Name: CXXABI_1.3.14'
+  else
+    printf '%s\n' 'Name: GLIBCXX_3.4.29' 'Name: CXXABI_1.3.12'
+  fi
+else
+  exec /usr/bin/readelf "$@"
+fi
+READELF
+chmod +x "$TMP/mock-bin/readelf"
+cat > "$TMP/WPE-ABI-REQUIREMENTS.json" <<'JSON'
+{
+  "highest_required_glibc_across_components": "GLIBC_2.38",
+  "highest_required_cpp_abi_across_components": {
+    "CXXABI": "CXXABI_1.3.13",
+    "GLIBCXX": "GLIBCXX_3.4.30"
+  }
+}
+JSON
+PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 reject 'libstdc++ GLIBCXX symbols too old'
+grep -q 'requires GLIBCXX_3.4.30' "$TMP/rejected.log"
+PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 MOCK_CPP_ABI_MODERN=1 probe > "$TMP/compatible-cpp.log" 2>&1
+grep -q 'checksum-verified WPE runtime activated' "$TMP/compatible-cpp.log"
+# A newer GLIBCXX alone does not imply the CXXABI version is sufficient.
+sed -i 's/CXXABI_1.3.13/CXXABI_1.3.15/g' "$TMP/WPE-ABI-REQUIREMENTS.json"
+PATH="$TMP/mock-bin:$PATH" MOCK_GLIBC_VERSION=2.44 MOCK_CPP_ABI_MODERN=1 reject 'CXXABI symbols too old'
+grep -q 'requires CXXABI_1.3.15' "$TMP/rejected.log"
 rm -f "$TMP/WPE-ABI-REQUIREMENTS.json"
 
 # All three helper executables are mandatory.
@@ -133,4 +166,4 @@ write_manifest
 # Bit flips must fail integrity verification.
 printf X >> "$TMP/bundle/lib/libWPEWebKit-2.0.so"
 reject 'checksum mismatch'
-printf '%s\n' 'PASS: WPE runtime activation, ABI fail-fast, architecture, Python checksums, symlink and libc safety checks'
+printf '%s\n' 'PASS: WPE runtime activation, GLIBC/GLIBCXX/CXXABI ABI fail-fast, architecture, checksums, symlink and libc safety checks'
