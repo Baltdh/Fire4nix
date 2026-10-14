@@ -34,6 +34,7 @@ prefix = 'Fire4Nix-ROCKNIX-Tools-CANDIDATE/'
 required = (
     'Start-Fire4Nix.sh',
     'Diagnostico.sh',
+    'Teste-WPE-No-R36H.sh',
     'LEIA-ANTES-DE-TESTAR.txt',
     'Fire4Nix/Fire4Nix.sh',
     'Fire4Nix/scripts/fire4nix_env.sh',
