@@ -48,7 +48,10 @@ def main():
             "schema": "fire4nix-wpe-abi-v1",
             "expected_elf_machine": 183,
             "qualification": "build-origin only; target ROCKNIX unverified",
-            "components": {role: {"sha256": hash_file(source)} for role in ROLES},
+            "components": {role: {
+                "sha256": hash_file(source),
+                "needed": ["libWPEWebKit-2.0.so", "libc.so.6"] if role == "launcher" else ["libc.so.6"],
+            } for role in ROLES},
         }
         abi_path = root / "abi.json"
         abi_path.write_text(json.dumps(abi))
@@ -79,6 +82,13 @@ def main():
                     "runtime manifest absent from ZIP")
             require(any(n.endswith("WPE-ABI-REQUIREMENTS.json") for n in names),
                     "ABI audit absent from ZIP")
+            needed = json.loads(z.read(target.name + "/WPE-CORE-SYSTEM-DEPENDENCIES.json"))
+            require(needed["schema"] == "fire4nix-wpe-core-needed-v1", "needed inventory schema")
+            require("libc.so.6" in needed["system_or_additional_bundle_dependencies"],
+                    "unbundled libc not inventoried")
+            require("libWPEWebKit-2.0.so" not in needed["system_or_additional_bundle_dependencies"],
+                    "bundled WPE library incorrectly marked external")
+            require("NOT verified" in needed["qualification"], "missing device qualification disclaimer")
             readme = z.read(target.name + "/LEIA-ANTES-DE-TESTAR.txt").decode()
             require("NAO E UM NAVEGADOR COMPLETO" in readme, "unqualified package")
             require("GLIBC/libc" in readme, "loader warning absent")
