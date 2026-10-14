@@ -50,7 +50,7 @@ def main():
             "qualification": "build-origin only; target ROCKNIX unverified",
             "components": {role: {
                 "sha256": hash_file(source),
-                "needed": ["libWPEWebKit-2.0.so", "libc.so.6"] if role == "launcher" else ["libc.so.6"],
+                "needed": ["libWPEWebKit-2.0.so.1", "libc.so.6"] if role == "launcher" else ["libc.so.6"],
             } for role in ROLES},
         }
         abi_path = root / "abi.json"
@@ -83,7 +83,7 @@ def main():
         target = out / "Fire4Nix-ROCKNIX-Tools-WPE-CORE-EXPERIMENTAL"
         inner = target / "Fire4Nix" / "runtime" / "aarch64"
         require((inner / "SHA256SUMS").is_file(), "missing portable runtime checksums")
-        for part in ("lib/libWPEWebKit-2.0.so", *(f"libexec/wpe-webkit-2.0/{x}" for x in PROCESSES)):
+        for part in ("lib/libWPEWebKit-2.0.so.1", *(f"libexec/wpe-webkit-2.0/{x}" for x in PROCESSES)):
             require((inner / part).is_file(), f"missing component {part}")
         with zipfile.ZipFile(archive) as z:
             require(z.testzip() is None, "corrupt archive")
@@ -115,7 +115,7 @@ def main():
             require(needed["schema"] == "fire4nix-wpe-core-needed-v1", "needed inventory schema")
             require("libc.so.6" in needed["system_or_additional_bundle_dependencies"],
                     "unbundled libc not inventoried")
-            require("libWPEWebKit-2.0.so" not in needed["system_or_additional_bundle_dependencies"],
+            require("libWPEWebKit-2.0.so.1" not in needed["system_or_additional_bundle_dependencies"],
                     "bundled WPE library incorrectly marked external")
             require("NOT verified" in needed["qualification"], "missing device qualification disclaimer")
             readme = z.read(target.name + "/LEIA-ANTES-DE-TESTAR.txt").decode()
