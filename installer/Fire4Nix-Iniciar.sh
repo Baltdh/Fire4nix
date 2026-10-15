@@ -47,7 +47,9 @@ export MALI_WAYLAND_AFBC=${MALI_WAYLAND_AFBC:-0}
 LOG_DIR=${FIRE4NIX_LOG_DIR:-$ROOT/logs}
 mkdir -p "$LOG_DIR" 2>/dev/null || LOG_DIR=${TMPDIR:-/tmp}
 LOG="$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-$$.log"
-URL=${1:-file://$ROOT/www/inicio.html}
+# The home shortcut always points to this installed offline HTML, not a remote service.
+export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
+URL=${1:-$FIRE4NIX_HOME_URL}
 { echo "mode=$MODE"; echo "platform=$WPE_PLATFORM"; echo "socket=${XDG_RUNTIME_DIR:-none}/${WAYLAND_DISPLAY:-none}"; } > "$LOG"
 case "$MODE" in
   --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;

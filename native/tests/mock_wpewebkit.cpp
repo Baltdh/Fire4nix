@@ -7,9 +7,15 @@ typedef struct { GObjectClass parent_class; } FakeViewClass;
 G_DEFINE_TYPE(FakeView, fake_view, G_TYPE_OBJECT)
 static guint changed;
 static guint closed;
+static guint keyboardEventSignal;
+struct FakeKeyEvent { int type; unsigned modifiers; unsigned keyval; };
+static gboolean fullscreenEnabled = FALSE;
 static void fake_view_class_init(FakeViewClass*) {
     closed = g_signal_new("closed", fake_view_get_type(), G_SIGNAL_RUN_LAST,
                            0, nullptr, nullptr, nullptr, G_TYPE_NONE, 0);
+    keyboardEventSignal = g_signal_new("event", fake_view_get_type(), G_SIGNAL_RUN_LAST,
+                           0, g_signal_accumulator_true_handled, nullptr, nullptr,
+                           G_TYPE_BOOLEAN, 1, G_TYPE_POINTER);
     changed = g_signal_new("load-changed", fake_view_get_type(),
                            G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
                            G_TYPE_NONE, 1, G_TYPE_INT);
@@ -20,15 +26,54 @@ extern "C" GType webkit_web_view_get_type(void) { return fake_view_get_type(); }
 extern "C" gpointer webkit_web_view_get_wpe_view(gpointer view) { return view; }
 #endif
 extern "C" gpointer wpe_view_get_toplevel(gpointer view) { return view; }
-extern "C" void wpe_toplevel_fullscreen(gpointer) { g_printerr("[MOCK-WPE] fullscreen requested\n"); }
+extern "C" void wpe_toplevel_fullscreen(gpointer) {
+    fullscreenEnabled = TRUE;
+    g_printerr("[MOCK-WPE] fullscreen requested\n");
+}
+extern "C" unsigned wpe_toplevel_get_state(gpointer) { return fullscreenEnabled ? 1u : 0u; }
+extern "C" void wpe_toplevel_unfullscreen(gpointer) {
+    fullscreenEnabled = FALSE;
+    g_printerr("[MOCK-WPE] window mode requested\n");
+}
+extern "C" int wpe_event_get_event_type(gpointer event) { return static_cast<FakeKeyEvent*>(event)->type; }
+extern "C" unsigned wpe_event_get_modifiers(gpointer event) { return static_cast<FakeKeyEvent*>(event)->modifiers; }
+extern "C" unsigned wpe_event_keyboard_get_keyval(gpointer event) { return static_cast<FakeKeyEvent*>(event)->keyval; }
+extern "C" void webkit_web_view_reload(gpointer) { g_printerr("[MOCK-WPE] reload performed\n"); }
+extern "C" gboolean webkit_web_view_can_go_back(gpointer) { return TRUE; }
+extern "C" gboolean webkit_web_view_can_go_forward(gpointer) { return TRUE; }
+extern "C" void webkit_web_view_go_back(gpointer) { g_printerr("[MOCK-WPE] back performed\n"); }
+extern "C" void webkit_web_view_go_forward(gpointer) { g_printerr("[MOCK-WPE] forward performed\n"); }
 extern "C" void wpe_toplevel_set_title(gpointer, const char*) {}
 extern "C" const char* webkit_web_view_get_uri(gpointer) { return "about:blank"; }
 static gboolean finished(gpointer v) {
+    // Simulated compositor events follow official WPEEvent/keysym values.
+    const FakeKeyEvent shortcuts[] = {
+        {7, 1u, 0x68},       // Ctrl+H
+        {7, 1u, 0x72},       // Ctrl+R
+        {7, 1u << 2, 0xff51}, // Alt+Left
+        {7, 1u << 2, 0xff53}, // Alt+Right
+        {7, 0, 0xffc8},     // F11
+    };
+    for (const auto& shortcut : shortcuts) {
+        gboolean handled = FALSE;
+        g_signal_emit(v, keyboardEventSignal, 0, &shortcut, &handled);
+        if (!handled) g_printerr("[MOCK-WPE] shortcut not handled\n");
+    }
+    if (g_getenv("FIRE4NIX_MOCK_QUIT")) {
+        const FakeKeyEvent quit = {7, 1u, 0x71}; // Ctrl+Q
+        gboolean handled = FALSE;
+        g_signal_emit(v, keyboardEventSignal, 0, &quit, &handled);
+    }
     g_signal_emit(v,changed,0,3);
     (void)closed;
     g_object_unref(v);
     return G_SOURCE_REMOVE;
 }
-extern "C" void webkit_web_view_load_uri(gpointer v, const char*) {
-    g_idle_add(finished, g_object_ref(v));
+extern "C" void webkit_web_view_load_uri(gpointer v, const char* uri) {
+    static unsigned requestCount = 0;
+    ++requestCount;
+    g_printerr("[MOCK-WPE] load_uri request=%s\n", uri ? uri : "(null)");
+    // A synthetic home shortcut must not recursively schedule endless fixture events.
+    if (requestCount == 1)
+        g_idle_add(finished, g_object_ref(v));
 }
