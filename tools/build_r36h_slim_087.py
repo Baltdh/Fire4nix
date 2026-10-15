@@ -58,7 +58,8 @@ def build():
         stage = Path(temp)
         app = stage / "Tools" / "Fire4Nix"
         for relative in RUN_FILES:
-            copy(SOURCES / "Fire4Nix" / relative, app / relative)
+            origin = (ROOT / "scripts" / relative) if relative == "Fire4Nix-R36H-Resgate.sh" else (SOURCES / "Fire4Nix" / relative)
+            copy(origin, app / relative)
         for name in SCRIPTS:
             copy(SOURCES / "Fire4Nix" / "scripts" / name, app / "scripts" / name)
         for name in UPDATERS:
