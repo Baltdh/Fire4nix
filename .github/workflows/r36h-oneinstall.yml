@@ -1,4 +1,4 @@
-name: Fire4Nix R36H one-time installer (existing WPE)
+name: Fire4Nix 0.89 R36H one-time optimized installer
 on:
   push:
     paths:
@@ -39,13 +39,15 @@ jobs:
           <a href="https://wpewebkit.org">WPE WebKit</a></html>
           HTML
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix R36H - instalador unico experimental para ROCKNIX 20261001.
+          Fire4Nix 0.89 R36H - instalacao unica otimizada para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
           Se faltarem os arquivos, CANCELA e nao modifica o sistema.
           Extraia e execute: sh Instalar-Fire4Nix-Uma-Vez.sh
           Depois procure Fire4Nix em Ports. O resultado grafico no hardware nao esta comprovado.
+          Preflight --check-platform recusa a biblioteca WebKit legada sem WPEPlatform.
+          Repetir o instalador nao recopia o runtime se a instalacao ja estiver valida.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
@@ -99,10 +101,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-Uma-Instalacao-Experimental.zip .)
-          unzip -t Fire4Nix-R36H-Uma-Instalacao-Experimental.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip .)
+          unzip -t Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-Uma-Instalacao-Experimental
-          path: Fire4Nix-R36H-Uma-Instalacao-Experimental.zip
+          name: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada
+          path: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip
           retention-days: 30
