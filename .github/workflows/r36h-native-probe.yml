@@ -35,7 +35,7 @@ jobs:
           out/fire4nix-wpe-probe-aarch64 --selftest | tee out/selftest.txt
           grep -q 'arch=aarch64' out/selftest.txt
           ldd out/fire4nix-wpe-probe-aarch64 | tee out/dependencies.txt
-          sha256sum out/fire4nix-wpe-probe-aarch64 > out/SHA256SUMS.txt
+          (cd out && sha256sum fire4nix-wpe-probe-aarch64 > SHA256SUMS.txt)
           cat > out/LEIA-ME.txt <<'INFO'
           Fire4Nix ARM64 native WPE diagnostic. It is NOT the production browser.
           Extract next to the other probe file and run Fire4Nix-WPE-Sonda-R36H.sh.
