@@ -29,6 +29,16 @@ export FIRE4NIX_RUNTIME_DIR="${FIRE4NIX_RUNTIME_DIR:-$RUNTIME_DIR}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$RUNTIME_DIR}"
 export FIRE4NIX_LOG="${FIRE4NIX_LOG:-$LOG_DIR/fire4nix.log}"
 LOG_FILE="$FIRE4NIX_LOG"
+# Rotate verbose WebKit logs rather than silently deleting crash history.
+max_log_kb="${FIRE4NIX_MAX_LOG_KB:-1024}"
+case "$max_log_kb" in ''|*[!0-9]*) max_log_kb=1024 ;; esac
+if [ "$max_log_kb" -gt 0 ] && [ -f "$LOG_FILE" ]; then
+    current_kb="$(du -k "$LOG_FILE" 2>/dev/null | awk '{print $1}')"
+    case "$current_kb" in ''|*[!0-9]*) current_kb=0 ;; esac
+    if [ "$current_kb" -ge "$max_log_kb" ]; then
+        mv -f "$LOG_FILE" "$LOG_FILE.previous" 2>/dev/null || true
+    fi
+fi
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$APP_DIR/www/inicio.html}"
 export FIRE4NIX_SEARCH_URL="${FIRE4NIX_SEARCH_URL:-https://duckduckgo.com/?q=%s}"
 export FIRE4NIX_SESSION_LABEL="${FIRE4NIX_SESSION_LABEL:-Fire4Nix ROCKNIX beta Marco 3 start}"
@@ -49,6 +59,10 @@ export FIRE4NIX_BROWSER_BRIDGE="${FIRE4NIX_BROWSER_BRIDGE:-bridge-marco3-start}"
 export FIRE4NIX_BRIDGE_JOURNAL="${FIRE4NIX_BRIDGE_JOURNAL:-$RUNTIME_DIR/bridge-journal.log}"
 export FIRE4NIX_ENGINE_PRIORITY="${FIRE4NIX_ENGINE_PRIORITY:-wpe-platform,cog,chromium,firefox,browser.arm64}"
 
+# Prefer the compositor that actually has a socket rather than guessing wayland-0.
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/wayland-1" ] && [ ! -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY:-no-socket}" ]; then
+    export WAYLAND_DISPLAY=wayland-1
+fi
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 export MOZ_ENABLE_WAYLAND="${MOZ_ENABLE_WAYLAND:-1}"
 export GDK_BACKEND="${GDK_BACKEND:-wayland}"
@@ -271,8 +285,19 @@ if [ -z "$runtime_candidate" ] || [ ! -d "$runtime_candidate" ] || [ ! -w "$runt
     fi
 fi
 
-# Prefer Wayland when present, otherwise fall back cleanly.
-if [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
+# Verify the compositor after runtime/log directories have been configured.
+if [ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-no-socket}" ]; then
+    for candidate_dir in "${XDG_RUNTIME_DIR:-/nonexistent}" /var/run/0-runtime-dir /run/user/0 "/run/user/$(id -u 2>/dev/null || printf 1000)"; do
+        for candidate_socket in wayland-1 wayland-0; do
+            if [ -S "$candidate_dir/$candidate_socket" ]; then
+                export XDG_RUNTIME_DIR="$candidate_dir" WAYLAND_DISPLAY="$candidate_socket"
+                break 2
+            fi
+        done
+    done
+fi
+# Only claim Wayland when a socket exists.
+if [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-no-socket}" ]; then
     export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-wayland}"
     export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
     export GDK_BACKEND="${GDK_BACKEND:-wayland}"
@@ -306,7 +331,7 @@ if [ -z "${FIRE4NIX_HOME_URL:-}" ] && [ -n "${FIRE4NIX_START_PAGE:-}" ]; then
 fi
 
 # Request maximum CPU clocks only when explicitly enabled.
-if [ "${FIRE4NIX_SET_GOVERNOR:-${FIRE4NIX_SET_GOVERNOR:-0}}" = "1" ]; then
+if [ "${FIRE4NIX_SET_GOVERNOR:-0}" = "1" ]; then
     for governor in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
         if [ -w "$governor" ]; then
             echo performance > "$governor" 2>/dev/null || true
@@ -357,6 +382,9 @@ else
 fi
 printf '[Fire4Nix] actual_browser_exit_code=%s\n' "$status" | tee -a "$LOG_FILE" || true
 if [ "$status" -ne 0 ]; then
+    printf '[Fire4Nix] engine=%s exit=%s runtime=%s socket=%s/%s\n' \
+      "$selected_engine" "$status" "${FIRE4NIX_HOME:-$APP_DIR}/runtime/lib" \
+      "${XDG_RUNTIME_DIR:-none}" "${WAYLAND_DISPLAY:-none}" >> "$LOG_FILE" 2>/dev/null || true
     tail -n 75 "$LOG_FILE" > "${FIRE4NIX_LOG_DIR:-$CONFIG_DIR/logs}/ultimo-diagnostico.txt" 2>/dev/null || true
     if [ -d /storage ]; then
         cp "${FIRE4NIX_LOG_DIR:-$CONFIG_DIR/logs}/ultimo-diagnostico.txt" /storage/Fire4Nix-ultimo-diagnostico.txt 2>/dev/null || true
