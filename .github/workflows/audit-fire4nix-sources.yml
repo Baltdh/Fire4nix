@@ -1,0 +1,44 @@
+name: Audit and extract legacy Fire4Nix sources
+on:
+  push:
+    paths:
+      - '.github/workflows/audit-fire4nix-sources.yml'
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory original ZIP files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for zip in ./*backup*.zip; do
+            echo "### ZIP: $zip"
+            unzip -Z1 "$zip" | head -120 || true
+          done
+      - name: Extract inspectable source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _sources
+          unzip -q -o Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip -d _sources
+          echo '### TOP LEVEL'; ls -lah _sources
+          echo '### SCRIPT/C SOURCE PATHS'
+          find _sources -type f \( -iname '*.sh' -o -iname '*.c' -o -iname '*.cpp' -o -iname '*.h' -o -iname 'Makefile' \) | head -120
+          echo '### PACKAGE TREE'; find _sources -maxdepth 4 -type f | head -120
+          echo '### RUNTIME OVERVIEW'; du -sh _sources
+      - name: Show original launchers
+        shell: bash
+        run: |
+          find _sources -type f \( -iname '*launcher*.sh' -o -iname 'fire4nix_env.sh' -o -iname '*entry*.sh' \) | head -14 | while IFS= read -r path; do
+            echo "### $path"
+            grep -n -E -C 7 'fallback|Segmentation|LD_LIBRARY_PATH|WEBKIT_EXEC_PATH|native_binary|WPE_PLATFORM|cog' "$path" | tail -130 || true
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: legacy-extracted-src
+          path: _sources/
+          retention-days: 7
