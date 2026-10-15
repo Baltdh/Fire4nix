@@ -32,7 +32,7 @@ LOG_FILE="$FIRE4NIX_LOG"
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$APP_DIR/www/inicio.html}"
 export FIRE4NIX_SEARCH_URL="${FIRE4NIX_SEARCH_URL:-https://duckduckgo.com/?q=%s}"
 export FIRE4NIX_SESSION_LABEL="${FIRE4NIX_SESSION_LABEL:-Fire4Nix ROCKNIX beta Marco 3 start}"
-export FIRE4NIX_VERSION="${FIRE4NIX_VERSION:-0.83-beta-rocknix-marco3-start}"
+export FIRE4NIX_VERSION="${FIRE4NIX_VERSION:-0.85-r36h-test2}"
 export FIRE4NIX_BETA="${FIRE4NIX_BETA:-1}"
 export FIRE4NIX_BROWSER_MODE="${FIRE4NIX_BROWSER_MODE:-beta}"
 export FIRE4NIX_UI_PROFILE="${FIRE4NIX_UI_PROFILE:-compact}"
@@ -355,10 +355,16 @@ if fire4nix_launch_engine "$selected_engine" "$FIRE4NIX_START_PAGE" "$@" >> "$LO
 else
     status=$?
 fi
-printf '[Fire4Nix] actual_browser_exit_code=%s
-' "$status" | tee -a "$LOG_FILE"
+printf '[Fire4Nix] actual_browser_exit_code=%s\n' "$status" | tee -a "$LOG_FILE" || true
 if [ "$status" -ne 0 ]; then
-    tail -n 75 "$LOG_FILE" > "$FIRE4NIX_LOG_DIR/ultimo-diagnostico.txt" 2>/dev/null || true
-    cp "$FIRE4NIX_LOG_DIR/ultimo-diagnostico.txt" /storage/Fire4Nix-ultimo-diagnostico.txt 2>/dev/null || true
+    tail -n 75 "$LOG_FILE" > "${FIRE4NIX_LOG_DIR:-$CONFIG_DIR/logs}/ultimo-diagnostico.txt" 2>/dev/null || true
+    if [ -d /storage ]; then
+        cp "${FIRE4NIX_LOG_DIR:-$CONFIG_DIR/logs}/ultimo-diagnostico.txt" /storage/Fire4Nix-ultimo-diagnostico.txt 2>/dev/null || true
+    fi
+fi
+if [ "$status" -eq 139 ]; then
+    printf '%s\n' '[Fire4Nix] CRASH: native SIGSEGV 139. Compare headless and Wayland diagnostics.' >> "$LOG_FILE" 2>/dev/null || true
+elif [ "$status" -eq 127 ]; then
+    printf '%s\n' '[Fire4Nix] LOADER: WPE library or executable missing (127).' >> "$LOG_FILE" 2>/dev/null || true
 fi
 exit "$status"
