@@ -1,0 +1,83 @@
+name: Fire4Nix v0.86 ARM64 WPEPlatform candidate
+on:
+  push:
+    paths:
+      - 'native/**'
+      - '.github/workflows/fire4nix-native-086.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  aarch64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install small build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev zip
+      - name: Compile standalone WPEPlatform launcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/native086 out
+          g++ -std=c++17 -O2 -g -Wall -Wextra -Werror \
+            native/fire4nix_wpeplatform.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0 gio-2.0) \
+            -ldl -o build/native086/fire4nix-native-086-aarch64
+          file build/native086/fire4nix-native-086-aarch64
+          readelf -h build/native086/fire4nix-native-086-aarch64 | grep -q AArch64
+          build/native086/fire4nix-native-086-aarch64 --selftest | tee build/native086/selftest.txt
+          grep -q 'AArch64' build/native086/selftest.txt
+      - name: Test missing runtime and fake WPE GObject lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/native086/fake
+          g++ -std=c++17 -O1 -fPIC -shared -Wall -Wextra -Werror \
+            native/tests/mock_wpewebkit.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0) \
+            -o build/native086/fake/libWPEWebKit-2.0.so.1
+          set +e
+          env LD_LIBRARY_PATH=/not/existing build/native086/fire4nix-native-086-aarch64 --check-library > build/native086/missing-lib.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -eq 127
+          grep -q 'loader error:' build/native086/missing-lib.log
+          LD_LIBRARY_PATH="$PWD/build/native086/fake" build/native086/fire4nix-native-086-aarch64 --check-library
+          LD_LIBRARY_PATH="$PWD/build/native086/fake" build/native086/fire4nix-native-086-aarch64 --smoke about:blank > build/native086/smoke.log 2>&1
+          grep -q 'load-event=3' build/native086/smoke.log
+          grep -q 'GLib main loop exited' build/native086/smoke.log
+          sh -n native/Fire4Nix-086-Teste.sh
+          echo 'PASS: ELF AArch64 + missing library 127 + GObject view creation + page-load lifecycle.'
+      - name: Package optional candidate (not an automatic replacement)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp build/native086/fire4nix-native-086-aarch64 out/
+          cp native/Fire4Nix-086-Teste.sh out/
+          chmod +x out/Fire4Nix-086-Teste.sh out/fire4nix-native-086-aarch64
+          cat > out/LEIA-ME-PRIMEIRO.txt <<'END'
+          Fire4Nix 0.86 - candidato ARM64 WPEPlatform para ROCKNIX R36H.
+          Os dois arquivos devem ficar juntos numa pasta do SD/Download.
+          Teste no Terminal R36:
+            sh Fire4Nix-086-Teste.sh --selftest
+            sh Fire4Nix-086-Teste.sh --check-library
+            sh Fire4Nix-086-Teste.sh --smoke
+            sh Fire4Nix-086-Teste.sh --open
+          '--smoke' verifica carregamento da pagina offline e termina apos confirmar
+          o evento WebKit load-finished; nao garante que apareceu na tela.
+          '--open' mantem a interface em execucao se WPEPlatform e o driver funcionarem.
+          Logs: /storage/Fire4Nix-086-Resultado.txt (quando gravavel).
+          Este candidato NAO sobrescreve o Fire4Nix existente e NAO inclui WebKit.
+          Precisa de runtime/lib/libWPEWebKit-2.0.so.1 e subprocessos WPE ja no SD.
+          Nunca desativa sandbox ou instala libs em /usr.
+          END
+          (cd out && sha256sum fire4nix-native-086-aarch64 > SHA256SUMS.txt)
+          (cd out && zip -9 -q Fire4Nix-0.86-R36H-ARM64-Native-Test.zip fire4nix-native-086-aarch64 Fire4Nix-086-Teste.sh LEIA-ME-PRIMEIRO.txt SHA256SUMS.txt)
+          unzip -t out/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip | tail -1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-0.86-R36H-ARM64-Native-Test
+          path: out/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip
+          retention-days: 30
