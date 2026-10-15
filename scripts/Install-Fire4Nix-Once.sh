@@ -14,7 +14,12 @@ fi
 [ -n "$ROMS" ] || { echo "ROM directory not found. Set FIRE4NIX_ROMS." >&2; exit 2; }
 # An install-once command should not duplicate a 174 MB+ runtime on repeated runs.
 DEST="$ROMS/ports/fire4nix-completo"
-if [ -s "$DEST/bin/fire4nix-native-aarch64" ] && [ -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
+if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
+   [ -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
+   [ -f "$DEST/Fire4Nix-Iniciar.sh" ] &&
+   [ -f "$ROMS/ports/Fire4Nix.sh" ] &&
+   cmp -s "$SOURCE/bin/fire4nix-native-aarch64" "$DEST/bin/fire4nix-native-aarch64" &&
+   cmp -s "$SOURCE/Fire4Nix-Iniciar.sh" "$DEST/Fire4Nix-Iniciar.sh"; then
     if sh "$DEST/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1; then
         echo "Fire4Nix already installed and API-compatible: $DEST"
         exit 0
@@ -46,8 +51,39 @@ case "$required_kb:$available_kb" in
       exit 6
      fi ;;
 esac
+# Each invocation stages a new copy and keeps the previously working install
+# available for rollback until both directory and Ports entry are activated.
+umask 077
 STAGE="$ROMS/ports/.fire4nix-staging-$$"
-trap 'rm -rf "$STAGE" 2>/dev/null || true' EXIT HUP INT TERM
+PORT_TEMP="$ROMS/ports/.Fire4Nix.sh.$$.tmp"
+BACKUP=""
+OLD_MOVED=0
+NEW_MOVED=0
+COMMITTED=0
+cleanup() {
+    status=$?
+    trap - 0 HUP INT TERM
+    if [ "$COMMITTED" -ne 1 ]; then
+        if [ "$NEW_MOVED" -eq 1 ] && [ -d "$DEST" ]; then
+            # The fresh install is disposable; preserve it for investigation.
+            mv "$DEST" "$DEST.failed-$$" 2>/dev/null || true
+        fi
+        if [ "$OLD_MOVED" -eq 1 ] && [ -d "$BACKUP" ]; then
+            mv "$BACKUP" "$DEST" 2>/dev/null || true
+        fi
+    fi
+    [ ! -e "$PORT_TEMP" ] || rm -f "$PORT_TEMP"
+    [ ! -d "$STAGE" ] || rm -rf "$STAGE"
+    exit "$status"
+}
+trap cleanup 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if [ -e "$STAGE" ] || [ -e "$PORT_TEMP" ]; then
+    echo "Temporary installation paths already occupied; aborting safely." >&2
+    exit 7
+fi
 mkdir -p "$STAGE"
 cp -a "$SOURCE/." "$STAGE/"
 if [ ! -s "$STAGE/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
@@ -58,29 +94,32 @@ fi
 chmod +x "$STAGE"/bin/fire4nix-native-aarch64 "$STAGE"/*.sh 2>/dev/null || true
 if ! sh "$STAGE/Fire4Nix-Iniciar.sh" --check-platform; then
     echo "WebKit missing dependencies or does not provide WPEPlatform." >&2
-    echo "Original Fire4Nix untouched; a legacy libwpe backend or compatible WPE runtime is required." >&2
+    echo "Original Fire4Nix untouched; legacy libwpe or compatible runtime required." >&2
     exit 5
 fi
-if [ -e "$DEST" ]; then
-    BACKUP="$DEST.backup-$(date +%Y%m%d-%H%M%S)-$$"
-    mv "$DEST" "$BACKUP"
-    echo "Old installation preserved: $BACKUP"
-fi
-mv "$STAGE" "$DEST"
-trap - EXIT HUP INT TERM
-if [ -e "$ROMS/ports/Fire4Nix.sh" ]; then
-    cp -p "$ROMS/ports/Fire4Nix.sh" "$ROMS/ports/Fire4Nix.sh.backup-$(date +%Y%m%d-%H%M%S)-$" || {
-        echo "Cannot back up existing Ports shortcut" >&2
-        exit 7
-    }
-fi
-PORT_TEMP="$ROMS/ports/.Fire4Nix.sh.$.tmp"
+# Prepare the new Ports shortcut *before* moving the working directory.
 cat > "$PORT_TEMP" <<'PORT'
 #!/bin/sh
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 exec sh "$DIR/fire4nix-completo/Fire4Nix.sh" "$@"
 PORT
-chmod +x "$PORT_TEMP"
-mv -f "$PORT_TEMP" "$ROMS/ports/Fire4Nix.sh"
+chmod 755 "$PORT_TEMP"
+if [ -e "$ROMS/ports/Fire4Nix.sh" ]; then
+    SHORTCUT_BACKUP="$ROMS/ports/Fire4Nix.sh.backup-$(date +%Y%m%d-%H%M%S)-$$"
+    cp -p "$ROMS/ports/Fire4Nix.sh" "$SHORTCUT_BACKUP" || exit 7
+fi
+if [ -e "$DEST" ]; then
+    BACKUP="$DEST.backup-$(date +%Y%m%d-%H%M%S)-$$"
+    mv "$DEST" "$BACKUP" || exit 7
+    OLD_MOVED=1
+fi
+# If either move fails, cleanup() restores the old installation.
+mv "$STAGE" "$DEST" || exit 7
+NEW_MOVED=1
+mv -f "$PORT_TEMP" "$ROMS/ports/Fire4Nix.sh" || exit 7
+COMMITTED=1
 echo "Installed Fire4Nix from local WPE library into $DEST"
-echo "Next: launch Fire4Nix from the ROCKNIX Ports menu; rendering remains unverified."
+if [ "$OLD_MOVED" -eq 1 ]; then
+    echo "Prior installation preserved: $BACKUP"
+fi
+echo "ROCKNIX Ports shortcut activated; graphical rendering still requires real R36H testing."
