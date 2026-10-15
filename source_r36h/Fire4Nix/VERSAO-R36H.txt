@@ -1,0 +1,1 @@
+Fire4Nix 0.85 R36H: loader diagnostics, dual-platform WPE checks and optional low-memory native settings. New ARM64 compilation is required to apply source-level C++ changes; the SD overlay preserves the user's executable.

@@ -359,17 +359,20 @@ void applyCookieSettings(WebKitWebContext* webContext, const LaunchOptions& opti
 
 void applyBrowserDefaults(WebKitWebView* view, const LaunchOptions& options)
 {
+    // Optional R36H low-memory rendering defaults. Requires rebuilt ARM64 WPE binary.
+    const bool lowMemory = envEnabled("FIRE4NIX_LOW_MEMORY", true);
     WebKitSettings* settings = webkit_settings_new_with_settings(
         "enable-javascript", TRUE,
-        "enable-developer-extras", TRUE,
+        "enable-developer-extras", !lowMemory,
         "enable-write-console-messages-to-stdout", TRUE,
-        "enable-media-stream", TRUE,
-        "enable-mediasource", TRUE,
-        "enable-webgl", TRUE,
-        "enable-webrtc", TRUE,
-        "enable-encrypted-media", TRUE,
+        "enable-media-stream", !lowMemory,
+        "enable-mediasource", !lowMemory,
+        "enable-webgl", !lowMemory,
+        "enable-webrtc", !lowMemory,
+        "enable-encrypted-media", !lowMemory,
         "enable-back-forward-navigation-gestures", TRUE,
         nullptr);
+    g_message("Fire4Nix memory profile: %s", lowMemory ? "low-memory" : "normal");
 
     webkit_web_view_set_settings(view, settings);
     g_object_unref(settings);

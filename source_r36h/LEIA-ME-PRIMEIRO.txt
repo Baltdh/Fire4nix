@@ -1,0 +1,14 @@
+Fire4Nix 0.85 - teste integrado 2 / R36H / ROCKNIX
+
+1. Extraia a pasta inteira do ZIP no cartao SD ou Download.
+2. Execute Atualizar-Fire4Nix-R36H.sh uma vez pelo Terminal R36.
+3. Execute 1-Verificar-Fire4Nix-R36H.sh para testar bibliotecas sem abrir o navegador.
+4. Execute 2-Abrir-Fire4Nix-R36H.sh para abrir no perfil grafico conservador.
+5. Se fechar, leia /storage/Fire4Nix-relatorio-ultimo.txt e envie o arquivo.
+6. Diagnostico sem tela: sh Tools/Fire4Nix/Fire4Nix-Diagnosticar.sh --headless
+
+Pacote de ATUALIZACAO. O WPE de aproximadamente 174MB nao esta incluido.
+Reutiliza bibliotecas e binario ARM64 da instalacao existente.
+Nao altera ROCKNIX, drivers Mali, sandbox ou /usr.
+Logs do Terminal R36 Tools sao separados dos logs Fire4Nix.
+Codigo C++ alterado depende de uma nova compilacao ARM64 para ter efeito.
