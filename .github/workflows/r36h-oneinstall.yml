@@ -133,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           (cd out && zip -q -r ../Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip .)
-          unzip -t Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip | tail -1
+          unzip -t Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura
