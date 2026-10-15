@@ -60,6 +60,11 @@ if ln "$SRC_RUNTIME/lib/libWPEWebKit-2.0.so.1" "$LINK_TEST" 2>/dev/null; then
     HARDLINK_RUNTIME=1
     rm -f "$LINK_TEST"
 fi
+if [ "$HARDLINK_RUNTIME" -eq 1 ]; then
+    echo "WPE runtime: filesystem supports space-saving hardlinks"
+else
+    echo "WPE runtime: full copy required (FAT/exFAT or separate filesystem)"
+fi
 # Check free space according to the actual copy method.
 if [ "$HARDLINK_RUNTIME" -eq 1 ]; then
     required_kb=0
