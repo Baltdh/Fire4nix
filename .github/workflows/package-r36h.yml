@@ -34,6 +34,7 @@ jobs:
           rm -f stage/pkg/Tools/Fire4Nix/bin/fire4nix-wpe-platform
           rm -f stage/pkg/Tools/Fire4Nix/fire4nix.conf
           rm -rf stage/pkg/Tools/Fire4Nix/.mozilla_profile
+          rm -rf stage/pkg/Tools/Fire4Nix/bin stage/pkg/Tools/Fire4Nix/.fire4nix
           cp source_r36h/Atualizar-Fire4Nix-R36H.sh stage/pkg/
           cp source_r36h/1-Verificar-Fire4Nix-R36H.sh stage/pkg/
           cp source_r36h/2-Abrir-Fire4Nix-R36H.sh stage/pkg/
@@ -52,10 +53,17 @@ jobs:
           chmod +x /tmp/test-fire4nix/bin/fire4nix-wpe-platform
           printf 'existing-wpe' > /tmp/test-fire4nix/runtime/lib/libWPEWebKit-2.0.so.1
           printf 'custom-settings' > /tmp/test-fire4nix/fire4nix.conf
+          printf 'old-working-browser' > /tmp/test-fire4nix/bin/browser.arm64
+          mkdir -p /tmp/test-fire4nix/theme
+          printf 'my-personal-theme' > /tmp/test-fire4nix/theme/theme.xml
           FIRE4NIX_DEST=/tmp/test-fire4nix sh stage/pkg/Atualizar-Fire4Nix-R36H.sh
           grep -q 'MOCK_STATUS' /tmp/test-fire4nix/bin/fire4nix-wpe-platform
           grep -q 'existing-wpe' /tmp/test-fire4nix/runtime/lib/libWPEWebKit-2.0.so.1
           grep -q 'custom-settings' /tmp/test-fire4nix/fire4nix.conf
+          grep -q 'old-working-browser' /tmp/test-fire4nix/bin/browser.arm64
+          grep -q 'my-personal-theme' /tmp/test-fire4nix/theme/theme.xml
+          test ! -e stage/pkg/Tools/Fire4Nix/bin/browser.arm64
+          test ! -d stage/pkg/Tools/Fire4Nix/.fire4nix
           test -n "$(find /tmp/test-fire4nix -maxdepth 1 -name 'backup-prev-*' -print -quit)"
           test ! -f stage/pkg/Tools/Fire4Nix/bin/fire4nix-wpe-platform
           test ! -d stage/pkg/Tools/Fire4Nix/runtime
