@@ -1,0 +1,87 @@
+name: Fire4Nix R36H one-time installer (existing WPE)
+on:
+  push:
+    paths:
+      - 'installer/**'
+      - 'scripts/Install-Fire4Nix-Once.sh'
+      - '.github/workflows/r36h-oneinstall.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build real ARM64 executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev
+          mkdir -p out/Fire4Nix/bin out/Fire4Nix/www
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror native/fire4nix_wpeplatform.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0 gio-2.0) -ldl \
+            -o out/Fire4Nix/bin/fire4nix-native-aarch64
+          readelf -h out/Fire4Nix/bin/fire4nix-native-aarch64 | grep -q AArch64
+          out/Fire4Nix/bin/fire4nix-native-aarch64 --selftest | grep AArch64
+          cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
+          cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
+          printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
+          cat > out/Fire4Nix/www/inicio.html <<'HTML'
+          <!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Fire4Nix</title><style>body{background:#161a25;color:white;font:20px sans-serif;padding:24px}a{color:#a0d1ff}input,button{font-size:20px;padding:10px}</style>
+          <h1>Fire4Nix</h1><p>ROCKNIX RK3326 · página local</p><form onsubmit="location.href=document.getElementById('u').value;return false">
+          <input id="u" value="https://lite.duckduckgo.com/lite/"><button>Abrir</button></form>
+          <a href="https://wpewebkit.org">WPE WebKit</a></html>
+          HTML
+          cat > out/LEIA-ME.txt <<'README'
+          Fire4Nix R36H - instalador unico experimental para ROCKNIX 20261001.
+          O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
+          NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
+          O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
+          Se faltarem os arquivos, CANCELA e nao modifica o sistema.
+          Extraia e execute: sh Instalar-Fire4Nix-Uma-Vez.sh
+          Depois procure Fire4Nix em Ports. O resultado grafico no hardware nao esta comprovado.
+          Nao desativa sandbox nem modifica /usr ou drivers Mali.
+          README
+          chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
+          sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
+          sh -n out/Fire4Nix/Fire4Nix-Iniciar.sh
+          (cd out && sha256sum Fire4Nix/bin/fire4nix-native-aarch64 > SHA256SUMS.txt)
+      - name: Test refused install and safe mock migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          t=$(mktemp -d)
+          mkdir -p "$t/roms/tools" "$t/pkg"
+          cp -a out/. "$t/pkg/"
+          set +e
+          FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh" > "$t/failure" 2>&1
+          result=$?
+          set -e
+          test "$result" -eq 3
+          test ! -e "$t/roms/ports/Fire4Nix.sh"
+          mkdir -p "$t/roms/tools/Fire4Nix/runtime/lib" "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0"
+          printf 'dummy-webkit-library' > "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+          for bin in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            printf 'dummy' > "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$bin"
+          done
+          # Mock only in test stage: production artifact retains the real ARM64 ELF.
+          printf '#!/bin/sh\nif [ "$1" = --check-library ]; then exit 0; fi\nexit 127\n' > "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          chmod +x "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
+          test -f "$t/roms/ports/Fire4Nix.sh"
+          cmp "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
+          echo 'PASS: missing WPE refusal, copy of local library and subprocesses, launcher entry, source preserved'
+      - name: Build download artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd out && zip -q -r ../Fire4Nix-R36H-Uma-Instalacao-Experimental.zip .)
+          unzip -t Fire4Nix-R36H-Uma-Instalacao-Experimental.zip | tail -1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-Uma-Instalacao-Experimental
+          path: Fire4Nix-R36H-Uma-Instalacao-Experimental.zip
+          retention-days: 30
