@@ -48,6 +48,7 @@ extern "C" const char* webkit_web_view_get_uri(gpointer) { return "about:blank";
 static gboolean finished(gpointer v) {
     // Simulated compositor events follow official WPEEvent/keysym values.
     const FakeKeyEvent shortcuts[] = {
+        {7, 1u, 0x68},       // Ctrl+H
         {7, 1u, 0x72},       // Ctrl+R
         {7, 1u << 2, 0xff51}, // Alt+Left
         {7, 1u << 2, 0xff53}, // Alt+Right
@@ -57,6 +58,11 @@ static gboolean finished(gpointer v) {
         gboolean handled = FALSE;
         g_signal_emit(v, keyboardEventSignal, 0, &shortcut, &handled);
         if (!handled) g_printerr("[MOCK-WPE] shortcut not handled\n");
+    }
+    if (g_getenv("FIRE4NIX_MOCK_QUIT")) {
+        const FakeKeyEvent quit = {7, 1u, 0x71}; // Ctrl+Q
+        gboolean handled = FALSE;
+        g_signal_emit(v, keyboardEventSignal, 0, &quit, &handled);
     }
     g_signal_emit(v,changed,0,3);
     (void)closed;
