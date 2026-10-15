@@ -19,6 +19,12 @@ using GetWPEView = gpointer (*)(gpointer);
 using GetToplevel = gpointer (*)(gpointer);
 using ToplevelFullscreen = void (*)(gpointer);
 using ToplevelSetTitle = void (*)(gpointer, const char*);
+using GetEventType = int (*)(gpointer);
+using GetEventModifiers = unsigned (*)(gpointer);
+using GetEventKeyval = unsigned (*)(gpointer);
+using NavigateAction = void (*)(gpointer);
+using CanNavigate = gboolean (*)(gpointer);
+using ToplevelGetState = unsigned (*)(gpointer);
 
 struct App {
     GMainLoop* loop = nullptr;
@@ -33,6 +39,17 @@ struct App {
     const char* initialUrl = nullptr;
     gpointer toplevel = nullptr;
     ToplevelSetTitle setTitle = nullptr;
+    GetEventType getEventType = nullptr;
+    GetEventModifiers getEventModifiers = nullptr;
+    GetEventKeyval getEventKeyval = nullptr;
+    NavigateAction reload = nullptr;
+    NavigateAction goBack = nullptr;
+    NavigateAction goForward = nullptr;
+    CanNavigate canGoBack = nullptr;
+    CanNavigate canGoForward = nullptr;
+    ToplevelGetState getToplevelState = nullptr;
+    ToplevelFullscreen fullscreen = nullptr;
+    ToplevelFullscreen unfullscreen = nullptr;
 };
 
 static bool setting(GObject* obj, const char* name, gboolean enabled) {
@@ -94,6 +111,59 @@ static void childTerminated(GObject*, int reason, gpointer data) {
     g_printerr("[FIRE4NIX-NATIVE] web-process-terminated reason=%d\n", reason);
     if (app->smoke) { app->exitCode = 70; g_idle_add(smokeQuit, app); }
 }
+// WPEEventType and WPEModifiers follow the WPEPlatform public ABI.
+static constexpr int keyboardDown = 7; // WPE_EVENT_KEYBOARD_KEY_DOWN
+static constexpr unsigned controlModifier = 1u << 0;
+static constexpr unsigned altModifier = 1u << 2;
+static constexpr unsigned keyLeft = 0xff51;
+static constexpr unsigned keyRight = 0xff53;
+static constexpr unsigned keyF11 = 0xffc8;
+static constexpr unsigned fullscreenState = 1u << 0;
+
+static gboolean onPlatformEvent(GObject*, gpointer event, gpointer data) {
+    auto* app = static_cast<App*>(data);
+    if (!app || !app->getEventType || !app->getEventKeyval ||
+        !app->getEventModifiers || app->getEventType(event) != keyboardDown)
+        return FALSE;
+    const unsigned modifiers = app->getEventModifiers(event);
+    const unsigned keyval = app->getEventKeyval(event);
+    if ((modifiers & controlModifier) && (keyval == 'q' || keyval == 'Q')) {
+        stage("shortcut Ctrl+Q: close browser");
+        if (app->loop) g_main_loop_quit(app->loop);
+        return TRUE;
+    }
+    if ((modifiers & controlModifier) && (keyval == 'r' || keyval == 'R') && app->reload) {
+        stage("shortcut Ctrl+R: reload");
+        app->reload(app->view);
+        return TRUE;
+    }
+    if (modifiers & altModifier) {
+        if (keyval == keyLeft && app->goBack && app->canGoBack && app->canGoBack(app->view)) {
+            stage("shortcut Alt+Left: back");
+            app->goBack(app->view);
+            return TRUE;
+        }
+        if (keyval == keyRight && app->goForward && app->canGoForward && app->canGoForward(app->view)) {
+            stage("shortcut Alt+Right: forward");
+            app->goForward(app->view);
+            return TRUE;
+        }
+    }
+    if (keyval == keyF11 && app->toplevel && app->getToplevelState) {
+        if ((app->getToplevelState(app->toplevel) & fullscreenState) && app->unfullscreen) {
+            stage("shortcut F11: window mode");
+            app->unfullscreen(app->toplevel);
+            return TRUE;
+        }
+        if (app->fullscreen) {
+            stage("shortcut F11: fullscreen");
+            app->fullscreen(app->toplevel);
+            return TRUE;
+        }
+    }
+    return FALSE; // Other keys go to the website (forms/text inputs).
+}
+
 static void platformViewClosed(GObject*, gpointer data) {
     App* app = static_cast<App*>(data);
     stage("WPEView closed by compositor");
@@ -126,7 +196,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 0.89: [--selftest|--check-library|--check-platform|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 0.91: [--selftest|--check-library|--check-platform|--smoke] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -195,6 +265,20 @@ int main(int argc, char** argv) {
     // Request compositor-managed fullscreen instead of merely opening a tile.
     auto getToplevel = reinterpret_cast<GetToplevel>(dlsym(RTLD_DEFAULT, "wpe_view_get_toplevel"));
     auto fullscreen = reinterpret_cast<ToplevelFullscreen>(dlsym(RTLD_DEFAULT, "wpe_toplevel_fullscreen"));
+    app.fullscreen = fullscreen;
+    app.unfullscreen = reinterpret_cast<ToplevelFullscreen>(dlsym(RTLD_DEFAULT, "wpe_toplevel_unfullscreen"));
+    app.getToplevelState = reinterpret_cast<ToplevelGetState>(dlsym(RTLD_DEFAULT, "wpe_toplevel_get_state"));
+    app.getEventType = reinterpret_cast<GetEventType>(dlsym(RTLD_DEFAULT, "wpe_event_get_event_type"));
+    app.getEventModifiers = reinterpret_cast<GetEventModifiers>(dlsym(RTLD_DEFAULT, "wpe_event_get_modifiers"));
+    app.getEventKeyval = reinterpret_cast<GetEventKeyval>(dlsym(RTLD_DEFAULT, "wpe_event_keyboard_get_keyval"));
+    app.reload = symbol<NavigateAction>(app.webkit, "webkit_web_view_reload");
+    app.goBack = symbol<NavigateAction>(app.webkit, "webkit_web_view_go_back");
+    app.goForward = symbol<NavigateAction>(app.webkit, "webkit_web_view_go_forward");
+    app.canGoBack = symbol<CanNavigate>(app.webkit, "webkit_web_view_can_go_back");
+    app.canGoForward = symbol<CanNavigate>(app.webkit, "webkit_web_view_can_go_forward");
+    if (g_signal_lookup("event", G_OBJECT_TYPE(nativeView)) &&
+        app.getEventType && app.getEventModifiers && app.getEventKeyval)
+        g_signal_connect(nativeView, "event", G_CALLBACK(onPlatformEvent), &app);
     app.setTitle = reinterpret_cast<ToplevelSetTitle>(dlsym(RTLD_DEFAULT, "wpe_toplevel_set_title"));
     if (getToplevel) {
         app.toplevel = getToplevel(nativeView);
