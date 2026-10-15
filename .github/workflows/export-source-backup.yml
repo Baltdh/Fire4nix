@@ -1,0 +1,17 @@
+name: Export canonical Fire4Nix backup
+on:
+  push:
+    paths: ['.github/workflows/export-source-backup.yml']
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Integrity
+        run: unzip -t Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip | tail -2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: original-wpe-backup
+          path: Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip
+          retention-days: 7
