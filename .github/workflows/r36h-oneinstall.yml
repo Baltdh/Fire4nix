@@ -49,7 +49,8 @@ jobs:
           Preflight --check-platform recusa a biblioteca WebKit legada sem WPEPlatform.
           O instalador evita recopia na mesma versao e faz rollback se a troca falhar.
           WPEPlatform usa modo fullscreen no Sway quando disponivel.
-          Atalhos: Ctrl+R recarregar, Alt+Esquerda voltar, Alt+Direita avancar,
+          Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
+          Alt+Direita avancar,
           F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
           Controles do gamepad R36H ainda nao homologados.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
@@ -122,9 +123,11 @@ jobs:
           g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/modern-wpe/libWPEWebKit-2.0.so.1
           g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror -DMOCK_NO_PLATFORM native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/old-wpe/libWPEWebKit-2.0.so.1
           LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform
-          LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v090-smoke.log 2>&1
+          FIRE4NIX_HOME_URL=file:///tmp/fire4nix-home.html LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v090-smoke.log 2>&1
           grep -q 'fullscreen requested' /tmp/fire4nix-v090-smoke.log
           grep -q 'load-event=3' /tmp/fire4nix-v090-smoke.log
+          grep -q 'shortcut Ctrl+H: home' /tmp/fire4nix-v090-smoke.log
+          grep -q 'load_uri request=file:///tmp/fire4nix-home.html' /tmp/fire4nix-v090-smoke.log
           grep -q 'shortcut Ctrl+R: reload' /tmp/fire4nix-v090-smoke.log
           grep -q '\[MOCK-WPE\] reload performed' /tmp/fire4nix-v090-smoke.log
           grep -q 'shortcut Alt+Left: back' /tmp/fire4nix-v090-smoke.log
@@ -138,7 +141,9 @@ jobs:
           old_status=$?
           set -e
           test "$old_status" -eq 78
-          echo 'PASS: platform API and mock lifecycle, legacy-only WPE refused without crash'
+          FIRE4NIX_MOCK_QUIT=1 LD_LIBRARY_PATH=/tmp/modern-wpe timeout 4s out/Fire4Nix/bin/fire4nix-native-aarch64 about:blank > /tmp/fire4nix-v091-quit.log 2>&1
+          grep -q 'shortcut Ctrl+Q: close browser' /tmp/fire4nix-v091-quit.log
+          echo 'PASS: navigation, quit, legacy WPE rejection without crash'
       - name: Build download artifact
         shell: bash
         run: |
