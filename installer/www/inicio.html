@@ -16,31 +16,80 @@ p{color:#bcc7dc;font-size:13px;line-height:1.35;margin:8px 0}
 form{display:flex;gap:7px;margin:12px 0}
 input{min-width:0;flex:1;background:#222c3f;color:white;border:1px solid #62748c}
 input,button,.tile{border-radius:8px;font:inherit;padding:10px}
-button{background:#6bb6ff;border:0;color:#0b1928;font-weight:700}
+button{background:#6bb6ff;border:0;color:#0b1928;font-weight:700;cursor:pointer}
+#keyboardToggle{background:#334a69;color:#fff;padding:8px}
+.keyboard{display:none;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;margin:10px 0}
+.keyboard.open{display:grid}
+.keyboard button{background:#33445d;color:white;padding:7px 0;min-height:34px;border-radius:6px;font-size:15px}
+.keyboard .wide{grid-column:span 2}
+.keyboard .space{grid-column:span 3}
+.keyboard .action{background:#5379a6}
+#keyboardHelp{display:none;font-size:12px}
+#keyboardHelp.open{display:block}
 nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:13px 0}
 .tile{display:block;background:#242f45;border:1px solid #344765;color:#f2f5fa;text-decoration:none;text-align:center;min-height:59px}
 .tile span{display:block;color:#9eaec7;font-size:11px}
 :focus-visible{outline:3px solid #7bd5fb;outline-offset:2px}
-footer{font-size:11px;color:#aab8ce}
+footer{font-size:11px;color:#aab8ce;margin-top:8px}
 @media(max-width:400px){body{padding:12px}h1{font-size:23px}.tile{font-size:15px}input{font-size:14px}}
 </style>
 </head>
 <body>
 <header><h1>Fire4Nix</h1><span class="status">ROCKNIX · R36H</span></header>
 <p>Navegação leve. Esta página abre sem internet.</p>
-<form id="form"><input id="address" aria-label="Endereço ou pesquisa" placeholder="Site ou pesquisa" autocomplete="off"><button id="go" type="submit">Ir</button></form>
+<form id="form"><input id="address" aria-label="Endereço ou pesquisa" placeholder="Site ou pesquisa" autocomplete="off"><button id="keyboardToggle" type="button" aria-expanded="false" aria-controls="keyboard">Teclado</button><button id="go" type="submit">Ir</button></form>
+<p id="keyboardHelp">Teclado na tela: use setas e Enter para selecionar letras.</p>
+<section id="keyboard" class="keyboard" aria-label="Teclado virtual"></section>
 <nav aria-label="Atalhos">
 <a class="tile" href="https://lite.duckduckgo.com/lite/">Pesquisar<span>DuckDuckGo Lite</span></a>
 <a class="tile" href="https://pt.m.wikipedia.org/">Wikipédia<span>Versão móvel</span></a>
 <a class="tile" href="https://www.google.com/">Google<span>Pesquisa web</span></a>
 <a class="tile" href="https://m.youtube.com/">YouTube<span>Versão móvel</span></a>
 </nav>
-<footer>Setas: selecionar · Enter: abrir · Ctrl+H: início · Ctrl+R: recarregar · Alt+←/→: histórico · Ctrl+Q: sair</footer>
+<footer>Setas: selecionar · Enter: abrir · Teclado: digitar sem teclado físico · Ctrl+H: início · Ctrl+R: recarregar · Ctrl+Q: sair</footer>
 <script>
 (function(){
 "use strict";
 var form=document.getElementById("form");
 var input=document.getElementById("address");
+var keyboard=document.getElementById("keyboard");
+var keyboardHelp=document.getElementById("keyboardHelp");
+var keyboardToggle=document.getElementById("keyboardToggle");
+var built=false;
+var keyRows=["qwertyuiop","asdfghjkl","zxcvbnm"];
+function virtualKey(label,value,cls){
+ var key=document.createElement("button");
+ key.type="button";
+ key.textContent=label;
+ if(cls)key.className=cls;
+ key.addEventListener("click",function(){
+   if(value==="BACK"){input.value=input.value.slice(0,-1);return;}
+   if(value==="CLEAR"){input.value="";return;}
+   if(value==="GO"){form.requestSubmit?form.requestSubmit():document.getElementById("go").click();return;}
+   input.value+=value;
+ });
+ keyboard.appendChild(key);
+}
+keyboardToggle.addEventListener("click",function(){
+ var open=!keyboard.classList.contains("open");
+ if(open&&!built){
+   keyRows.forEach(function(row){
+     row.split("").forEach(function(letter){virtualKey(letter,letter);});
+   });
+   virtualKey("0","0");virtualKey("1","1");virtualKey("2","2");virtualKey("3","3");
+   virtualKey("4","4");virtualKey("5","5");virtualKey("6","6");virtualKey("7","7");
+   virtualKey("8","8");virtualKey("9","9");
+   virtualKey(".",".");virtualKey("/","/");virtualKey(":",":");
+   virtualKey("-","-");virtualKey("Apagar","BACK","wide action");
+   virtualKey("Limpar","CLEAR","wide action");
+   virtualKey("Espaço"," ","space");
+   virtualKey("Abrir","GO","wide action");
+   built=true;
+ }
+ keyboard.classList.toggle("open",open);
+ keyboardHelp.classList.toggle("open",open);
+ keyboardToggle.setAttribute("aria-expanded",String(open));
+});
 form.addEventListener("submit",function(event){
  event.preventDefault();
  var value=input.value.trim();
@@ -54,7 +103,9 @@ document.addEventListener("keydown",function(event){
  var active=document.activeElement;
  if(active===input)return;
  if(event.key!=="ArrowDown"&&event.key!=="ArrowUp"&&event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
- var items=[].slice.call(document.querySelectorAll("#address,#go,nav .tile"));
+ var items=[].slice.call(document.querySelectorAll("#address,#keyboardToggle,#go,nav .tile"));
+ if(keyboard.classList.contains("open"))
+   items=items.concat([].slice.call(keyboard.querySelectorAll("button")));
  var index=items.indexOf(active);
  if(index<0)index=0;
  var step=(event.key==="ArrowLeft"||event.key==="ArrowUp")?-1:1;
