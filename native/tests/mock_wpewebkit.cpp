@@ -6,6 +6,7 @@ typedef struct { GObject parent; } FakeView;
 typedef struct { GObjectClass parent_class; } FakeViewClass;
 G_DEFINE_TYPE(FakeView, fake_view, G_TYPE_OBJECT)
 static guint changed;
+static guint terminated;
 static guint closed;
 static guint keyboardEventSignal;
 struct FakeKeyEvent { int type; unsigned modifiers; unsigned keyval; };
@@ -16,6 +17,9 @@ static void fake_view_class_init(FakeViewClass*) {
     keyboardEventSignal = g_signal_new("event", fake_view_get_type(), G_SIGNAL_RUN_LAST,
                            0, g_signal_accumulator_true_handled, nullptr, nullptr,
                            G_TYPE_BOOLEAN, 1, G_TYPE_POINTER);
+    terminated = g_signal_new("web-process-terminated", fake_view_get_type(),
+                             G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
+                             G_TYPE_NONE, 1, G_TYPE_INT);
     changed = g_signal_new("load-changed", fake_view_get_type(),
                            G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
                            G_TYPE_NONE, 1, G_TYPE_INT);
@@ -63,6 +67,10 @@ static gboolean finished(gpointer v) {
         const FakeKeyEvent quit = {7, 1u, 0x71}; // Ctrl+Q
         gboolean handled = FALSE;
         g_signal_emit(v, keyboardEventSignal, 0, &quit, &handled);
+    }
+    if (g_getenv("FIRE4NIX_MOCK_TERMINATE")) {
+        g_signal_emit(v, terminated, 0, 1);
+        g_printerr("[MOCK-WPE] web process terminated before load finish\n");
     }
     g_signal_emit(v,changed,0,3);
     (void)closed;
