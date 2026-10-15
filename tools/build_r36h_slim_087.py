@@ -96,7 +96,7 @@ exec sh "$D/Teste-Nativo-086/Fire4Nix-086-Teste.sh" --smoke "$@"
         )
         # Prevent any accidental inclusion of proprietary settings, reference OS dumps,
         # ELF binaries from previous versions, or WebKit shared objects.
-        expected = len(RUN_FILES) + len(SCRIPTS) + len(UPDATERS) + 4 + 3
+        expected = len(RUN_FILES) + len(SCRIPTS) + len(UPDATERS) + 6
         actual = [p for p in stage.rglob("*") if p.is_file()]
         if len(actual) != expected:
             raise RuntimeError(f"Unexpected file count {len(actual)} (expected {expected})")
