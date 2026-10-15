@@ -119,6 +119,15 @@ jobs:
           # Source WebKit and installed WebKit can share an inode on link-capable filesystems.
           test "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -ef "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
           test -n "$(find "$t/roms/ports" -maxdepth 1 -name 'fire4nix-completo.backup-*' -print -quit)"
+          # Disable hardlinks to emulate FAT/exFAT or a different SD card.
+          mkdir -p "$t/nolink"
+          printf '#!/bin/sh\nexit 1\n' > "$t/nolink/ln"
+          chmod +x "$t/nolink/ln"
+          printf '<!-- fat-fallback-update -->\n' >> "$t/pkg/Fire4Nix/www/inicio.html"
+          PATH="$t/nolink:$PATH" FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
+          grep -q 'fat-fallback-update' "$t/roms/ports/fire4nix-completo/www/inicio.html"
+          # Unlike ext4 hardlinks, the fallback must yield an independent file.
+          test ! "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -ef "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
           # A new binary must trigger an upgrade, not be silently skipped.
           printf '\n# v090 update\n' >> "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
@@ -149,7 +158,7 @@ jobs:
           test -z "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-staging-*' -print -quit)"
           FIRE4NIX_DIAGNOSTIC_OUT="$t/installed-report.txt" sh "$t/roms/ports/fire4nix-completo/Diagnosticar-Fire4Nix.sh"
           grep -q 'WPEPlatform_preflight_exit=0' "$t/installed-report.txt"
-          echo 'PASS: safe migration, same-version skip, rollback, early log and diagnostics'
+          echo 'PASS: safe migration, homepage-only update, ext4 hardlinks, FAT/exFAT fallback, rollback, early logs and diagnostics'
       - name: Validate WebKit WPEPlatform API vs legacy-only WPE
         shell: bash
         run: |
