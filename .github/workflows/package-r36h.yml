@@ -27,61 +27,28 @@ jobs:
           bash -n stage/pkg/Tools/Fire4Nix/scripts/fire4nix_env.sh
           sh -n stage/pkg/Tools/Fire4Nix/Fire4Nix.sh
           sh -n stage/pkg/Tools/Fire4Nix/Fire4Nix-R36H-Resgate.sh
+          sh -n stage/pkg/Tools/Fire4Nix/Fire4Nix-Diagnosticar.sh
           test -f stage/pkg/Tools/Fire4Nix/src/wpe/wpe_platform_launcher.cpp
           test -f stage/pkg/Tools/Fire4Nix/www/inicio.html
-          cat > stage/pkg/Atualizar-Fire4Nix-R36H.sh <<'SHELL'
-          #!/bin/sh
-          set -eu
-          BASE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-          SOURCE="$BASE/Tools/Fire4Nix"
-          [ -f "$SOURCE/scripts/run_browser.sh" ] || { echo 'ERRO: Pacote incompleto'; exit 2; }
-          DEST="${FIRE4NIX_DEST:-}"
-          if [ -z "$DEST" ]; then
-            for candidate in /storage/games-internal/roms/tools/Fire4Nix /storage/games-external/roms/tools/Fire4Nix; do
-              if [ -d "$candidate" ]; then DEST=$candidate; break; fi
-            done
-          fi
-          if [ -z "$DEST" ] || [ ! -d "$DEST" ] || [ ! -w "$DEST" ]; then
-            echo 'Instalação existente não encontrada: defina FIRE4NIX_DEST.'
-            exit 2
-          fi
-          BACKUP="$DEST/backup-prev-$(date +%Y%m%d-%H%M%S)"
-          mkdir -p "$BACKUP"
-          for entry in scripts Fire4Nix.sh fire4nix.conf; do
-            if [ -e "$DEST/$entry" ]; then cp -a "$DEST/$entry" "$BACKUP/"; fi
-          done
-          if [ -f "$DEST/bin/fire4nix-wpe-platform" ]; then
-            mkdir -p "$BACKUP/bin"
-            cp -a "$DEST/bin/fire4nix-wpe-platform" "$BACKUP/bin/"
-          fi
-          cp -a "$SOURCE/." "$DEST/"
-          if [ -f "$BACKUP/bin/fire4nix-wpe-platform" ]; then
-            cp -a "$BACKUP/bin/fire4nix-wpe-platform" "$DEST/bin/fire4nix-wpe-platform"
-          fi
-          if [ -f "$BACKUP/fire4nix.conf" ]; then cp -a "$BACKUP/fire4nix.conf" "$DEST/fire4nix.conf"; fi
-          chmod +x "$DEST/Fire4Nix.sh" "$DEST/Fire4Nix-R36H-Resgate.sh" "$DEST/scripts/"*.sh "$DEST/bin/"* 2>/dev/null || true
-          echo "Fire4Nix atualizado; backup em $BACKUP"
-          if [ ! -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
-            echo 'AVISO: biblioteca ARM64 WPE ausente. Atualização não é um WebKit completo.'
-          fi
-          SHELL
+          # Neither overwrite nor distribute the user's original WPE binary, runtime or config.
+          rm -f stage/pkg/Tools/Fire4Nix/bin/fire4nix-wpe-platform
+          rm -f stage/pkg/Tools/Fire4Nix/fire4nix.conf
+          rm -rf stage/pkg/Tools/Fire4Nix/.mozilla_profile
+          cp source_r36h/Atualizar-Fire4Nix-R36H.sh stage/pkg/
+          cp source_r36h/1-Verificar-Fire4Nix-R36H.sh stage/pkg/
+          cp source_r36h/2-Abrir-Fire4Nix-R36H.sh stage/pkg/
+          chmod +x stage/pkg/*.sh stage/pkg/Tools/Fire4Nix/Fire4Nix-Diagnosticar.sh
           sh -n stage/pkg/Atualizar-Fire4Nix-R36H.sh
-          cat > stage/pkg/LEIA-ME-PRIMEIRO.txt <<'README'
-          Fire4Nix 0.84 R36H - atualizacao para instalacao existente
-          Extraia e execute Atualizar-Fire4Nix-R36H.sh com Terminal R36.
-          O instalador preserva o runtime e executavel WebKit existentes.
-          Use Fire4Nix-R36H-Resgate.sh para salvar logs de erro.
-          A GPU Mali, Wayland e sandbox exigem teste real no R36H.
-          README
-          (cd stage/pkg && zip -qr ../../dist/Fire4Nix-R36H-0.84-integrated-github.zip .)
-          unzip -t dist/Fire4Nix-R36H-0.84-integrated-github.zip | tail -2
+          cp source_r36h/LEIA-ME-PRIMEIRO.txt stage/pkg/
+          (cd stage/pkg && zip -qr ../../dist/Fire4Nix-R36H-0.85-integrated-github.zip .)
+          unzip -t dist/Fire4Nix-R36H-0.85-integrated-github.zip | tail -2
           sha256sum dist/*.zip > dist/SHA256SUMS.txt
       - name: Test safe installer preserving user data
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/test-fire4nix/bin /tmp/test-fire4nix/runtime/lib
-          printf '#!/bin/sh\nexit 139\n' > /tmp/test-fire4nix/bin/fire4nix-wpe-platform
+          printf '#!/bin/sh\necho mock-wpe\nexit "${MOCK_STATUS:-139}"\n' > /tmp/test-fire4nix/bin/fire4nix-wpe-platform
           chmod +x /tmp/test-fire4nix/bin/fire4nix-wpe-platform
           printf 'existing-wpe' > /tmp/test-fire4nix/runtime/lib/libWPEWebKit-2.0.so.1
           printf 'custom-settings' > /tmp/test-fire4nix/fire4nix.conf
@@ -90,9 +57,23 @@ jobs:
           grep -q 'existing-wpe' /tmp/test-fire4nix/runtime/lib/libWPEWebKit-2.0.so.1
           grep -q 'custom-settings' /tmp/test-fire4nix/fire4nix.conf
           test -n "$(find /tmp/test-fire4nix -maxdepth 1 -name 'backup-prev-*' -print -quit)"
+          test ! -f stage/pkg/Tools/Fire4Nix/bin/fire4nix-wpe-platform
+          test ! -d stage/pkg/Tools/Fire4Nix/runtime
+          test ! -f stage/pkg/Tools/Fire4Nix/fire4nix.conf
+          mkdir -p /tmp/test-fire4nix/runtime/libexec/wpe-webkit-2.0
+          for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            printf '#!/bin/sh\\nexit 0\\n' > "/tmp/test-fire4nix/runtime/libexec/wpe-webkit-2.0/$child"
+            chmod +x "/tmp/test-fire4nix/runtime/libexec/wpe-webkit-2.0/$child"
+          done
+          FIRE4NIX_LOG_DIR=/tmp/fire4nix-ci-log sh /tmp/test-fire4nix/Fire4Nix-Diagnosticar.sh --check --root /tmp/test-fire4nix | grep CHECK_OK
+          set +e
+          MOCK_STATUS=139 FIRE4NIX_LOG_DIR=/tmp/fire4nix-ci-log sh /tmp/test-fire4nix/Fire4Nix-Diagnosticar.sh --headless --root /tmp/test-fire4nix
+          exit_code=$?
+          set -e
+          test "$exit_code" -eq 139
           echo 'PASS: original executable, library, configuration and rollback backup'
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.84-integrated-test
+          name: Fire4Nix-R36H-0.85-integrated-test
           path: dist/
           retention-days: 30
