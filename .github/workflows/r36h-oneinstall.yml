@@ -1,4 +1,4 @@
-name: Fire4Nix 0.90 R36H transactional installer
+name: Fire4Nix 0.91 R36H keyboard-navigation installer
 on:
   push:
     paths:
@@ -39,7 +39,7 @@ jobs:
           <a href="https://wpewebkit.org">WPE WebKit</a></html>
           HTML
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.90 R36H - instalacao unica com recuperacao e fullscreen para ROCKNIX 20261001.
+          Fire4Nix 0.91 R36H - instalacao unica com navegacao por teclado para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -49,6 +49,9 @@ jobs:
           Preflight --check-platform recusa a biblioteca WebKit legada sem WPEPlatform.
           O instalador evita recopia na mesma versao e faz rollback se a troca falhar.
           WPEPlatform usa modo fullscreen no Sway quando disponivel.
+          Atalhos: Ctrl+R recarregar, Alt+Esquerda voltar, Alt+Direita avancar,
+          F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
+          Controles do gamepad R36H ainda nao homologados.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
@@ -122,6 +125,14 @@ jobs:
           LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v090-smoke.log 2>&1
           grep -q 'fullscreen requested' /tmp/fire4nix-v090-smoke.log
           grep -q 'load-event=3' /tmp/fire4nix-v090-smoke.log
+          grep -q 'shortcut Ctrl+R: reload' /tmp/fire4nix-v090-smoke.log
+          grep -q '\[MOCK-WPE\] reload performed' /tmp/fire4nix-v090-smoke.log
+          grep -q 'shortcut Alt+Left: back' /tmp/fire4nix-v090-smoke.log
+          grep -q '\[MOCK-WPE\] back performed' /tmp/fire4nix-v090-smoke.log
+          grep -q 'shortcut Alt+Right: forward' /tmp/fire4nix-v090-smoke.log
+          grep -q '\[MOCK-WPE\] forward performed' /tmp/fire4nix-v090-smoke.log
+          grep -q 'shortcut F11: window mode' /tmp/fire4nix-v090-smoke.log
+          grep -q '\[MOCK-WPE\] window mode requested' /tmp/fire4nix-v090-smoke.log
           set +e
           LD_LIBRARY_PATH=/tmp/old-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform
           old_status=$?
@@ -132,10 +143,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip .)
-          unzip -t Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.91-Navegacao-ARM64.zip .)
+          unzip -t Fire4Nix-R36H-0.91-Navegacao-ARM64.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura
-          path: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip
+          name: Fire4Nix-R36H-0.91-Navegacao-ARM64
+          path: Fire4Nix-R36H-0.91-Navegacao-ARM64.zip
           retention-days: 30
