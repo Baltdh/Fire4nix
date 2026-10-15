@@ -188,6 +188,12 @@ int main(int argc, char** argv) {
                 setting(settings, "enable-webrtc", FALSE);
                 setting(settings, "enable-media-stream", FALSE);
                 setting(settings, "enable-mediasource", FALSE);
+                // Back/forward page cache retains entire documents in memory.
+                // Keep URL/history behavior but reclaim documents between pages.
+                setting(settings, "enable-page-cache", FALSE);
+                setting(settings, "enable-webaudio", FALSE);
+                // Avoid automatic video/audio work on a 1 GB RK3326 device.
+                setting(settings, "media-playback-requires-user-gesture", TRUE);
                 setting(settings, "enable-encrypted-media", FALSE);
                 setting(settings, "enable-developer-extras", FALSE);
             }
