@@ -137,5 +137,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura
-          path: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip
+          path: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip
           retention-days: 30
