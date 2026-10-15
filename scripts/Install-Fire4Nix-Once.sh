@@ -12,6 +12,14 @@ if [ -z "$ROMS" ]; then
     done
 fi
 [ -n "$ROMS" ] || { echo "ROM directory not found. Set FIRE4NIX_ROMS." >&2; exit 2; }
+# An install-once command should not duplicate a 174 MB+ runtime on repeated runs.
+DEST="$ROMS/ports/fire4nix-completo"
+if [ -s "$DEST/bin/fire4nix-native-aarch64" ] && [ -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
+    if sh "$DEST/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1; then
+        echo "Fire4Nix already installed and API-compatible: $DEST"
+        exit 0
+    fi
+fi
 SRC_RUNTIME=
 for path in "$SOURCE/runtime" "$ROMS/tools/Fire4Nix/runtime" "$ROMS/ports/Fire4Nix/runtime" "$ROMS/ports/fire4nix-completo/runtime" /storage/games-internal/roms/tools/Fire4Nix/runtime /storage/games-external/roms/tools/Fire4Nix/runtime; do
     if [ -s "$path/lib/libWPEWebKit-2.0.so.1" ]; then SRC_RUNTIME="$path"; break; fi
@@ -26,8 +34,18 @@ for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
         echo "Missing WPE subprocess: $child" >&2; exit 3;
     }
 done
-DEST="$ROMS/ports/fire4nix-completo"
 mkdir -p "$ROMS/ports"
+# Reserve enough space for a complete independent runtime plus a small margin.
+required_kb=$(du -sk "$SRC_RUNTIME" 2>/dev/null | awk '{print $1}')
+available_kb=$(df -Pk "$ROMS/ports" 2>/dev/null | awk 'NR==2 {print $4}')
+case "$required_kb:$available_kb" in
+  *[!0-9:]*|:*|*:) ;;
+  *) if [ "$available_kb" -lt "$((required_kb + 32768))" ]; then
+      echo "Insufficient free space to safely copy the private WPE runtime." >&2
+      echo "Required approximately $((required_kb / 1024 + 32)) MiB; available $((available_kb / 1024)) MiB." >&2
+      exit 6
+     fi ;;
+esac
 STAGE="$ROMS/ports/.fire4nix-staging-$$"
 trap 'rm -rf "$STAGE" 2>/dev/null || true' EXIT HUP INT TERM
 mkdir -p "$STAGE"
@@ -38,8 +56,9 @@ if [ ! -s "$STAGE/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
 fi
 [ -s "$STAGE/runtime/lib/libWPEWebKit-2.0.so.1" ] || exit 4
 chmod +x "$STAGE"/bin/fire4nix-native-aarch64 "$STAGE"/*.sh 2>/dev/null || true
-if ! sh "$STAGE/Fire4Nix-Iniciar.sh" --check-library; then
-    echo "WebKit is missing loader dependencies. Original installation left intact." >&2
+if ! sh "$STAGE/Fire4Nix-Iniciar.sh" --check-platform; then
+    echo "WebKit missing dependencies or does not provide WPEPlatform." >&2
+    echo "Original Fire4Nix untouched; a legacy libwpe backend or compatible WPE runtime is required." >&2
     exit 5
 fi
 if [ -e "$DEST" ]; then
@@ -49,11 +68,19 @@ if [ -e "$DEST" ]; then
 fi
 mv "$STAGE" "$DEST"
 trap - EXIT HUP INT TERM
-cat > "$ROMS/ports/Fire4Nix.sh" <<'PORT'
+if [ -e "$ROMS/ports/Fire4Nix.sh" ]; then
+    cp -p "$ROMS/ports/Fire4Nix.sh" "$ROMS/ports/Fire4Nix.sh.backup-$(date +%Y%m%d-%H%M%S)-$" || {
+        echo "Cannot back up existing Ports shortcut" >&2
+        exit 7
+    }
+fi
+PORT_TEMP="$ROMS/ports/.Fire4Nix.sh.$.tmp"
+cat > "$PORT_TEMP" <<'PORT'
 #!/bin/sh
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 exec sh "$DIR/fire4nix-completo/Fire4Nix.sh" "$@"
 PORT
-chmod +x "$ROMS/ports/Fire4Nix.sh"
+chmod +x "$PORT_TEMP"
+mv -f "$PORT_TEMP" "$ROMS/ports/Fire4Nix.sh"
 echo "Installed Fire4Nix from local WPE library into $DEST"
 echo "Next: launch Fire4Nix from the ROCKNIX Ports menu; rendering remains unverified."

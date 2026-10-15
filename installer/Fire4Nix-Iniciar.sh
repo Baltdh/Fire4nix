@@ -5,7 +5,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
 MODE=${1:---open}
 [ "$#" -eq 0 ] || shift
-case "$MODE" in --open|--smoke|--headless|--check-library|--selftest) ;; *) echo "invalid mode $MODE" >&2; exit 2 ;; esac
+case "$MODE" in --open|--smoke|--headless|--check-library|--check-platform|--selftest) ;; *) echo "invalid mode $MODE" >&2; exit 2 ;; esac
 [ -f "$BIN" ] || { echo "Missing Fire4Nix ARM64 executable" >&2; exit 127; }
 [ -x "$BIN" ] || chmod u+x "$BIN" 2>/dev/null || true
 [ -x "$BIN" ] || { echo "ELF cannot execute (permissions/noexec)"; exit 126; }
@@ -22,7 +22,7 @@ export WEBKIT_EXEC_PATH="$CHILD"
 export WPE_PLATFORM=wayland
 unset WPE_DISPLAY
 if [ "$MODE" = --headless ]; then export WPE_PLATFORM=headless; MODE=--smoke; fi
-if [ "$WPE_PLATFORM" = wayland ] && [ ! -S "${XDG_RUNTIME_DIR:-/nowhere}/${WAYLAND_DISPLAY:-invalid}" ]; then
+if [ "$WPE_PLATFORM" = wayland ] && [ "$MODE" != --check-platform ] && [ "$MODE" != --check-library ] && [ ! -S "${XDG_RUNTIME_DIR:-/nowhere}/${WAYLAND_DISPLAY:-invalid}" ]; then
     for dir in /var/run/0-runtime-dir /run/user/0 "/run/user/$(id -u 2>/dev/null || echo 1000)"; do
         for socket in wayland-1 wayland-0; do
             if [ -S "$dir/$socket" ]; then
@@ -32,6 +32,11 @@ if [ "$WPE_PLATFORM" = wayland ] && [ ! -S "${XDG_RUNTIME_DIR:-/nowhere}/${WAYLA
         done
     done
 fi
+# Reject graphical startup when no running Sway socket can be found.
+if [ "$WPE_PLATFORM" = wayland ] && [ "$MODE" != --check-platform ] && [ "$MODE" != --check-library ] && [ ! -S "${XDG_RUNTIME_DIR:-/nowhere}/${WAYLAND_DISPLAY:-invalid}" ]; then
+    echo 'Fire4Nix: Wayland socket unavailable; start from ROCKNIX Ports under Sway.' >&2
+    exit 69
+fi
 export FIRE4NIX_LOW_MEMORY=${FIRE4NIX_LOW_MEMORY:-1}
 export MALI_WAYLAND_AFBC=${MALI_WAYLAND_AFBC:-0}
 LOG_DIR=${FIRE4NIX_LOG_DIR:-$ROOT/logs}
@@ -40,7 +45,7 @@ LOG="$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-$$.log"
 URL=${1:-file://$ROOT/www/inicio.html}
 { echo "mode=$MODE"; echo "platform=$WPE_PLATFORM"; echo "socket=${XDG_RUNTIME_DIR:-none}/${WAYLAND_DISPLAY:-none}"; } > "$LOG"
 case "$MODE" in
-  --check-library) "$BIN" --check-library >> "$LOG" 2>&1; code=$? ;;
+  --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;
   --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
   --open) "$BIN" "$URL" >> "$LOG" 2>&1; code=$? ;;
 esac

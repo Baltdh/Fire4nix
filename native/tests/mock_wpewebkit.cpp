@@ -6,16 +6,23 @@ typedef struct { GObject parent; } FakeView;
 typedef struct { GObjectClass parent_class; } FakeViewClass;
 G_DEFINE_TYPE(FakeView, fake_view, G_TYPE_OBJECT)
 static guint changed;
+static guint closed;
 static void fake_view_class_init(FakeViewClass*) {
+    closed = g_signal_new("closed", fake_view_get_type(), G_SIGNAL_RUN_LAST,
+                           0, nullptr, nullptr, nullptr, G_TYPE_NONE, 0);
     changed = g_signal_new("load-changed", fake_view_get_type(),
                            G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
                            G_TYPE_NONE, 1, G_TYPE_INT);
 }
 static void fake_view_init(FakeView*) {}
 extern "C" GType webkit_web_view_get_type(void) { return fake_view_get_type(); }
+#ifndef MOCK_NO_PLATFORM
+extern "C" gpointer webkit_web_view_get_wpe_view(gpointer view) { return view; }
+#endif
 extern "C" const char* webkit_web_view_get_uri(gpointer) { return "about:blank"; }
 static gboolean finished(gpointer v) {
     g_signal_emit(v,changed,0,3);
+    (void)closed;
     g_object_unref(v);
     return G_SOURCE_REMOVE;
 }

@@ -1,8 +1,10 @@
-name: Fire4Nix R36H one-time installer (existing WPE)
+name: Fire4Nix 0.89 R36H one-time optimized installer
 on:
   push:
     paths:
       - 'installer/**'
+      - 'native/fire4nix_wpeplatform.cpp'
+      - 'native/tests/mock_wpewebkit.cpp'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
   workflow_dispatch:
@@ -20,9 +22,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev
           mkdir -p out/Fire4Nix/bin out/Fire4Nix/www
-          g++ -std=c++17 -O2 -Wall -Wextra -Werror native/fire4nix_wpeplatform.cpp \
-            $(pkg-config --cflags --libs glib-2.0 gobject-2.0 gio-2.0) -ldl \
+          g++ -std=c++17 -Os -flto -mtune=cortex-a35 -ffunction-sections -fdata-sections -Wall -Wextra -Werror native/fire4nix_wpeplatform.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -ldl -Wl,--gc-sections,-z,relro,-z,now \
             -o out/Fire4Nix/bin/fire4nix-native-aarch64
+          strip --strip-unneeded out/Fire4Nix/bin/fire4nix-native-aarch64
           readelf -h out/Fire4Nix/bin/fire4nix-native-aarch64 | grep -q AArch64
           out/Fire4Nix/bin/fire4nix-native-aarch64 --selftest | grep AArch64
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
@@ -36,18 +39,21 @@ jobs:
           <a href="https://wpewebkit.org">WPE WebKit</a></html>
           HTML
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix R36H - instalador unico experimental para ROCKNIX 20261001.
+          Fire4Nix 0.89 R36H - instalacao unica otimizada para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
           Se faltarem os arquivos, CANCELA e nao modifica o sistema.
           Extraia e execute: sh Instalar-Fire4Nix-Uma-Vez.sh
           Depois procure Fire4Nix em Ports. O resultado grafico no hardware nao esta comprovado.
+          Preflight --check-platform recusa a biblioteca WebKit legada sem WPEPlatform.
+          Repetir o instalador nao recopia o runtime se a instalacao ja estiver valida.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix/Fire4Nix-Iniciar.sh
+          out/Fire4Nix/bin/fire4nix-native-aarch64 --help | grep -q check-platform
           (cd out && sha256sum Fire4Nix/bin/fire4nix-native-aarch64 > SHA256SUMS.txt)
       - name: Test refused install and safe mock migration
         shell: bash
@@ -68,20 +74,37 @@ jobs:
             printf 'dummy' > "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$bin"
           done
           # Mock only in test stage: production artifact retains the real ARM64 ELF.
-          printf '#!/bin/sh\nif [ "$1" = --check-library ]; then exit 0; fi\nexit 127\n' > "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          printf '#!/bin/sh\nif [ "$1" = --check-platform ]; then exit 0; fi\nexit 127\n' > "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
           chmod +x "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
           test -f "$t/roms/ports/Fire4Nix.sh"
           cmp "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
-          echo 'PASS: missing WPE refusal, copy of local library and subprocesses, launcher entry, source preserved'
+          FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh" | grep 'already installed'
+          test "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-staging-*' | wc -l)" -eq 0
+          echo 'PASS: missing WPE refusal, local library copy and idempotent re-run'
+      - name: Validate WebKit WPEPlatform API vs legacy-only WPE
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/modern-wpe /tmp/old-wpe
+          g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/modern-wpe/libWPEWebKit-2.0.so.1
+          g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror -DMOCK_NO_PLATFORM native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/old-wpe/libWPEWebKit-2.0.so.1
+          LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform
+          LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank
+          set +e
+          LD_LIBRARY_PATH=/tmp/old-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform
+          old_status=$?
+          set -e
+          test "$old_status" -eq 78
+          echo 'PASS: platform API and mock lifecycle, legacy-only WPE refused without crash'
       - name: Build download artifact
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-Uma-Instalacao-Experimental.zip .)
-          unzip -t Fire4Nix-R36H-Uma-Instalacao-Experimental.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip .)
+          unzip -t Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-Uma-Instalacao-Experimental
-          path: Fire4Nix-R36H-Uma-Instalacao-Experimental.zip
+          name: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada
+          path: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip
           retention-days: 30
