@@ -477,7 +477,12 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    WebKitWebView* view = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(webContext));
+    // WPEPlatform (not the deprecated libwpe backend) owns the display.
+    // The legacy webkit_web_view_new_with_context() expects a native backend
+    // in WPE builds and cannot be called with a single web context argument.
+    WebKitWebView* view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+                                                       "web-context", webContext,
+                                                       nullptr));
     if (view == nullptr) {
         g_printerr("Fire4Nix WPE: failed to create WebKitWebView\n");
         return EXIT_FAILURE;
