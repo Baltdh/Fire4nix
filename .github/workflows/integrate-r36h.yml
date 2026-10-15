@@ -1,0 +1,144 @@
+name: Reconstruct corrected R36H source
+on:
+  push:
+    paths: ['.github/workflows/integrate-r36h.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack legacy first-party source and apply R36H corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q -o Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip -d _extract
+          mkdir -p source_r36h/Fire4Nix
+          for item in scripts src theme emulationstation .mozilla_profile Makefile Fire4Nix.sh Install-Fire4Nix.sh fire4nix.conf README.md; do
+            if [ -e "_extract/Fire4Nix/$item" ]; then cp -a "_extract/Fire4Nix/$item" source_r36h/Fire4Nix/; fi
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("source_r36h/Fire4Nix")
+          env=root/"scripts/fire4nix_env.sh"
+          run=root/"scripts/run_browser.sh"
+          def fix(path,old,new):
+              data=path.read_text()
+              if old not in data: raise RuntimeError(f"Missing patch anchor {path}: {old[:80]}")
+              path.write_text(data.replace(old,new))
+          fix(env,'    if [ -d "$reference_root/runtime-libs/armhf/lib32-snapshot" ]; then',
+                  '    if [ "$(uname -m)" != aarch64 ] && [ -d "$reference_root/runtime-libs/armhf/lib32-snapshot" ]; then')
+          fix(env,'    if [ -d "$reference_root/devkit/armhf/pkgconfig" ]; then',
+                  '    if [ "$(uname -m)" != aarch64 ] && [ -d "$reference_root/devkit/armhf/pkgconfig" ]; then')
+          fix(env,'''    fire4nix_sync_progress_context
+          }
+          fire4nix_log_reference_summary()''',
+          '''    if [ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-not-set}" ]; then
+              local wd wr
+              for wr in /var/run/0-runtime-dir /run/user/0 "${XDG_RUNTIME_DIR:-/nonexistent}"; do
+                  for wd in wayland-1 wayland-0; do
+                      if [ -S "$wr/$wd" ]; then
+                          export XDG_RUNTIME_DIR="$wr"
+                          export WAYLAND_DISPLAY="$wd"
+                          break 2
+                      fi
+                  done
+              done
+          fi
+          fire4nix_sync_progress_context
+          }
+          fire4nix_log_reference_summary()''')
+          fix(env,'    export WPE_DISPLAY="$display"',
+          '''    local local_root="${FIRE4NIX_HOME:-${APP_DIR:-}}"
+          if [ -s "$local_root/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
+              case ":${LD_LIBRARY_PATH:-}:" in
+                  *":$local_root/runtime/lib:"*) ;;
+                  *) export LD_LIBRARY_PATH="$local_root/runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
+              esac
+              if [ -d "$local_root/runtime/libexec/wpe-webkit-2.0" ]; then
+                  export WEBKIT_EXEC_PATH="$local_root/runtime/libexec/wpe-webkit-2.0"
+              fi
+          fi
+          export WPE_PLATFORM="${WPE_PLATFORM:-wayland}"
+          export MALI_WAYLAND_AFBC="${MALI_WAYLAND_AFBC:-0}"
+          export WPE_DISPLAY="$display"''')
+          fix(env,'''        fire4nix_wpe_runtime_env
+                  exec "$native_binary" "$url" "$@"''',
+          '''        fire4nix_wpe_runtime_env
+                  if [ -z "${WEBKIT_EXEC_PATH:-}" ] || [ ! -s "${FIRE4NIX_HOME:-$APP_DIR}/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
+                      echo '[Fire4Nix] Missing WPE library/subprocesses on existing SD installation' >&2
+                      return 127
+                  fi
+                  "$native_binary" "$url" "$@"
+                  local native_status=$?
+                  printf '[Fire4Nix] native_wpe_exit_code=%s\n' "$native_status" >&2
+                  return "$native_status"''')
+          fix(env,'''            fire4nix_launch_wpe_platform "$normalized_url" "$@"
+                      ;;''',
+          '''            fire4nix_launch_wpe_platform "$normalized_url" "$@"
+                      return $?
+                      ;;''')
+          fix(run,'export FIRE4NIX_LOG="${FIRE4NIX_LOG:-$LOG_DIR/fire4nix.log}"',
+                  'export FIRE4NIX_LOG="${FIRE4NIX_LOG:-$LOG_DIR/fire4nix.log}"\nLOG_FILE="$FIRE4NIX_LOG"')
+          fix(run,'echo "platform=${FIRE4NIX_PLATFORM}"','echo "platform=${FIRE4NIX_PLATFORM:-rocknix}"')
+          fix(run,'export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-about:home}"',
+                  'export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$APP_DIR/www/inicio.html}"')
+          fix(run,'''if ! fire4nix_launch_engine "$selected_engine" "$FIRE4NIX_START_PAGE" "$@"; then
+              echo "[ERROR] no launchable browser engine found" >&2
+              echo "[Fire4Nix] no launchable browser engine found" >> "$LOG_FILE"
+              exit 1
+          fi''',
+          '''if fire4nix_launch_engine "$selected_engine" "$FIRE4NIX_START_PAGE" "$@" >> "$LOG_FILE" 2>&1; then
+              status=0
+          else
+              status=$?
+          fi
+          printf '[Fire4Nix] actual_browser_exit_code=%s\n' "$status" | tee -a "$LOG_FILE"
+          if [ "$status" -ne 0 ]; then
+              tail -n 75 "$LOG_FILE" > "$FIRE4NIX_LOG_DIR/ultimo-diagnostico.txt" 2>/dev/null || true
+              cp "$FIRE4NIX_LOG_DIR/ultimo-diagnostico.txt" /storage/Fire4Nix-ultimo-diagnostico.txt 2>/dev/null || true
+          fi
+          exit "$status"''')
+          cpp=root/"src/wpe/wpe_platform_launcher.cpp"
+          fix(cpp,'''    if (view != nullptr)
+                  webkit_web_view_reload(view);
+              return TRUE;
+          }
+          
+          void onTitleNotify''',
+          '''    // Avoid endless reload on low-memory process crashes.
+              (void)view;
+              return TRUE;
+          }
+          
+          void onTitleNotify''')
+          (root/"Fire4Nix.sh").write_text('''#!/bin/sh
+          set -eu
+          APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+          exec bash "$APP_DIR/scripts/run_browser.sh" "$@"
+          ''')
+          (root/"VERSION").write_text("0.84-r36h-integrated-test1\n")
+          (root/"www").mkdir(exist_ok=True)
+          (root/"www/inicio.html").write_text('<!doctype html><html lang="pt-br"><meta charset="utf-8"><title>Fire4Nix</title><style>body{background:#121a23;color:white;font:20px sans-serif;margin:24px}a{color:#8ad8ff}</style><h1>Fire4Nix</h1><p>R36H - ROCKNIX</p><a href="https://lite.duckduckgo.com/lite/">Pesquisar na internet</a></html>')
+          PY
+          bash -n source_r36h/Fire4Nix/scripts/fire4nix_env.sh
+          bash -n source_r36h/Fire4Nix/scripts/run_browser.sh
+          sh -n source_r36h/Fire4Nix/Fire4Nix.sh
+          echo 'Source updated and syntactically valid; ARM64 GPU runtime still needs physical-device test.'
+      - name: Commit canonical first-party code on branch
+        shell: bash
+        run: |
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add source_r36h/
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: canonical R36H corrected first-party Fire4Nix source"
+            git push origin HEAD:build/integrated-r36h-v4-20261014
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corrected-r36h-source-tree
+          path: source_r36h/
+          retention-days: 14
