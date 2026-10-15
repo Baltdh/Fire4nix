@@ -11,6 +11,8 @@ if [ -z "$ROOT" ]; then
   done
 fi
 if [ ! -f "$BIN" ]; then echo 'ERRO: nao foi encontrado o executavel ARM64 ao lado do script.' >&2; exit 2; fi
+# Selftest verifies architecture and script without requiring the 174 MB WebKit.
+if [ "${1:-}" = --selftest ]; then exec "$BIN" --selftest; fi
 if [ -z "$ROOT" ] || [ ! -s "$ROOT/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
   echo 'ERRO: runtime WPE existente nao encontrado. Nao instale bibliotecas em /usr.' >&2
   exit 127
@@ -39,14 +41,19 @@ LOG="$LOGDIR/fire4nix-086-$(date +%Y%m%d-%H%M%S 2>/dev/null)-$$.log"
 MODE=${1:---smoke}
 if [ "$#" -gt 0 ]; then shift; fi
 case "$MODE" in
-  --selftest|--check-library|--smoke|--open) ;;
+  --selftest|--check-library|--smoke|--headless|--open) ;;
   *) echo 'Uso: sh Fire4Nix-086-Teste.sh --check-library|--smoke|--open [URL]' >&2; exit 2 ;;
 esac
 URL=${1:-}
 if [ -z "$URL" ]; then URL="file://$ROOT/www/inicio.html"; fi
 printf 'Fire4Nix 0.86 | root=%s | socket=%s/%s | WPE_PLATFORM=%s | modo=%s\n' \
  "$ROOT" "${XDG_RUNTIME_DIR:-unknown}" "${WAYLAND_DISPLAY:-unknown}" "$WPE_PLATFORM" "$MODE" > "$LOG"
+if [ "$MODE" = --headless ]; then
+  export WPE_PLATFORM=headless
+  export WPE_DISPLAY=wpe-display-headless
+fi
 case "$MODE" in
+  --headless) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; STATUS=$? ;;
   --open) "$BIN" "$URL" >> "$LOG" 2>&1; STATUS=$? ;;
   --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; STATUS=$? ;;
   --check-library|--selftest) "$BIN" "$MODE" >> "$LOG" 2>&1; STATUS=$? ;;
