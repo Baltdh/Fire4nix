@@ -53,7 +53,7 @@ jobs:
           printf 'existing-wpe' > /tmp/test-fire4nix/runtime/lib/libWPEWebKit-2.0.so.1
           printf 'custom-settings' > /tmp/test-fire4nix/fire4nix.conf
           FIRE4NIX_DEST=/tmp/test-fire4nix sh stage/pkg/Atualizar-Fire4Nix-R36H.sh
-          grep -q 'exit 139' /tmp/test-fire4nix/bin/fire4nix-wpe-platform
+          grep -q 'MOCK_STATUS' /tmp/test-fire4nix/bin/fire4nix-wpe-platform
           grep -q 'existing-wpe' /tmp/test-fire4nix/runtime/lib/libWPEWebKit-2.0.so.1
           grep -q 'custom-settings' /tmp/test-fire4nix/fire4nix.conf
           test -n "$(find /tmp/test-fire4nix -maxdepth 1 -name 'backup-prev-*' -print -quit)"
