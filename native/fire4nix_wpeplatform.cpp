@@ -15,6 +15,7 @@ using LoadUri = void (*)(gpointer, const char*);
 using GetType = GType (*)();
 using SetSettings = void (*)(gpointer, gpointer);
 using GetUri = const char* (*)(gpointer);
+using GetWPEView = gpointer (*)(gpointer);
 
 struct App {
     GMainLoop* loop = nullptr;
@@ -86,7 +87,12 @@ static void childTerminated(GObject*, int reason, gpointer data) {
     App* app = static_cast<App*>(data);
     app->failed = true;
     g_printerr("[FIRE4NIX-NATIVE] web-process-terminated reason=%d\n", reason);
-    if (app->smoke) { app->exitCode = 139; g_idle_add(smokeQuit, app); }
+    if (app->smoke) { app->exitCode = 70; g_idle_add(smokeQuit, app); }
+}
+static void platformViewClosed(GObject*, gpointer data) {
+    App* app = static_cast<App*>(data);
+    stage("WPEView closed by compositor");
+    if (app->loop) g_main_loop_quit(app->loop);
 }
 static gboolean closeView(GObject*, gpointer data) {
     App* app = static_cast<App*>(data);
@@ -109,7 +115,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 0.86: [--selftest|--check-library|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 0.89: [--selftest|--check-library|--check-platform|--smoke] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -121,10 +127,11 @@ int main(int argc, char** argv) {
         return 0;
     }
     const bool onlyLibrary = argc > 1 && !strcmp(argv[1], "--check-library");
+    const bool onlyPlatform = argc > 1 && !strcmp(argv[1], "--check-platform");
     const bool smoke = argc > 1 && !strcmp(argv[1], "--smoke");
     const char* url = "about:blank";
     for (int i=1; i<argc; ++i) {
-        if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--smoke") &&
+        if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") && strcmp(argv[i],"--smoke") &&
             argv[i][0] != '-') { url=argv[i]; break; }
     }
     stage("dlopen libWPEWebKit-2.0.so.1");
@@ -139,19 +146,40 @@ int main(int argc, char** argv) {
     stage("dlopen success");
     if (onlyLibrary) return 0;
     auto webViewType = symbol<GetType>(app.webkit, "webkit_web_view_get_type");
+    auto getWPEView = symbol<GetWPEView>(app.webkit, "webkit_web_view_get_wpe_view");
     app.loadUri = symbol<LoadUri>(app.webkit, "webkit_web_view_load_uri");
     app.getUri = symbol<GetUri>(app.webkit, "webkit_web_view_get_uri");
     auto settingsType = symbol<GetType>(app.webkit, "webkit_settings_get_type");
     auto assignSettings = symbol<SetSettings>(app.webkit, "webkit_web_view_set_settings");
     if (!webViewType || !app.loadUri) return 127;
+    // The library might expose only the older libwpe backend, even when dlopen worked.
+    if (!getWPEView) {
+        stage("INCOMPATIBLE WPE: WPEPlatform API absent; legacy backend required");
+        return 78;
+    }
+    if (onlyPlatform) {
+        stage("WPEPlatform symbol found (actual Wayland display still untested)");
+        return 0;
+    }
 
     app.loop = g_main_loop_new(nullptr, FALSE);
     stage("creating WebKitWebView via GObject/WPEPlatform");
-    // WPE 2.52 WPEPlatform: the GObject constructor initializes display.
+    // WPEPlatform: the GObject constructor initializes the selected display.
     // The old webkit_web_view_new_with_context() is a legacy backend API.
     app.view = static_cast<GObject*>(g_object_new(webViewType(), nullptr));
     if (!app.view) { stage("WebKitWebView creation failed"); return 3; }
     stage("WebKitWebView created");
+    gpointer nativeView = getWPEView(app.view);
+    if (!nativeView || !G_IS_OBJECT(nativeView)) {
+        stage("WPEPlatform WPEView unavailable");
+        g_object_unref(app.view);
+        g_main_loop_unref(app.loop);
+        return 78;
+    }
+    // The display/window closes via WPEView::closed (not WebKitWebView::close).
+    if (g_signal_lookup("closed", G_OBJECT_TYPE(nativeView)))
+        g_signal_connect(nativeView, "closed", G_CALLBACK(platformViewClosed), &app);
+    stage("WPEPlatform WPEView available");
     if (settingsType && assignSettings) {
         GObject* settings = static_cast<GObject*>(g_object_new(settingsType(), nullptr));
         if (settings) {
@@ -179,7 +207,7 @@ int main(int argc, char** argv) {
 
     g_unix_signal_add(SIGINT, signalQuit, &app);
     g_unix_signal_add(SIGTERM, signalQuit, &app);
-    if (app.smoke) g_timeout_add_seconds(15, timeoutQuit, &app);
+    if (app.smoke) g_timeout_add_seconds(30, timeoutQuit, &app);
     g_printerr("[FIRE4NIX-NATIVE] mode=%s low_memory=%d url=%s platform=%s\n",
                app.smoke ? "smoke" : "interactive", lowMemory() ? 1 : 0, url,
                g_getenv("WPE_PLATFORM") ? g_getenv("WPE_PLATFORM") : "default");
