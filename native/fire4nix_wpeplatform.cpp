@@ -132,6 +132,14 @@ static gboolean onPlatformEvent(GObject*, gpointer event, gpointer data) {
         if (app->loop) g_main_loop_quit(app->loop);
         return TRUE;
     }
+    if ((modifiers & controlModifier) && (keyval == 'h' || keyval == 'H') && app->loadUri) {
+        const char* home = g_getenv("FIRE4NIX_HOME_URL");
+        if (home && *home) {
+            stage("shortcut Ctrl+H: home");
+            app->loadUri(app->view, home);
+            return TRUE;
+        }
+    }
     if ((modifiers & controlModifier) && (keyval == 'r' || keyval == 'R') && app->reload) {
         stage("shortcut Ctrl+R: reload");
         app->reload(app->view);
