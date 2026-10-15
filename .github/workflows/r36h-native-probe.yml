@@ -1,0 +1,53 @@
+name: R36H ARM64 native WPE probe
+on:
+  push:
+    paths:
+      - 'diagnostics/wpe_native_probe.cpp'
+      - 'diagnostics/wpe_native_probe.sh'
+      - '.github/workflows/r36h-native-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-native:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GLib native development headers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev
+      - name: Compile aarch64 diagnostic (not a production browser)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Werror -fno-omit-frame-pointer -rdynamic \
+            diagnostics/wpe_native_probe.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0) \
+            -ldl -o out/fire4nix-wpe-probe-aarch64
+          cp diagnostics/wpe_native_probe.sh out/Fire4Nix-WPE-Sonda-R36H.sh
+          chmod +x out/Fire4Nix-WPE-Sonda-R36H.sh out/fire4nix-wpe-probe-aarch64
+          sh -n out/Fire4Nix-WPE-Sonda-R36H.sh
+          file out/fire4nix-wpe-probe-aarch64
+          readelf -h out/fire4nix-wpe-probe-aarch64 | grep -E 'Class:|Machine:'
+          readelf -h out/fire4nix-wpe-probe-aarch64 | grep -q AArch64
+          out/fire4nix-wpe-probe-aarch64 --selftest | tee out/selftest.txt
+          grep -q 'arch=aarch64' out/selftest.txt
+          ldd out/fire4nix-wpe-probe-aarch64 | tee out/dependencies.txt
+          (cd out && sha256sum fire4nix-wpe-probe-aarch64 > SHA256SUMS.txt)
+          cat > out/LEIA-ME.txt <<'INFO'
+          Fire4Nix ARM64 native WPE diagnostic. It is NOT the production browser.
+          Extract next to the other probe file and run Fire4Nix-WPE-Sonda-R36H.sh.
+          Default --check-library checks dlopen of the portable 174 MB WPE runtime.
+          Then --check-view tests if WPE WebKit can create a WebView.
+          Then --load optionally attempts to render the local Fire4Nix HTML page.
+          Uses the library and WPE subprocesses already present in the R36H SD.
+          It NEVER replaces bin/fire4nix-wpe-platform.
+          Results in /storage/Fire4Nix-Sonda-WPE.txt when writable.
+          INFO
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-AARCH64-WPE-native-probe
+          path: out/
+          retention-days: 30
