@@ -1,44 +1,42 @@
-name: Audit and extract legacy Fire4Nix sources
+name: Audit original Fire4Nix
 on:
   push:
-    paths:
-      - '.github/workflows/audit-fire4nix-sources.yml'
+    paths: ['.github/workflows/audit-fire4nix-sources.yml']
   workflow_dispatch:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Inventory original ZIP files
-        shell: bash
-        run: |
-          set -euo pipefail
-          for zip in ./*backup*.zip; do
-            echo "### ZIP: $zip"
-            unzip -Z1 "$zip" | head -120 || true
-          done
-      - name: Extract inspectable source tree
+      - name: Inspect latest packaged WPE integration
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p _sources
           unzip -q -o Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip -d _sources
-          echo '### TOP LEVEL'; ls -lah _sources
-          echo '### SCRIPT/C SOURCE PATHS'
-          find _sources -type f \( -iname '*.sh' -o -iname '*.c' -o -iname '*.cpp' -o -iname '*.h' -o -iname 'Makefile' \) | head -120
-          echo '### PACKAGE TREE'; find _sources -maxdepth 4 -type f | head -120
-          echo '### RUNTIME OVERVIEW'; du -sh _sources
-      - name: Show original launchers
+          echo '--- exact first-level tree ---'
+          find _sources/Fire4Nix -maxdepth 2 -type d | sort
+          echo '--- all .sh in package ---'
+          find _sources/Fire4Nix -path '*third_party_reference*' -prune -o -type f -name '*.sh' -print | sort
+          echo '--- first-party files, no upstream references ---'
+          find _sources/Fire4Nix -path '*third_party_reference*' -prune -o -type f -print | sed -n '1,180p'
+          echo '--- WPE native binary and runtime inventory ---'
+          find _sources/Fire4Nix/bin _sources/Fire4Nix/runtime -maxdepth 4 -type f 2>/dev/null | sed -n '1,80p' || true
+          echo '--- launch-related source snippets ---'
+          grep -n -E -C 4 'fallback|native_binary|LD_LIBRARY_PATH|WEBKIT_EXEC_PATH|WPE_PLATFORM|cog|wpe-platform' _sources/Fire4Nix/scripts/fire4nix_env.sh | tail -160 || true
+      - name: Extract FIRST PARTY sources for review
         shell: bash
         run: |
-          find _sources -type f \( -iname '*launcher*.sh' -o -iname 'fire4nix_env.sh' -o -iname '*entry*.sh' \) | head -14 | while IFS= read -r path; do
-            echo "### $path"
-            grep -n -E -C 7 'fallback|Segmentation|LD_LIBRARY_PATH|WEBKIT_EXEC_PATH|native_binary|WPE_PLATFORM|cog' "$path" | tail -130 || true
+          mkdir -p review
+          for dir in scripts src config build tools www; do
+            if [ -d "_sources/Fire4Nix/$dir" ]; then cp -r "_sources/Fire4Nix/$dir" review/; fi
           done
+          for f in _sources/Fire4Nix/*.sh _sources/Fire4Nix/README.md _sources/Fire4Nix/Makefile _sources/Fire4Nix/CMakeLists.txt; do
+            if [ -f "$f" ]; then cp "$f" review/; fi
+          done
+          find review -type f | sort | sed -n '1,180p'
       - uses: actions/upload-artifact@v4
         with:
-          name: legacy-extracted-src
-          path: _sources/
+          name: first-party-source-audit
+          path: review/
           retention-days: 7
