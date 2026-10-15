@@ -42,7 +42,7 @@ jobs:
           cp source_r36h/LEIA-ME-PRIMEIRO.txt stage/pkg/
           (cd stage/pkg && zip -qr ../../dist/Fire4Nix-R36H-0.85-integrated-github.zip .)
           unzip -t dist/Fire4Nix-R36H-0.85-integrated-github.zip | tail -2
-          sha256sum dist/*.zip > dist/SHA256SUMS.txt
+          (cd dist && sha256sum *.zip > SHA256SUMS.txt)
       - name: Test safe installer preserving user data
         shell: bash
         run: |
