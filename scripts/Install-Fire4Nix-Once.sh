@@ -7,9 +7,18 @@ SOURCE="$HERE/Fire4Nix"
 [ -f "$SOURCE/bin/fire4nix-native-aarch64" ] || { echo "No native ARM64 candidate bundled" >&2; exit 2; }
 ROMS=${FIRE4NIX_ROMS:-}
 if [ -z "$ROMS" ]; then
+    # On dual-SD R36H devices, favor the card that already has the WPE runtime.
     for path in /storage/games-internal/roms /storage/games-external/roms /storage/roms /roms; do
-        if [ -d "$path/tools" ] && [ -w "$path/tools" ]; then ROMS="$path"; break; fi
+        if [ -s "$path/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" ] && [ -w "$path" ]; then
+            ROMS="$path"
+            break
+        fi
     done
+    if [ -z "$ROMS" ]; then
+        for path in /storage/games-internal/roms /storage/games-external/roms /storage/roms /roms; do
+            if [ -d "$path/tools" ] && [ -w "$path/tools" ]; then ROMS="$path"; break; fi
+        done
+    fi
 fi
 [ -n "$ROMS" ] || { echo "ROM directory not found. Set FIRE4NIX_ROMS." >&2; exit 2; }
 # An install-once command should not duplicate a 174 MB+ runtime on repeated runs.
