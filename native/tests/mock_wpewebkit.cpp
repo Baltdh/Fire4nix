@@ -30,14 +30,16 @@ extern "C" GType webkit_web_view_get_type(void) { return fake_view_get_type(); }
 extern "C" gpointer webkit_web_view_get_wpe_view(gpointer view) { return view; }
 #endif
 extern "C" gpointer wpe_view_get_toplevel(gpointer view) { return view; }
-extern "C" void wpe_toplevel_fullscreen(gpointer) {
+extern "C" gboolean wpe_toplevel_fullscreen(gpointer) {
     fullscreenEnabled = TRUE;
     g_printerr("[MOCK-WPE] fullscreen requested\n");
+    return TRUE;
 }
 extern "C" unsigned wpe_toplevel_get_state(gpointer) { return fullscreenEnabled ? 1u : 0u; }
-extern "C" void wpe_toplevel_unfullscreen(gpointer) {
+extern "C" gboolean wpe_toplevel_unfullscreen(gpointer) {
     fullscreenEnabled = FALSE;
     g_printerr("[MOCK-WPE] window mode requested\n");
+    return TRUE;
 }
 extern "C" int wpe_event_get_event_type(gpointer event) { return static_cast<FakeKeyEvent*>(event)->type; }
 extern "C" unsigned wpe_event_get_modifiers(gpointer event) { return static_cast<FakeKeyEvent*>(event)->modifiers; }
