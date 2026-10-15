@@ -1063,6 +1063,10 @@ fire4nix_launch_wpe_platform() {
         return "$native_status"
     fi
 
+    if ! command -v cog >/dev/null 2>&1; then
+        printf '%s\n' '[Fire4Nix] No working WPE platform launcher; Cog not installed.' >&2
+        return 127
+    fi
     cog_platform="$(fire4nix_cog_platform_name)"
     fire4nix_cog_runtime_env "$cog_platform"
     local -a cog_args
