@@ -19,6 +19,9 @@ extern "C" GType webkit_web_view_get_type(void) { return fake_view_get_type(); }
 #ifndef MOCK_NO_PLATFORM
 extern "C" gpointer webkit_web_view_get_wpe_view(gpointer view) { return view; }
 #endif
+extern "C" gpointer wpe_view_get_toplevel(gpointer view) { return view; }
+extern "C" void wpe_toplevel_fullscreen(gpointer) { g_printerr("[MOCK-WPE] fullscreen requested\n"); }
+extern "C" void wpe_toplevel_set_title(gpointer, const char*) {}
 extern "C" const char* webkit_web_view_get_uri(gpointer) { return "about:blank"; }
 static gboolean finished(gpointer v) {
     g_signal_emit(v,changed,0,3);

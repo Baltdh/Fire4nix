@@ -3,9 +3,14 @@
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
-MODE=${1:---open}
-[ "$#" -eq 0 ] || shift
-case "$MODE" in --open|--smoke|--headless|--check-library|--check-platform|--selftest) ;; *) echo "invalid mode $MODE" >&2; exit 2 ;; esac
+# A URL can be supplied directly, without a preceding --open.
+MODE=--open
+case "${1:-}" in
+  --open|--smoke|--headless|--check-library|--check-platform|--selftest)
+    MODE=$1
+    shift ;;
+  --*) echo "Unsupported Fire4Nix option: $1" >&2; exit 2 ;;
+esac
 [ -f "$BIN" ] || { echo "Missing Fire4Nix ARM64 executable" >&2; exit 127; }
 [ -x "$BIN" ] || chmod u+x "$BIN" 2>/dev/null || true
 [ -x "$BIN" ] || { echo "ELF cannot execute (permissions/noexec)"; exit 126; }

@@ -1,4 +1,4 @@
-name: Fire4Nix 0.89 R36H one-time optimized installer
+name: Fire4Nix 0.90 R36H transactional installer
 on:
   push:
     paths:
@@ -39,7 +39,7 @@ jobs:
           <a href="https://wpewebkit.org">WPE WebKit</a></html>
           HTML
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.89 R36H - instalacao unica otimizada para ROCKNIX 20261001.
+          Fire4Nix 0.90 R36H - instalacao unica com recuperacao e fullscreen para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -47,7 +47,8 @@ jobs:
           Extraia e execute: sh Instalar-Fire4Nix-Uma-Vez.sh
           Depois procure Fire4Nix em Ports. O resultado grafico no hardware nao esta comprovado.
           Preflight --check-platform recusa a biblioteca WebKit legada sem WPEPlatform.
-          Repetir o instalador nao recopia o runtime se a instalacao ja estiver valida.
+          O instalador evita recopia na mesma versao e faz rollback se a troca falhar.
+          WPEPlatform usa modo fullscreen no Sway quando disponivel.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
@@ -81,7 +82,35 @@ jobs:
           cmp "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh" | grep 'already installed'
           test "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-staging-*' | wc -l)" -eq 0
-          echo 'PASS: missing WPE refusal, local library copy and idempotent re-run'
+          # A new binary must trigger an upgrade, not be silently skipped.
+          printf '\n# v090 update\n' >> "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
+          grep -q '# v090 update' "$t/roms/ports/fire4nix-completo/bin/fire4nix-native-aarch64"
+          test -n "$(find "$t/roms/ports" -maxdepth 1 -name 'fire4nix-completo.backup-*' -print -quit)"
+          # Simulate filesystem failure precisely after moving the old installation.
+          printf '\n# simulated failure\n' >> "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          mkdir -p "$t/failbin"
+          cat > "$t/failbin/mv" <<'FAILMV'
+          #!/bin/sh
+          case "$1" in
+            */.fire4nix-staging-*) exit 63 ;;
+          esac
+          exec /usr/bin/mv "$@"
+          FAILMV
+          chmod +x "$t/failbin/mv"
+          set +e
+          PATH="$t/failbin:$PATH" FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh" > "$t/rollback.log" 2>&1
+          status=$?
+          set -e
+          test "$status" -eq 7
+          test -f "$t/roms/ports/Fire4Nix.sh"
+          grep -q '# v090 update' "$t/roms/ports/fire4nix-completo/bin/fire4nix-native-aarch64"
+          if grep -q '# simulated failure' "$t/roms/ports/fire4nix-completo/bin/fire4nix-native-aarch64"; then
+            echo 'FAIL: failed update replaced working binary'
+            exit 1
+          fi
+          test -z "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-staging-*' -print -quit)"
+          echo 'PASS: safe migration, same-version skip, actual upgrade and simulated rollback'
       - name: Validate WebKit WPEPlatform API vs legacy-only WPE
         shell: bash
         run: |
@@ -90,7 +119,9 @@ jobs:
           g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/modern-wpe/libWPEWebKit-2.0.so.1
           g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror -DMOCK_NO_PLATFORM native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/old-wpe/libWPEWebKit-2.0.so.1
           LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform
-          LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank
+          LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v090-smoke.log 2>&1
+          grep -q 'fullscreen requested' /tmp/fire4nix-v090-smoke.log
+          grep -q 'load-event=3' /tmp/fire4nix-v090-smoke.log
           set +e
           LD_LIBRARY_PATH=/tmp/old-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform
           old_status=$?
@@ -101,10 +132,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip .)
-          unzip -t Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip .)
+          unzip -t Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada
-          path: Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip
+          name: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura
+          path: Fire4Nix-R36H-0.90-Instalacao-Unica-Segura.zip
           retention-days: 30
