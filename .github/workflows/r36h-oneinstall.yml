@@ -31,13 +31,7 @@ jobs:
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
-          cat > out/Fire4Nix/www/inicio.html <<'HTML'
-          <!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>Fire4Nix</title><style>body{background:#161a25;color:white;font:20px sans-serif;padding:24px}a{color:#a0d1ff}input,button{font-size:20px;padding:10px}</style>
-          <h1>Fire4Nix</h1><p>ROCKNIX RK3326 · página local</p><form onsubmit="location.href=document.getElementById('u').value;return false">
-          <input id="u" value="https://lite.duckduckgo.com/lite/"><button>Abrir</button></form>
-          <a href="https://wpewebkit.org">WPE WebKit</a></html>
-          HTML
+          cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cat > out/LEIA-ME.txt <<'README'
           Fire4Nix 0.91 R36H - instalacao unica com navegacao por teclado para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
@@ -58,6 +52,8 @@ jobs:
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix/Fire4Nix-Iniciar.sh
+          grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
+          grep -q 'DuckDuckGo' out/Fire4Nix/www/inicio.html
           out/Fire4Nix/bin/fire4nix-native-aarch64 --help | grep -q check-platform
           (cd out && sha256sum Fire4Nix/bin/fire4nix-native-aarch64 > SHA256SUMS.txt)
       - name: Test refused install and safe mock migration
