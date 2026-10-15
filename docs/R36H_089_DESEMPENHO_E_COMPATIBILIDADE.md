@@ -31,7 +31,7 @@ Em runner `ubuntu-24.04-arm`:
 
 1. Extrair o ZIP `Fire4Nix-R36H-0.89-Instalacao-Unica-Otimizada.zip`.
 2. Se a biblioteca WPE já estiver no cartão, executar `sh Instalar-Fire4Nix-Uma-Vez.sh` **uma única vez**.
-3. Se retornar incompatibilidade 78, o WebKit antigo não tem WPEPlatform; será necessária implementação do backend legada ou WebKit compatível, não só alterações de scripts.
+3. Se a verificação nativa registrar código **78**, o WebKit antigo não oferece WPEPlatform. O instalador cancela com código **5**, mantendo a instalação anterior. Nesse caso será preciso um backend legado ou WebKit compatível — só alterações nos scripts não resolvem.
 4. Com sucesso, iniciar o Fire4Nix em **Ports** na interface ROCKNIX.
 5. Se fechar, enviar `/storage/Fire4Nix-ultimo-resultado.txt`.
 
