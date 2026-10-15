@@ -1,0 +1,100 @@
+<theme>
+    <formatVersion>4</formatVersion>
+    
+    <!-- System View: Carousel Entry -->
+    <view name="system">
+        <image name="background" extra="true">
+            <path>./system.png</path>
+            <pos>0.5 0.5</pos>
+            <origin>0.5 0.5</origin>
+            <size>1 1</size>
+            <zIndex>1</zIndex>
+        </image>
+        
+        <!-- Large Logo Overlay (4:3 Ratio Aware) -->
+        <image name="logo_shadow" extra="true">
+            <path>./logo.png</path>
+            <pos>0.3015 0.5015</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.7 0.93</size>
+            <color>000000AA</color>
+            <zIndex>2</zIndex>
+        </image>
+        <image name="logo">
+            <path>./logo.png</path>
+            <pos>0.3 0.5</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.7 0.93</size>
+            <zIndex>3</zIndex>
+        </image>
+
+        <text name="description">
+            <text>Fire4Nix: High-performance web browser. Desktop-class browsing on your ArkOS handheld.</text>
+            <pos>0.3 0.90</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.5 0.08</size>
+            <fontSize>0.035</fontSize>
+            <color>CCCCCCFF</color>
+            <zIndex>4</zIndex>
+        </text>
+    </view>
+
+    <!-- Gamelist View: Clean Dark Mode List -->
+    <view name="basic, detailed, video">
+        <image name="background" extra="true">
+            <path>./system.png</path>
+            <pos>0.5 0.5</pos>
+            <origin>0.5 0.5</origin>
+            <size>1 1</size>
+            <zIndex>1</zIndex>
+            <opacity>0.4</opacity>
+        </image>
+        
+        <!-- Black Backdrop (Self-contained) -->
+        <image name="overlay" extra="true">
+            <path>./blank.png</path>
+            <pos>0 0</pos>
+            <size>1 1</size>
+            <color>000000DD</color>
+            <zIndex>2</zIndex>
+        </image>
+
+        <!-- Header Logo (4:3 Ratio Aware) -->
+        <image name="logo">
+            <path>./logo.png</path>
+            <pos>0.5 0.18</pos>
+            <origin>0.5 0.5</origin>
+            <maxSize>0.25 0.33</maxSize>
+            <zIndex>3</zIndex>
+        </image>
+
+        <!-- Forced Monochromatic Textlist -->
+        <textlist name="gamelist">
+            <pos>0.1 0.35</pos>
+            <size>0.8 0.35</size>
+            <alignment>center</alignment>
+            <fontSize>0.045</fontSize>
+            
+            <primaryColor>DDDDDDFF</primaryColor>
+            <secondaryColor>BBBBBBFF</secondaryColor>
+            <selectedColor>FFFFFFFF</selectedColor>
+            <selectorColor>FF7700AA</selectorColor>
+            <folderColor>DDDDDDFF</folderColor>
+            
+            <zIndex>4</zIndex>
+        </textlist>
+
+        <!-- Suppress ALL metadata labels and values -->
+        <text name="md_lbl_releasedate, md_releasedate, md_lbl_developer, md_developer, md_lbl_publisher, md_publisher, md_lbl_genre, md_genre, md_lbl_players, md_players, md_lbl_lastplayed, md_lastplayed, md_lbl_playcount, md_playcount, md_lbl_rating, md_rating, md_description">
+            <pos>1 1</pos>
+            <visible>false</visible>
+        </text>
+
+        <help name="help">
+            <pos>0.5 0.94</pos>
+            <origin>0.5 0.5</origin>
+            <fontSize>0.03</fontSize>
+            <color>AAAAAAFF</color>
+        </help>
+    </view>
+</theme>
