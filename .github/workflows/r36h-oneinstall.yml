@@ -1,4 +1,4 @@
-name: Fire4Nix 0.91 R36H keyboard-navigation installer
+name: Fire4Nix 0.92 R36H polished diagnostics and keyboard
 on:
   push:
     paths:
@@ -29,11 +29,13 @@ jobs:
           readelf -h out/Fire4Nix/bin/fire4nix-native-aarch64 | grep -q AArch64
           out/Fire4Nix/bin/fire4nix-native-aarch64 --selftest | grep AArch64
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
+          cp installer/Diagnosticar-Fire4Nix.sh out/Diagnosticar-Fire4Nix.sh
+          cp installer/Diagnosticar-Fire4Nix.sh out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.91 R36H - instalacao unica com navegacao por teclado para ROCKNIX 20261001.
+          Fire4Nix 0.92 R36H - instalacao unica com teclado virtual e logs seguros para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -43,16 +45,31 @@ jobs:
           Preflight --check-platform recusa a biblioteca WebKit legada sem WPEPlatform.
           O instalador evita recopia na mesma versao e faz rollback se a troca falhar.
           WPEPlatform usa modo fullscreen no Sway quando disponivel.
+          Teclado virtual opcional usa setas e Enter sem hardware adicional.
+          Diagnosticar-Fire4Nix.sh salva erros de biblioteca/Wayland sem a Internet.
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
           Alt+Direita avancar,
           F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
           Controles do gamepad R36H ainda nao homologados.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
-          chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
+          chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix/Fire4Nix-Iniciar.sh
+          sh -n out/Diagnosticar-Fire4Nix.sh
+          sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
+          grep -q 'keyboardToggle' out/Fire4Nix/www/inicio.html
+          grep -q 'Espaço' out/Fire4Nix/www/inicio.html
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source=Path('out/Fire4Nix/www/inicio.html').read_text()
+          js=re.search(r'<script>(.*?)</script>',source,re.S)
+          assert js, 'Inline JS missing'
+          Path('/tmp/fire4nix-home.js').write_text(js.group(1))
+          PY
+          node --check /tmp/fire4nix-home.js
           grep -q 'DuckDuckGo' out/Fire4Nix/www/inicio.html
           out/Fire4Nix/bin/fire4nix-native-aarch64 --help | grep -q check-platform
           (cd out && sha256sum Fire4Nix/bin/fire4nix-native-aarch64 > SHA256SUMS.txt)
@@ -69,6 +86,17 @@ jobs:
           set -e
           test "$result" -eq 3
           test ! -e "$t/roms/ports/Fire4Nix.sh"
+          # Missing-library diagnostics must be captured even before startup.
+          set +e
+          FIRE4NIX_LOG_DIR="$t/logs" sh "$t/pkg/Fire4Nix/Fire4Nix-Iniciar.sh" --check-platform > "$t/no-webkit.txt" 2>&1
+          missing_status=$?
+          set -e
+          test "$missing_status" -eq 127
+          grep -q 'Missing local WPE WebKit runtime' "$t/logs/"*.log
+          grep -q 'fire4nix_exit_code=127' "$t/logs/"*.log
+          FIRE4NIX_DIAGNOSTIC_OUT="$t/diagnostic.txt" sh "$t/pkg/Diagnosticar-Fire4Nix.sh"
+          grep -q 'WPE_library=missing' "$t/diagnostic.txt"
+          grep -q 'WPEPlatform_preflight_exit=127' "$t/diagnostic.txt"
           mkdir -p "$t/roms/tools/Fire4Nix/runtime/lib" "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0"
           printf 'dummy-webkit-library' > "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
           for bin in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
@@ -110,7 +138,9 @@ jobs:
             exit 1
           fi
           test -z "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-staging-*' -print -quit)"
-          echo 'PASS: safe migration, same-version skip, actual upgrade and simulated rollback'
+          FIRE4NIX_DIAGNOSTIC_OUT="$t/installed-report.txt" sh "$t/roms/ports/fire4nix-completo/Diagnosticar-Fire4Nix.sh"
+          grep -q 'WPEPlatform_preflight_exit=0' "$t/installed-report.txt"
+          echo 'PASS: safe migration, same-version skip, rollback, early log and diagnostics'
       - name: Validate WebKit WPEPlatform API vs legacy-only WPE
         shell: bash
         run: |
@@ -139,15 +169,22 @@ jobs:
           test "$old_status" -eq 78
           FIRE4NIX_MOCK_QUIT=1 LD_LIBRARY_PATH=/tmp/modern-wpe timeout 4s out/Fire4Nix/bin/fire4nix-native-aarch64 about:blank > /tmp/fire4nix-v091-quit.log 2>&1
           grep -q 'shortcut Ctrl+Q: close browser' /tmp/fire4nix-v091-quit.log
-          echo 'PASS: navigation, quit, legacy WPE rejection without crash'
+          set +e
+          FIRE4NIX_MOCK_TERMINATE=1 LD_LIBRARY_PATH=/tmp/modern-wpe             out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v092-crash.log 2>&1
+          crash_status=$?
+          set -e
+          test "$crash_status" -eq 70
+          grep -q 'web-process-terminated' /tmp/fire4nix-v092-crash.log
+          grep -q 'load-event=3' /tmp/fire4nix-v092-crash.log
+          echo 'PASS: navigation, quit, crash status preserved and legacy WPE rejected'
       - name: Build download artifact
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.91-Navegacao-ARM64.zip .)
-          unzip -t Fire4Nix-R36H-0.91-Navegacao-ARM64.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.92-Completo-Para-Teste.zip .)
+          unzip -t Fire4Nix-R36H-0.92-Completo-Para-Teste.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.91-Navegacao-ARM64
-          path: Fire4Nix-R36H-0.91-Navegacao-ARM64.zip
+          name: Fire4Nix-R36H-0.92-Completo-Para-Teste
+          path: Fire4Nix-R36H-0.92-Completo-Para-Teste.zip
           retention-days: 30
