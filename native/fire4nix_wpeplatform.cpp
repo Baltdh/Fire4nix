@@ -1,4 +1,4 @@
-// Fire4Nix R36H v0.92 - minimal ARM64 WPEPlatform launcher.
+// Fire4Nix R36H v0.93 - minimal ARM64 WPEPlatform launcher.
 // Build on AArch64 Linux against GLib/GObject; load the *user-installed* WPE2.0
 // runtime with dlopen. Never pull GTK/Qt libraries into the launcher.
 #include <glib.h>
@@ -210,7 +210,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 0.92: [--selftest|--check-library|--check-platform|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 0.93: [--selftest|--check-library|--check-platform|--smoke] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -239,21 +239,50 @@ int main(int argc, char** argv) {
         return 127;
     }
     stage("dlopen success");
-    if (onlyLibrary) return 0;
+    if (onlyLibrary) {
+        dlclose(app.webkit);
+        return 0;
+    }
     auto webViewType = symbol<GetType>(app.webkit, "webkit_web_view_get_type");
     auto getWPEView = symbol<GetWPEView>(app.webkit, "webkit_web_view_get_wpe_view");
     app.loadUri = symbol<LoadUri>(app.webkit, "webkit_web_view_load_uri");
     app.getUri = symbol<GetUri>(app.webkit, "webkit_web_view_get_uri");
     auto settingsType = symbol<GetType>(app.webkit, "webkit_settings_get_type");
     auto assignSettings = symbol<SetSettings>(app.webkit, "webkit_web_view_set_settings");
-    if (!webViewType || !app.loadUri) return 127;
+    if (!webViewType || !app.loadUri) {
+        stage("WebKit core ABI missing; incompatible or damaged library");
+        dlclose(app.webkit);
+        return 127;
+    }
     // The library might expose only the older libwpe backend, even when dlopen worked.
     if (!getWPEView) {
         stage("INCOMPATIBLE WPE: WPEPlatform API absent; legacy backend required");
+        dlclose(app.webkit);
         return 78;
     }
     if (onlyPlatform) {
         stage("WPEPlatform symbol found (actual Wayland display still untested)");
+        Dl_info providerInfo {};
+        if (dladdr(reinterpret_cast<void*>(getWPEView), &providerInfo) && providerInfo.dli_fname)
+            g_printerr("[FIRE4NIX-ABI] webkit_library=%s\n", providerInfo.dli_fname);
+        const char* symbols[] = {
+            "wpe_view_get_toplevel",
+            "wpe_toplevel_fullscreen",
+            "wpe_toplevel_set_title",
+            "wpe_event_get_event_type",
+            "wpe_event_get_modifiers",
+            "wpe_event_keyboard_get_keyval",
+            "webkit_web_view_reload",
+            "webkit_web_view_can_go_back",
+            "webkit_web_view_go_back"
+        };
+        for (const char* name : symbols) {
+            void* found = dlsym(RTLD_DEFAULT, name);
+            if (!found) found = dlsym(app.webkit, name);
+            g_printerr("[FIRE4NIX-ABI] %s=%s\n", name, found ? "present" : "absent");
+        }
+        stage("ABI availability above is NOT a GPU/Wayland rendering test");
+        dlclose(app.webkit);
         return 0;
     }
 
