@@ -16,6 +16,9 @@ using GetType = GType (*)();
 using SetSettings = void (*)(gpointer, gpointer);
 using GetUri = const char* (*)(gpointer);
 using GetWPEView = gpointer (*)(gpointer);
+using GetToplevel = gpointer (*)(gpointer);
+using ToplevelFullscreen = void (*)(gpointer);
+using ToplevelSetTitle = void (*)(gpointer, const char*);
 
 struct App {
     GMainLoop* loop = nullptr;
@@ -28,6 +31,8 @@ struct App {
     bool failed = false;
     int exitCode = 0;
     const char* initialUrl = nullptr;
+    gpointer toplevel = nullptr;
+    ToplevelSetTitle setTitle = nullptr;
 };
 
 static bool setting(GObject* obj, const char* name, gboolean enabled) {
@@ -99,10 +104,16 @@ static gboolean closeView(GObject*, gpointer data) {
     if (app->loop) g_main_loop_quit(app->loop);
     return TRUE;
 }
-static void titleChanged(GObject* object, GParamSpec*, gpointer) {
+static void titleChanged(GObject* object, GParamSpec*, gpointer data) {
+    auto* app = static_cast<App*>(data);
     gchar* title = nullptr;
     g_object_get(object, "title", &title, nullptr);
-    if (title) { g_printerr("[FIRE4NIX-NATIVE] title=%s\n", title); g_free(title); }
+    if (title) {
+        g_printerr("[FIRE4NIX-NATIVE] title=%s\n", title);
+        if (app && app->toplevel && app->setTitle)
+            app->setTitle(app->toplevel, title);
+        g_free(title);
+    }
 }
 template <typename T> T symbol(void* library, const char* name) {
     dlerror();
@@ -180,6 +191,22 @@ int main(int argc, char** argv) {
     if (g_signal_lookup("closed", G_OBJECT_TYPE(nativeView)))
         g_signal_connect(nativeView, "closed", G_CALLBACK(platformViewClosed), &app);
     stage("WPEPlatform WPEView available");
+    // The normal ROCKNIX Sway session has a single 640x480 handheld display.
+    // Request compositor-managed fullscreen instead of merely opening a tile.
+    auto getToplevel = reinterpret_cast<GetToplevel>(dlsym(RTLD_DEFAULT, "wpe_view_get_toplevel"));
+    auto fullscreen = reinterpret_cast<ToplevelFullscreen>(dlsym(RTLD_DEFAULT, "wpe_toplevel_fullscreen"));
+    app.setTitle = reinterpret_cast<ToplevelSetTitle>(dlsym(RTLD_DEFAULT, "wpe_toplevel_set_title"));
+    if (getToplevel) {
+        app.toplevel = getToplevel(nativeView);
+        if (app.toplevel) {
+            if (app.setTitle) app.setTitle(app.toplevel, "Fire4Nix - ROCKNIX");
+            const char* fullscreenSetting = g_getenv("FIRE4NIX_FULLSCREEN");
+            if (fullscreen && (!fullscreenSetting || strcmp(fullscreenSetting, "0"))) {
+                fullscreen(app.toplevel);
+                stage("requested WPEPlatform fullscreen");
+            }
+        }
+    }
     if (settingsType && assignSettings) {
         GObject* settings = static_cast<GObject*>(g_object_new(settingsType(), nullptr));
         if (settings) {
@@ -209,7 +236,7 @@ int main(int argc, char** argv) {
         g_signal_connect(app.view, "web-process-terminated", G_CALLBACK(childTerminated), &app);
     if (g_signal_lookup("close", G_OBJECT_TYPE(app.view)))
         g_signal_connect(app.view, "close", G_CALLBACK(closeView), &app);
-    g_signal_connect(app.view, "notify::title", G_CALLBACK(titleChanged), nullptr);
+    g_signal_connect(app.view, "notify::title", G_CALLBACK(titleChanged), &app);
 
     g_unix_signal_add(SIGINT, signalQuit, &app);
     g_unix_signal_add(SIGTERM, signalQuit, &app);
