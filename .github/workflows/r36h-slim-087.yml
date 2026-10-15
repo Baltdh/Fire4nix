@@ -48,9 +48,9 @@ jobs:
               pkg=root/'pkg'
               assert len(names)==23, len(names)
               for path in pkg.rglob('*.sh'):
-                  subprocess.run(['sh','-n',str(path)],check=True)
-              for path in (pkg/'Tools/Fire4Nix/scripts').glob('*.sh'):
-                  subprocess.run(['bash','-n',str(path)],check=True)
+                  # Existing Fire4Nix engine helpers explicitly require Bash.
+                  interpreter='bash' if '/Tools/Fire4Nix/scripts/' in str(path) else 'sh'
+                  subprocess.run([interpreter,'-n',str(path)],check=True)
               dest=root/'existing Fire4Nix'
               for dirname in ('bin','theme','runtime/lib','.mozilla_profile'):
                   (dest/dirname).mkdir(parents=True,exist_ok=True)
