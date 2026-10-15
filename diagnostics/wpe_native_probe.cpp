@@ -14,7 +14,8 @@
 static volatile sig_atomic_t stage = 0;
 static void onFatal(int signum) {
     const char* prefix = "\nFire4Nix WPE probe: fatal signal, backtrace follows\n";
-    write(STDERR_FILENO, prefix, strlen(prefix));
+    const ssize_t written = write(STDERR_FILENO, prefix, strlen(prefix));
+    (void)written;
     void* stack[48];
     int n = backtrace(stack, 48);
     backtrace_symbols_fd(stack, n, STDERR_FILENO);
@@ -22,7 +23,8 @@ static void onFatal(int signum) {
 }
 static void onAlarm(int) {
     const char* line = "Fire4Nix WPE probe: 30s timeout without exit (not proof of rendering)\n";
-    write(STDERR_FILENO, line, strlen(line));
+    const ssize_t written = write(STDERR_FILENO, line, strlen(line));
+    (void)written;
     _exit(124);
 }
 static void stageLog(int n, const char* s) {
