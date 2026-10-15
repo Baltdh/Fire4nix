@@ -1,1 +1,1 @@
-Fire4Nix 0.85 R36H: loader diagnostics, dual-platform WPE checks and optional low-memory native settings. New ARM64 compilation is required to apply source-level C++ changes; the SD overlay preserves the user's executable.
+Fire4Nix 0.87: slim safe runtime overlay for ROCKNIX R36H. Uses independently compiled WPE ARM64 candidate. Original binaries, runtime, SDL browser, EmulationStation theme and settings are preserved. WebKit/Mali rendering still requires hardware validation.

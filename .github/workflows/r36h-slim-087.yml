@@ -1,0 +1,103 @@
+name: Fire4Nix R36H v0.87 optimized upgrade
+on:
+  push:
+    paths:
+      - 'source_r36h/Fire4Nix/scripts/**'
+      - 'source_r36h/Fire4Nix/VERSION'
+      - 'source_r36h/Fire4Nix/VERSAO-R36H.txt'
+      - 'native/Fire4Nix-086-Teste.sh'
+      - 'tools/build_r36h_slim_087.py'
+      - '.github/workflows/r36h-slim-087.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arm64-package:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GLib build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev
+      - name: Compile native candidate on ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-native
+          g++ -std=c++17 -O2 -g -Wall -Wextra -Werror native/fire4nix_wpeplatform.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0 gio-2.0) -ldl \
+            -o dist-native/fire4nix-native-086-aarch64
+          readelf -h dist-native/fire4nix-native-086-aarch64 | grep -q AArch64
+          dist-native/fire4nix-native-086-aarch64 --selftest | grep AArch64
+      - name: Build and validate compact runtime package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_r36h_slim_087.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile, tempfile, os, subprocess
+          file=Path('dist/Fire4Nix-R36H-0.87-Teste-Otimizado.zip')
+          with tempfile.TemporaryDirectory() as temp:
+              root=Path(temp)
+              with zipfile.ZipFile(file) as z:
+                  assert z.testzip() is None
+                  z.extractall(root/'pkg')
+                  names=set(z.namelist())
+              pkg=root/'pkg'
+              assert len(names)==23, len(names)
+              for path in pkg.rglob('*.sh'):
+                  # Existing Fire4Nix engine helpers explicitly require Bash.
+                  interpreter='bash' if '/Tools/Fire4Nix/scripts/' in str(path) else 'sh'
+                  subprocess.run([interpreter,'-n',str(path)],check=True)
+              dest=root/'existing Fire4Nix'
+              for dirname in ('bin','theme','runtime/lib','.mozilla_profile'):
+                  (dest/dirname).mkdir(parents=True,exist_ok=True)
+              files={
+                'bin/browser.arm64':b'working old SDL browser',
+                'bin/fire4nix-wpe-platform':b'old WPE engine',
+                'runtime/lib/libWPEWebKit-2.0.so.1':b'old WPE library',
+                'fire4nix.conf':b'customer settings',
+                'theme/theme.xml':b'custom theme',
+                '.mozilla_profile/user.js':b'private profile',
+              }
+              for name,data in files.items(): (dest/name).write_bytes(data)
+              env=os.environ.copy()
+              env['FIRE4NIX_DEST']=str(dest)
+              subprocess.run(['sh',str(pkg/'Atualizar-Fire4Nix-R36H.sh')],check=True,env=env)
+              for name,data in files.items(): assert (dest/name).read_bytes()==data,name
+              assert (dest/'scripts/run_browser.sh').exists()
+              assert list(dest.glob('backup-prev-*'))
+              unsafe=pkg/'Tools/Fire4Nix/bin'
+              unsafe.mkdir()
+              (unsafe/'browser.arm64').write_bytes(b'replacement executable')
+              proc=subprocess.run(['sh',str(pkg/'Atualizar-Fire4Nix-R36H.sh')],env=env)
+              assert proc.returncode==3,proc.returncode
+              (unsafe/'browser.arm64').unlink()
+              # Probe can selftest even if the WebKit runtime is missing.
+              args=['sh',str(pkg/'Teste-Nativo-086/Fire4Nix-086-Teste.sh'),'--selftest']
+              proc=subprocess.run(args,env={**env,'FIRE4NIX_ROOT':'/nonexistent'},capture_output=True,text=True)
+              assert proc.returncode==0,(proc.returncode,proc.stderr)
+              assert 'AArch64' in proc.stdout
+              print('PASS: small ZIP, shell syntax, preserve six installed files, backup, reject overwrite, selftest')
+          PY
+      - name: Mock lifecycle regression and headless test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fire4nix/mock/runtime/lib /tmp/fire4nix/mock/www
+          g++ -std=c++17 -O1 -fPIC -shared -Wall -Wextra -Werror \
+            native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) \
+            -o /tmp/fire4nix/mock/runtime/lib/libWPEWebKit-2.0.so.1
+          cp dist-native/fire4nix-native-086-aarch64 native/fire4nix-native-086-aarch64
+          FIRE4NIX_ROOT=/tmp/fire4nix/mock FIRE4NIX_LOG_DIR=/tmp/fire4nix/diag \
+            sh native/Fire4Nix-086-Teste.sh --headless
+          grep -q 'load-event=3' /tmp/fire4nix/diag/fire4nix-086-*.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-0.87-Otimizado
+          path: |
+            dist/Fire4Nix-R36H-0.87-Teste-Otimizado.zip
+            dist/SHA256SUMS.txt
+          retention-days: 30
