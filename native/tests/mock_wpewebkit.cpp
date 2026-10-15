@@ -69,6 +69,11 @@ static gboolean finished(gpointer v) {
     g_object_unref(v);
     return G_SOURCE_REMOVE;
 }
-extern "C" void webkit_web_view_load_uri(gpointer v, const char*) {
-    g_idle_add(finished, g_object_ref(v));
+extern "C" void webkit_web_view_load_uri(gpointer v, const char* uri) {
+    static unsigned requestCount = 0;
+    ++requestCount;
+    g_printerr("[MOCK-WPE] load_uri request=%s\n", uri ? uri : "(null)");
+    // A synthetic home shortcut must not recursively schedule endless fixture events.
+    if (requestCount == 1)
+        g_idle_add(finished, g_object_ref(v));
 }
