@@ -11,6 +11,12 @@ if [ -z "$ROOT" ]; then
   done
 fi
 if [ ! -f "$BIN" ]; then echo 'ERRO: nao foi encontrado o executavel ARM64 ao lado do script.' >&2; exit 2; fi
+# Zip extraction on FAT and some file managers may clear executable permissions.
+if [ ! -x "$BIN" ]; then chmod u+x "$BIN" 2>/dev/null || true; fi
+if [ ! -x "$BIN" ]; then
+  echo 'ERRO 126: binario ARM64 sem permissao de execucao. Copie para um local montado com exec.' >&2
+  exit 126
+fi
 # Selftest verifies architecture and script without requiring the 174 MB WebKit.
 if [ "${1:-}" = --selftest ]; then exec "$BIN" --selftest; fi
 if [ -z "$ROOT" ] || [ ! -s "$ROOT/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
