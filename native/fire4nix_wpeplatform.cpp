@@ -1,4 +1,4 @@
-// Fire4Nix R36H v0.86 - optional native WPEPlatform launcher, not a replacement.
+// Fire4Nix R36H v0.92 - minimal ARM64 WPEPlatform launcher.
 // Build on AArch64 Linux against GLib/GObject; load the *user-installed* WPE2.0
 // runtime with dlopen. Never pull GTK/Qt libraries into the launcher.
 #include <glib.h>
@@ -37,6 +37,7 @@ struct App {
     bool failed = false;
     int exitCode = 0;
     const char* initialUrl = nullptr;
+    guint smokeTimeoutSource = 0;
     gpointer toplevel = nullptr;
     ToplevelSetTitle setTitle = nullptr;
     GetEventType getEventType = nullptr;
@@ -69,6 +70,7 @@ static void stage(const char* name) {
 static gboolean timeoutQuit(gpointer data) {
     App* app = static_cast<App*>(data);
     stage("smoke timeout; no confirmed page load");
+    if (app->loaded || app->failed) return G_SOURCE_REMOVE;
     app->exitCode = 124;
     if (app->loop) g_main_loop_quit(app->loop);
     return G_SOURCE_REMOVE;
@@ -92,7 +94,8 @@ static void loadChanged(GObject*, int event, gpointer data) {
     if (event == 3) {
         app->loaded = true;
         if (app->smoke) {
-            app->exitCode = app->failed ? 3 : 0;
+            if (!app->failed) app->exitCode = 0;
+            else if (!app->exitCode) app->exitCode = 3;
             g_idle_add(smokeQuit, app);
         }
     }
@@ -102,14 +105,17 @@ static gboolean loadFailed(GObject*, int, const char* url, GError* error, gpoint
     app->failed = true;
     g_printerr("[FIRE4NIX-NATIVE] load-failed url=%s error=%s\n",
                url ? url : "(unknown)", error ? error->message : "unknown");
-    if (app->smoke) { app->exitCode = 3; g_idle_add(smokeQuit, app); }
+    if (!app->exitCode) app->exitCode = 3;
+    if (app->smoke) g_idle_add(smokeQuit, app);
     return FALSE;  // normal WebKit error handling; do not silently ignore TLS failures
 }
 static void childTerminated(GObject*, int reason, gpointer data) {
     App* app = static_cast<App*>(data);
     app->failed = true;
     g_printerr("[FIRE4NIX-NATIVE] web-process-terminated reason=%d\n", reason);
-    if (app->smoke) { app->exitCode = 70; g_idle_add(smokeQuit, app); }
+    app->exitCode = 70;
+    // An unexpected renderer exit in interactive mode otherwise leaves a dead page.
+    g_idle_add(smokeQuit, app);
 }
 // WPEEventType and WPEModifiers follow the WPEPlatform public ABI.
 static constexpr int keyboardDown = 7; // WPE_EVENT_KEYBOARD_KEY_DOWN
@@ -204,7 +210,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 0.91: [--selftest|--check-library|--check-platform|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 0.92: [--selftest|--check-library|--check-platform|--smoke] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -332,7 +338,7 @@ int main(int argc, char** argv) {
 
     g_unix_signal_add(SIGINT, signalQuit, &app);
     g_unix_signal_add(SIGTERM, signalQuit, &app);
-    if (app.smoke) g_timeout_add_seconds(30, timeoutQuit, &app);
+    if (app.smoke) app.smokeTimeoutSource = g_timeout_add_seconds(30, timeoutQuit, &app);
     g_printerr("[FIRE4NIX-NATIVE] mode=%s low_memory=%d url=%s platform=%s\n",
                app.smoke ? "smoke" : "interactive", lowMemory() ? 1 : 0, url,
                g_getenv("WPE_PLATFORM") ? g_getenv("WPE_PLATFORM") : "default");
@@ -340,6 +346,10 @@ int main(int argc, char** argv) {
     stage("entering GLib main loop");
     g_main_loop_run(app.loop);
     stage("GLib main loop exited");
+    // Never leave callbacks referring to the stack App after the loop returns.
+    if (app.smokeTimeoutSource &&
+        g_main_context_find_source_by_id(nullptr, app.smokeTimeoutSource))
+        g_source_remove(app.smokeTimeoutSource);
     g_object_unref(app.view);
     g_main_loop_unref(app.loop);
     dlclose(app.webkit);
