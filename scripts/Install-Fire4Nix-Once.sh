@@ -28,7 +28,10 @@ if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
    [ -f "$DEST/Fire4Nix-Iniciar.sh" ] &&
    [ -f "$ROMS/ports/Fire4Nix.sh" ] &&
    cmp -s "$SOURCE/bin/fire4nix-native-aarch64" "$DEST/bin/fire4nix-native-aarch64" &&
-   cmp -s "$SOURCE/Fire4Nix-Iniciar.sh" "$DEST/Fire4Nix-Iniciar.sh"; then
+   cmp -s "$SOURCE/Fire4Nix-Iniciar.sh" "$DEST/Fire4Nix-Iniciar.sh" &&
+   cmp -s "$SOURCE/www/inicio.html" "$DEST/www/inicio.html" &&
+   cmp -s "$SOURCE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh" &&
+   cmp -s "$HERE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh"; then
     if sh "$DEST/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1; then
         echo "Fire4Nix already installed and API-compatible: $DEST"
         exit 0
@@ -49,8 +52,20 @@ for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
     }
 done
 mkdir -p "$ROMS/ports"
-# Reserve enough space for a complete independent runtime plus a small margin.
-required_kb=$(du -sk "$SRC_RUNTIME" 2>/dev/null | awk '{print $1}')
+# On Linux filesystems hardlinks can reuse the read-only WebKit runtime safely.
+# FAT/exFAT and separate SD cards cannot hardlink: keep the complete copy fallback.
+HARDLINK_RUNTIME=0
+LINK_TEST="$ROMS/ports/.fire4nix-hardlink-test-$"
+if ln "$SRC_RUNTIME/lib/libWPEWebKit-2.0.so.1" "$LINK_TEST" 2>/dev/null; then
+    HARDLINK_RUNTIME=1
+    rm -f "$LINK_TEST"
+fi
+# Check free space according to the actual copy method.
+if [ "$HARDLINK_RUNTIME" -eq 1 ]; then
+    required_kb=0
+else
+    required_kb=$(du -sk "$SRC_RUNTIME" 2>/dev/null | awk '{print $1}')
+fi
 available_kb=$(df -Pk "$ROMS/ports" 2>/dev/null | awk 'NR==2 {print $4}')
 case "$required_kb:$available_kb" in
   *[!0-9:]*|:*|*:) ;;
@@ -97,7 +112,17 @@ mkdir -p "$STAGE"
 cp -a "$SOURCE/." "$STAGE/"
 if [ ! -s "$STAGE/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
     mkdir -p "$STAGE/runtime"
-    cp -a "$SRC_RUNTIME/." "$STAGE/runtime/"
+    if [ "$HARDLINK_RUNTIME" -eq 1 ]; then
+        # An immutable engine may be hardlinked across our staging/backup folders.
+        # On any unsupported file, start a clean full-copy fallback.
+        if ! cp -al "$SRC_RUNTIME/." "$STAGE/runtime/" 2>/dev/null; then
+            rm -rf "$STAGE/runtime"
+            mkdir -p "$STAGE/runtime"
+            cp -a "$SRC_RUNTIME/." "$STAGE/runtime/"
+        fi
+    else
+        cp -a "$SRC_RUNTIME/." "$STAGE/runtime/"
+    fi
 fi
 [ -s "$STAGE/runtime/lib/libWPEWebKit-2.0.so.1" ] || exit 4
 chmod +x "$STAGE"/bin/fire4nix-native-aarch64 "$STAGE"/*.sh 2>/dev/null || true
