@@ -1,0 +1,59 @@
+# Fire4Nix 0.95 controller profile for ROCKNIX gptokeyb.
+# Uses SDL logical gamepad names, not unverified physical RK3326 button indices.
+# Select/Back is the hotkey by default in ROCKNIX gptokeyb.
+# Source: https://github.com/ROCKNIX/rocknix-hotkey
+back = esc
+start = enter
+guide = enter
+a = enter
+b = esc
+x = tab
+y = space
+l1 = home
+r1 = end
+l2 = pageup
+r2 = pagedown
+l3 = mouse_right
+r3 = mouse_left
+
+up = up
+down = down
+left = left
+right = right
+up = repeat
+down = repeat
+left = repeat
+right = repeat
+left_analog_as_mouse = true
+right_analog_as_mouse = false
+left_analog_up = mouse_movement_up
+left_analog_down = mouse_movement_down
+left_analog_left = mouse_movement_left
+left_analog_right = mouse_movement_right
+right_analog_up = up
+right_analog_down = down
+right_analog_left = left
+right_analog_right = right
+right_analog_up = repeat
+right_analog_down = repeat
+
+# Select+A: start page, Select+B: close, Select+X: reload.
+a_hk = h
+a_hk = add_ctrl
+b_hk = q
+b_hk = add_ctrl
+x_hk = r
+x_hk = add_ctrl
+# Select+L1: back, Select+R1: forward.
+l1_hk = left
+l1_hk = add_alt
+r1_hk = right
+r1_hk = add_alt
+
+deadzone_y = 15000
+deadzone_x = 15000
+deadzone_triggers = 3000
+fake_mouse_scale = 512
+fake_mouse_delay = 16
+repeat_delay = 450
+repeat_interval = 85
