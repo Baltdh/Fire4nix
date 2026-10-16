@@ -2,21 +2,43 @@
 // Do NOT ship this fake library inside the R36H release ZIP.
 #include <glib.h>
 #include <glib-object.h>
+typedef struct { GObject parent; } FakeSettings;
+typedef struct { GObjectClass parent_class; } FakeSettingsClass;
+G_DEFINE_TYPE(FakeSettings, fake_settings, G_TYPE_OBJECT)
+static void fake_settings_class_init(FakeSettingsClass*) {}
+static void fake_settings_init(FakeSettings*) {}
+extern "C" GType webkit_settings_get_type(void) { return fake_settings_get_type(); }
+static void fake_view_set_property(GObject* obj, guint prop, const GValue* val, GParamSpec* spec)
+{
+    (void)obj;
+    if (prop == 1 && g_value_get_object(val))
+        g_printerr("[MOCK-WPE] settings supplied during webview creation\n");
+    else G_OBJECT_WARN_INVALID_PROPERTY_ID(obj, prop, spec);
+}
 typedef struct { GObject parent; } FakeView;
 typedef struct { GObjectClass parent_class; } FakeViewClass;
 G_DEFINE_TYPE(FakeView, fake_view, G_TYPE_OBJECT)
 static guint changed;
 static guint terminated;
+static guint displayDisconnected;
 static guint closed;
 static guint keyboardEventSignal;
 struct FakeKeyEvent { int type; unsigned modifiers; unsigned keyval; };
 static gboolean fullscreenEnabled = FALSE;
-static void fake_view_class_init(FakeViewClass*) {
+static void fake_view_class_init(FakeViewClass* klass) {
+    auto* objectClass = G_OBJECT_CLASS(klass);
+    objectClass->set_property = fake_view_set_property;
+    g_object_class_install_property(objectClass, 1,
+        g_param_spec_object("settings", "Settings", "Construct-only WebKit settings",
+                            fake_settings_get_type(), static_cast<GParamFlags>(G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY)));
     closed = g_signal_new("closed", fake_view_get_type(), G_SIGNAL_RUN_LAST,
                            0, nullptr, nullptr, nullptr, G_TYPE_NONE, 0);
     keyboardEventSignal = g_signal_new("event", fake_view_get_type(), G_SIGNAL_RUN_LAST,
                            0, g_signal_accumulator_true_handled, nullptr, nullptr,
                            G_TYPE_BOOLEAN, 1, G_TYPE_POINTER);
+    displayDisconnected = g_signal_new("disconnected", fake_view_get_type(),
+                          G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
+                          G_TYPE_NONE, 1, G_TYPE_ERROR);
     terminated = g_signal_new("web-process-terminated", fake_view_get_type(),
                              G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
                              G_TYPE_NONE, 1, G_TYPE_INT);
@@ -30,6 +52,7 @@ extern "C" GType webkit_web_view_get_type(void) { return fake_view_get_type(); }
 extern "C" gpointer webkit_web_view_get_wpe_view(gpointer view) { return view; }
 #endif
 extern "C" gpointer wpe_view_get_toplevel(gpointer view) { return view; }
+extern "C" gpointer wpe_view_get_display(gpointer view) { return view; }
 extern "C" gboolean wpe_toplevel_fullscreen(gpointer) {
     fullscreenEnabled = TRUE;
     g_printerr("[MOCK-WPE] fullscreen requested\n");
@@ -73,6 +96,10 @@ static gboolean finished(gpointer v) {
     if (g_getenv("FIRE4NIX_MOCK_TERMINATE")) {
         g_signal_emit(v, terminated, 0, 1);
         g_printerr("[MOCK-WPE] web process terminated before load finish\n");
+    }
+    if (g_getenv("FIRE4NIX_MOCK_DISPLAY_DISCONNECT")) {
+        g_signal_emit(v, displayDisconnected, 0, nullptr);
+        g_printerr("[MOCK-WPE] display disconnected\n");
     }
     g_signal_emit(v,changed,0,3);
     (void)closed;
