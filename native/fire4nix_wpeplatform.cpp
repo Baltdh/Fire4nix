@@ -253,14 +253,18 @@ int main(int argc, char** argv) {
         return 127;
     }
     stage("dlopen success");
+    stage("wpe version dlsym begin");
     // Get the version from the *loaded runtime*, not the launcher's build.
     // WPEPlatform became stable in 2.54; availability still depends on the
     // options used when compiling this particular library.
     auto majorVersion = reinterpret_cast<GetVersionPart>(dlsym(app.webkit, "webkit_get_major_version"));
     auto minorVersion = reinterpret_cast<GetVersionPart>(dlsym(app.webkit, "webkit_get_minor_version"));
     auto microVersion = reinterpret_cast<GetVersionPart>(dlsym(app.webkit, "webkit_get_micro_version"));
+    stage("wpe version dlsym done");
     if (majorVersion && minorVersion && microVersion) {
+        stage("wpe version getters begin");
         const unsigned major = majorVersion(), minor = minorVersion(), micro = microVersion();
+        stage("wpe version getters done");
         g_printerr("[FIRE4NIX-ABI] wpe_version=%u.%u.%u\n", major, minor, micro);
         if (major < 2 || (major == 2 && minor < 54))
             stage("WPE version older than 2.54: WPEPlatform may be missing or experimental");
@@ -274,12 +278,14 @@ int main(int argc, char** argv) {
         dlclose(app.webkit);
         return 0;
     }
+    stage("WPE core symbol probes begin");
     auto webViewType = symbol<GetType>(app.webkit, "webkit_web_view_get_type");
     auto getWPEView = symbol<GetWPEView>(app.webkit, "webkit_web_view_get_wpe_view");
     app.loadUri = symbol<LoadUri>(app.webkit, "webkit_web_view_load_uri");
     app.getUri = symbol<GetUri>(app.webkit, "webkit_web_view_get_uri");
     auto settingsType = symbol<GetType>(app.webkit, "webkit_settings_get_type");
     auto assignSettings = symbol<SetSettings>(app.webkit, "webkit_web_view_set_settings");
+    stage("WPE core symbol probes done");
     if (!webViewType || !app.loadUri) {
         stage("WebKit core ABI missing; incompatible or damaged library");
         dlclose(app.webkit);
