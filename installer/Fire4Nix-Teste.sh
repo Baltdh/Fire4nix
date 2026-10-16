@@ -122,7 +122,8 @@ cp "$REPORT" "$LATEST" 2>/dev/null || true
   grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_smoke_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
   echo 'FIM DO RESUMO'
 } > "$STATUS_FILE"
-if [ "$MODE" = --screen ] || [ "$MODE" = --visual ] || [ "$MODE" = --check ]; then
+if [ "$MODE" = --safe ] || [ "$MODE" = --screen ] ||
+   [ "$MODE" = --visual ] || [ "$MODE" = --check ]; then
   cat "$STATUS_FILE"
   printf 'Relatorio completo: %s\n' "$LATEST"
   printf 'Diagnostico WPE: %s\n' "$DIAG"
