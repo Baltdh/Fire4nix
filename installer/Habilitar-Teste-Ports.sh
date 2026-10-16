@@ -55,7 +55,7 @@ trap - 0
 cat > "$ROMS/ports/Fire4Nix-Teste-101.sh" <<'ENTRY'
 #!/bin/sh
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-exec sh "$HERE/.Fire4Nix-Teste-101/Fire4Nix-Teste.sh" --screen
+exec sh "$HERE/.Fire4Nix-Teste-101/Fire4Nix-Teste.sh" --safe
 ENTRY
 cat > "$ROMS/ports/Fire4Nix-Grafico-101.sh" <<'ENTRY'
 #!/bin/sh
