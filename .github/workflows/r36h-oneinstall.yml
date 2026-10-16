@@ -1,4 +1,4 @@
-name: Fire4Nix 0.93 R36H runtime probe and optimized install
+name: Fire4Nix 0.94 R36H native display resilience
 on:
   push:
     paths:
@@ -35,7 +35,7 @@ jobs:
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.93 R36H - instalacao unica com diagnostico ABI detalhado para ROCKNIX 20261001.
+          Fire4Nix 0.94 R36H - instalacao unica com monitor do Wayland/WPE para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -197,16 +197,24 @@ jobs:
           set -e
           test "$crash_status" -eq 70
           grep -q 'web-process-terminated' /tmp/fire4nix-v092-crash.log
+          # A Wayland/WPE display disconnect must not leave an invisible browser.
+          set +e
+          FIRE4NIX_MOCK_DISPLAY_DISCONNECT=1 LD_LIBRARY_PATH=/tmp/modern-wpe             out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-display-loss.log 2>&1
+          display_status=$?
+          set -e
+          test "$display_status" -eq 71
+          grep -q 'WPEPlatform display disconnect monitoring active' /tmp/fire4nix-display-loss.log
+          grep -q 'WPE display disconnected' /tmp/fire4nix-display-loss.log
           grep -q 'load-event=3' /tmp/fire4nix-v092-crash.log
           echo 'PASS: navigation, quit, crash status preserved and legacy WPE rejected'
       - name: Build download artifact
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.93-Otimizado-Para-Teste.zip .)
-          unzip -t Fire4Nix-R36H-0.93-Otimizado-Para-Teste.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.94-Correcao-Janela.zip .)
+          unzip -t Fire4Nix-R36H-0.94-Correcao-Janela.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.93-Otimizado-Para-Teste
-          path: Fire4Nix-R36H-0.93-Otimizado-Para-Teste.zip
+          name: Fire4Nix-R36H-0.94-Correcao-Janela
+          path: Fire4Nix-R36H-0.94-Correcao-Janela.zip
           retention-days: 30
