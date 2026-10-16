@@ -7,8 +7,8 @@ VERSION=2.54.1
 SOURCE_SHA256=0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9
 mode=${1:---plan}
 case "$mode" in
-  --plan|--configure|--build) ;;
-  *) echo "Usage: $0 [--plan|--configure|--build]" >&2; exit 2 ;;
+  --plan|--configure|--build|--stage) ;;
+  *) echo "Usage: $0 [--plan|--configure|--build|--stage]" >&2; exit 2 ;;
 esac
 
 # Point these at the *actual ROCKNIX 20261001 cross-build SDK*.
@@ -29,7 +29,9 @@ if [ "$mode" = --plan ]; then
   echo 'To configure, set FIRE4NIX_WPE_ARCHIVE to the official tarball and'
   echo 'FIRE4NIX_ROCKNIX_TOOLCHAIN to a cross toolchain CMake file built'
   echo 'from the ROCKNIX 20261001 source environment.'
-  echo 'Then run this script with --configure, then --build.'
+  echo 'Then run this script with --configure, --build and --stage.'
+  echo 'Stage requires a separate ROCKNIX SDK DESTDIR and the runtime audit script.'
+  echo 'No build or installation is performed by --plan.'
   exit 0
 fi
 [ -n "$TOOLCHAIN" ] && [ -f "$TOOLCHAIN" ] || {
@@ -71,6 +73,25 @@ else
     echo 'ERROR: run --configure with the ROCKNIX SDK first' >&2
     exit 5
   }
-  cmake --build "$BUILD" --parallel "${FIRE4NIX_BUILD_JOBS:-2}"
-  echo 'Build completed; runtime dependency collection and real R36H validation STILL required.'
+  if [ "$mode" = --build ]; then
+    cmake --build "$BUILD" --parallel "${FIRE4NIX_BUILD_JOBS:-2}"
+    echo 'Build completed; run --stage to collect candidate ARM64 WebKit binaries.'
+  else
+    # Never install into /usr on the build host. CMake's prefix is /usr but
+    # DESTDIR relocates files into our private staging directory.
+    SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+    STAGER="$SCRIPT_DIR/Empacotar-WPE-ROCKNIX.sh"
+    [ -f "$STAGER" ] || STAGER="$SCRIPT_DIR/stage-wpe-runtime.sh"
+    [ -f "$STAGER" ] || {
+      echo 'ERROR: stage-wpe-runtime.sh not found beside this script' >&2
+      exit 5
+    }
+    DESTDIR="$WORK/destdir"
+    mkdir -p "$DESTDIR"
+    DESTDIR="$DESTDIR" cmake --install "$BUILD"
+    FIRE4NIX_WPE_DESTDIR="$DESTDIR" \
+      FIRE4NIX_WPE_RUNTIME_OUT="${FIRE4NIX_WPE_RUNTIME_OUT:-$WORK/fire4nix-runtime}" \
+      sh "$STAGER" --stage
+    echo 'WPE runtime staged; target GLIBC dependencies and actual Mali/Wayland remain to test.'
+  fi
 fi
