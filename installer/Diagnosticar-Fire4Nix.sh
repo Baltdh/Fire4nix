@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix 0.93: device-local, privacy-minimal diagnostics. No network/firmware writes.
+# Fire4Nix 0.94: device-local, privacy-minimal diagnostics. No network/firmware writes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 ROOT="$HERE/Fire4Nix"
@@ -12,9 +12,9 @@ fi
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
     if [ -d /storage ] && [ -w /storage ]; then
-        OUT=/storage/Fire4Nix-Diagnostico-093.txt
+        OUT=/storage/Fire4Nix-Diagnostico-094.txt
     else
-        OUT="$HERE/Fire4Nix-Diagnostico-093.txt"
+        OUT="$HERE/Fire4Nix-Diagnostico-094.txt"
     fi
 fi
 TMP="$OUT.$$"
@@ -24,7 +24,7 @@ if ! ( : > "$TMP" ) 2>/dev/null; then
 fi
 trap 'rm -f "$TMP" 2>/dev/null || true' 0
 {
-  echo "Fire4Nix 0.93 / R36H diagnostic"
+  echo "Fire4Nix 0.94 / R36H diagnostic"
   date '+datetime=%Y-%m-%d %H:%M:%S %z' 2>/dev/null || true
   printf 'arm=%s kernel=%s\n' "$(uname -m 2>/dev/null)" "$(uname -r 2>/dev/null)"
   if [ -r /etc/os-release ]; then
