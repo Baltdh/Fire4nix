@@ -1,4 +1,4 @@
-name: Fire4Nix 0.98 R36H WPE 2.54.1 runtime compatibility
+name: Fire4Nix 0.99 R36H ABI-aware WPE runtime selection
 on:
   push:
     paths:
@@ -7,6 +7,8 @@ on:
       - 'native/tests/mock_wpewebkit.cpp'
       - 'native/tests/test_launch_gamepad.sh'
       - 'native/tests/test_runtime_diagnostic.sh'
+      - 'native/tests/test_runtime_selection.sh'
+      - 'native/tests/test_runtime_staging.sh'
       - 'rocknix-integration/**'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
@@ -34,13 +36,14 @@ jobs:
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Diagnosticar-Fire4Nix.sh
           cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
+          cp rocknix-integration/stage-wpe-runtime.sh out/Empacotar-WPE-ROCKNIX.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.98 R36H - identificacao de WPE e receita de integracao ROCKNIX para ROCKNIX 20261001.
+          Fire4Nix 0.99 R36H - selecionar WPE compativel e montar runtime auditado para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -59,8 +62,11 @@ jobs:
           Exemplo: sh Diagnosticar-Fire4Nix.sh --screen
           Agora identifica versao real do WPE, separa APIs antigas e observa
           que WPE 2.54.1+ corrige compatibilidade de build com Wayland 1.25+.
-          Preparar-WPE-ROCKNIX-2.54.1.sh e um script de compilacao para SDK
-          ROCKNIX (nao compila no console; runtime nao incluido).
+          Preparar-WPE-ROCKNIX-2.54.1.sh compila no SDK ROCKNIX; --stage
+          instala em DESTDIR privado e usa Empacotar-WPE-ROCKNIX.sh para
+          auditar ELF ARM64, WPEPlatform, subprocessos e checksums.
+          Instalador prefere WPE com ABI compativel, sem copiar candidatos ruins;
+          motor completo WebKit NAO esta incluido nem testado na Mali fisica.
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
           Alt+Direita avancar,
           F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
@@ -76,6 +82,8 @@ jobs:
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Preparar-WPE-ROCKNIX-2.54.1.sh
+          sh -n out/Empacotar-WPE-ROCKNIX.sh
+          sh out/Empacotar-WPE-ROCKNIX.sh --help | grep -q 'isolated ROCKNIX AArch64 DESTDIR'
           sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --plan | grep -q 'target=ROCKNIX-20261001-aarch64-cortex-a35'
           set +e
           sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --configure >/tmp/fire4nix-no-sdk.log 2>&1
@@ -88,6 +96,7 @@ jobs:
           grep -q '^up = repeat' out/Fire4Nix/config/fire4nix.gptk
           sh native/tests/test_launch_gamepad.sh
           sh native/tests/test_runtime_diagnostic.sh
+          FIRE4NIX_TEST_PKG=out sh native/tests/test_runtime_selection.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
@@ -287,14 +296,21 @@ jobs:
           grep -q 'WPE display disconnected' /tmp/fire4nix-display-loss.log
           grep -q 'load-event=3' /tmp/fire4nix-v092-crash.log
           echo 'PASS: navigation, quit, crash status preserved and legacy WPE rejected'
+      - name: Verify WPE runtime staging from isolated ROCKNIX DESTDIR (mock only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh native/tests/test_runtime_staging.sh
+          # Never add the fake CI WPE runtime to the release archive.
+          test ! -d out/Fire4Nix/runtime
       - name: Build download artifact
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.98-WPE-Compatibilidade.zip .)
-          unzip -t Fire4Nix-R36H-0.98-WPE-Compatibilidade.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.99-Selecao-WPE-ROCKNIX.zip .)
+          unzip -t Fire4Nix-R36H-0.99-Selecao-WPE-ROCKNIX.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.98-WPE-Compatibilidade
-          path: Fire4Nix-R36H-0.98-WPE-Compatibilidade.zip
+          name: Fire4Nix-R36H-0.99-Selecao-WPE-ROCKNIX
+          path: Fire4Nix-R36H-0.99-Selecao-WPE-ROCKNIX.zip
           retention-days: 30
