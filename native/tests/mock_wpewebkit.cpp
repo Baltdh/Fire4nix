@@ -2,6 +2,20 @@
 // Do NOT ship this fake library inside the R36H release ZIP.
 #include <glib.h>
 #include <glib-object.h>
+#include <cstdio>
+#ifndef MOCK_NO_VERSION
+static unsigned part(unsigned index) {
+    const char* value = g_getenv("FIRE4NIX_MOCK_WPE_VERSION");
+    if (!value || !*value) return index == 0 ? 2 : (index == 1 ? 54 : 1);
+    unsigned maj = 0, min = 0, patch = 0;
+    if (sscanf(value, "%u.%u.%u", &maj, &min, &patch) != 3)
+        return index == 0 ? 2 : (index == 1 ? 54 : 1);
+    return index == 0 ? maj : (index == 1 ? min : patch);
+}
+extern "C" unsigned webkit_get_major_version(void) { return part(0); }
+extern "C" unsigned webkit_get_minor_version(void) { return part(1); }
+extern "C" unsigned webkit_get_micro_version(void) { return part(2); }
+#endif
 typedef struct { GObject parent; } FakeSettings;
 typedef struct { GObjectClass parent_class; } FakeSettingsClass;
 G_DEFINE_TYPE(FakeSettings, fake_settings, G_TYPE_OBJECT)

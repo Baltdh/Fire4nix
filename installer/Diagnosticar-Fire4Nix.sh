@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix 0.97: inspect the actual SD card runtime without starting the GUI.
+# Fire4Nix 0.98: inspect the actual SD card runtime without starting the GUI.
 # Privacy: only file presence, ELF dependencies and controlled exit codes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
@@ -39,9 +39,9 @@ done
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
-    OUT=/storage/Fire4Nix-Diagnostico-097.txt
+    OUT=/storage/Fire4Nix-Diagnostico-098.txt
   else
-    OUT="$HERE/Fire4Nix-Diagnostico-097.txt"
+    OUT="$HERE/Fire4Nix-Diagnostico-098.txt"
   fi
 fi
 # Keep the report even if /storage cannot be written, and never clobber it midway.
@@ -53,7 +53,7 @@ fi
 TMP=$(mktemp "$DIR/.fire4nix-diag-XXXXXX") || exit 73
 trap 'rm -f "$TMP"' 0
 {
-  echo "Fire4Nix 0.97 / R36H standalone runtime diagnosis"
+  echo "Fire4Nix 0.98 / R36H standalone runtime diagnosis"
   printf 'arch=%s\n' "$(uname -m)"
   printf 'kernel=%s\n' "$(uname -r)"
   if [ -r /etc/os-release ]; then
@@ -127,7 +127,8 @@ trap 'rm -f "$TMP"' 0
        "$BIN" --check-platform > "$TMP.abi" 2>&1
     result=$?
     printf 'WPEPlatform_preflight_exit=%s\n' "$result"
-    grep '^\[FIRE4NIX-ABI\]' "$TMP.abi" | head -n 16 || true
+    awk -F= '/^\[FIRE4NIX-ABI\] wpe_version=/ { print "WPE_version=" $2 }' "$TMP.abi" | head -n 1
+    grep '^\[FIRE4NIX-ABI\]' "$TMP.abi" | head -n 17 || true
     case "$result" in
       0) echo 'WPEPlatform_preflight_note=ABI_present_not_graphics_test' ;;
       78) echo 'WPEPlatform_preflight_note=legacy_library_without_new_API' ;;
@@ -153,7 +154,7 @@ trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
   echo '=== FIRE4NIX 0.97 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi

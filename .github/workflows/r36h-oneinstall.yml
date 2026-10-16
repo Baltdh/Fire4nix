@@ -1,4 +1,4 @@
-name: Fire4Nix 0.97 R36H dual-SD runtime diagnostics
+name: Fire4Nix 0.98 R36H WPE 2.54.1 runtime compatibility
 on:
   push:
     paths:
@@ -7,6 +7,7 @@ on:
       - 'native/tests/mock_wpewebkit.cpp'
       - 'native/tests/test_launch_gamepad.sh'
       - 'native/tests/test_runtime_diagnostic.sh'
+      - 'rocknix-integration/**'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
   workflow_dispatch:
@@ -32,13 +33,14 @@ jobs:
           out/Fire4Nix/bin/fire4nix-native-aarch64 --selftest | grep AArch64
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Diagnosticar-Fire4Nix.sh
+          cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.97 R36H - diagnostico do WebKit no SD e exibicao via terminal para ROCKNIX 20261001.
+          Fire4Nix 0.98 R36H - identificacao de WPE e receita de integracao ROCKNIX para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -55,6 +57,10 @@ jobs:
           Diagnosticar-Fire4Nix.sh identifica WebKit de outro SD, dependencias
           e codigos da API; --screen exibe resumo curto que pode ser fotografado.
           Exemplo: sh Diagnosticar-Fire4Nix.sh --screen
+          Agora identifica versao real do WPE, separa APIs antigas e observa
+          que WPE 2.54.1+ corrige compatibilidade de build com Wayland 1.25+.
+          Preparar-WPE-ROCKNIX-2.54.1.sh e um script de compilacao para SDK
+          ROCKNIX (nao compila no console; runtime nao incluido).
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
           Alt+Direita avancar,
           F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
@@ -69,6 +75,14 @@ jobs:
           README
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
+          sh -n out/Preparar-WPE-ROCKNIX-2.54.1.sh
+          sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --plan | grep -q 'target=ROCKNIX-20261001-aarch64-cortex-a35'
+          set +e
+          sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --configure >/tmp/fire4nix-no-sdk.log 2>&1
+          no_sdk_status=$?
+          set -e
+          test "$no_sdk_status" -eq 4
+          grep -q 'cross-toolchain CMake file required' /tmp/fire4nix-no-sdk.log
           sh -n out/Fire4Nix/Fire4Nix-Iniciar.sh
           grep -q '^a_hk = add_ctrl' out/Fire4Nix/config/fire4nix.gptk
           grep -q '^up = repeat' out/Fire4Nix/config/fire4nix.gptk
@@ -225,9 +239,16 @@ jobs:
           g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/modern-wpe/libWPEWebKit-2.0.so.1
           g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror -DMOCK_NO_PLATFORM native/tests/mock_wpewebkit.cpp $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -o /tmp/old-wpe/libWPEWebKit-2.0.so.1
           LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform > /tmp/fire4nix-api-probe.log 2>&1
+          grep -q 'wpe_version=2.54.1' /tmp/fire4nix-api-probe.log
+          FIRE4NIX_MOCK_WPE_VERSION=2.54.0 LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform > /tmp/fire4nix-wpe-2540.log 2>&1
+          grep -q 'wpe_version=2.54.0' /tmp/fire4nix-wpe-2540.log
+          grep -q 'prefer WPE 2.54.1+' /tmp/fire4nix-wpe-2540.log
+          FIRE4NIX_MOCK_WPE_VERSION=2.50.0 LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --check-platform > /tmp/fire4nix-wpe-2500.log 2>&1
+          grep -q 'older than 2.54' /tmp/fire4nix-wpe-2500.log
           grep -q 'webkit_library=' /tmp/fire4nix-api-probe.log
           grep -q 'wpe_event_get_event_type=present' /tmp/fire4nix-api-probe.log
           grep -q 'wpe_toplevel_fullscreen=present' /tmp/fire4nix-api-probe.log
+          grep -q 'wpe_view_get_display=present' /tmp/fire4nix-api-probe.log
           grep -q 'NOT a GPU/Wayland rendering test' /tmp/fire4nix-api-probe.log
           FIRE4NIX_HOME_URL=file:///tmp/fire4nix-home.html LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v090-smoke.log 2>&1
           grep -q 'fullscreen requested' /tmp/fire4nix-v090-smoke.log
@@ -270,10 +291,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.97-Sonda-WPE-SD.zip .)
-          unzip -t Fire4Nix-R36H-0.97-Sonda-WPE-SD.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.98-WPE-Compatibilidade.zip .)
+          unzip -t Fire4Nix-R36H-0.98-WPE-Compatibilidade.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.97-Sonda-WPE-SD
-          path: Fire4Nix-R36H-0.97-Sonda-WPE-SD.zip
+          name: Fire4Nix-R36H-0.98-WPE-Compatibilidade
+          path: Fire4Nix-R36H-0.98-WPE-Compatibilidade.zip
           retention-days: 30

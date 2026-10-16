@@ -8,6 +8,7 @@ mkdir -p "$T/package/Fire4Nix/bin" "$T/runtime/libexec/wpe-webkit-2.0" "$T/runti
 cp "$ROOT/installer/Diagnosticar-Fire4Nix.sh" "$T/package/Diagnosticar-Fire4Nix.sh"
 cat > "$T/package/Fire4Nix/bin/fire4nix-native-aarch64" <<'BROWSER'
 #!/bin/sh
+printf '[FIRE4NIX-ABI] wpe_version=2.54.1\n'
 printf '[FIRE4NIX-ABI] webkit_library=mocked\n'
 printf '[FIRE4NIX-ABI] wpe_toplevel_fullscreen=absent\n'
 exit 78
@@ -24,10 +25,12 @@ grep -q '^WPE_library=present$' "$T/found.txt"
 grep -q '^WPEWebProcess=present$' "$T/found.txt"
 grep -q '^WPENetworkProcess=present$' "$T/found.txt"
 grep -q '^WPEGPUProcess=present$' "$T/found.txt"
+grep -q '^WPE_version=2.54.1$' "$T/found.txt"
 grep -q '^WPEPlatform_preflight_exit=78$' "$T/found.txt"
 grep -q '^WPEPlatform_preflight_note=legacy_library_without_new_API$' "$T/found.txt"
 grep -q '\[FIRE4NIX-ABI\] wpe_toplevel_fullscreen=absent' "$T/found.txt"
 grep -q 'RESUMO PARA FOTO' "$T/screen.txt"
+grep -q 'WPE_version=2.54.1' "$T/screen.txt"
 grep -q 'WPEPlatform_preflight_exit=78' "$T/screen.txt"
 grep -q 'GRAPHICS_STATUS=NOT_VERIFIED_BY_PREFLIGHT' "$T/screen.txt"
 # When run directly from an extracted package on SD2, no local runtime
