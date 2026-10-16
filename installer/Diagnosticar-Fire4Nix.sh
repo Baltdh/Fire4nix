@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix 0.94: device-local, privacy-minimal diagnostics. No network/firmware writes.
+# Fire4Nix 0.95: device-local, privacy-minimal diagnostics. No network/firmware writes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 ROOT="$HERE/Fire4Nix"
@@ -12,9 +12,9 @@ fi
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
     if [ -d /storage ] && [ -w /storage ]; then
-        OUT=/storage/Fire4Nix-Diagnostico-094.txt
+        OUT=/storage/Fire4Nix-Diagnostico-095.txt
     else
-        OUT="$HERE/Fire4Nix-Diagnostico-094.txt"
+        OUT="$HERE/Fire4Nix-Diagnostico-095.txt"
     fi
 fi
 TMP="$OUT.$$"
@@ -24,7 +24,7 @@ if ! ( : > "$TMP" ) 2>/dev/null; then
 fi
 trap 'rm -f "$TMP" 2>/dev/null || true' 0
 {
-  echo "Fire4Nix 0.94 / R36H diagnostic"
+  echo "Fire4Nix 0.95 / R36H diagnostic"
   date '+datetime=%Y-%m-%d %H:%M:%S %z' 2>/dev/null || true
   printf 'arm=%s kernel=%s\n' "$(uname -m 2>/dev/null)" "$(uname -r 2>/dev/null)"
   if [ -r /etc/os-release ]; then
@@ -60,6 +60,27 @@ trap 'rm -f "$TMP" 2>/dev/null || true' 0
           printf '%s=missing\n' "$process"
       fi
   done
+  if [ -s "$ROOT/config/fire4nix.gptk" ]; then
+      echo "gamepad_config=present"
+  else
+      echo "gamepad_config=missing"
+  fi
+  gamepad_bin=${FIRE4NIX_GPTOKEYB:-}
+  [ -n "$gamepad_bin" ] || gamepad_bin=$(command -v gptokeyb 2>/dev/null || true)
+  if [ -n "$gamepad_bin" ] && [ -x "$gamepad_bin" ]; then
+      echo "rocknix_gptokeyb=available"
+  elif [ -x /usr/bin/gptokeyb ]; then
+      echo "rocknix_gptokeyb=available"
+  else
+      echo "rocknix_gptokeyb=not_detected"
+  fi
+  if [ -r /dev/uinput ] && [ -w /dev/uinput ]; then
+      echo "virtual_keyboard_uinput=writable"
+  elif [ -e /dev/uinput ]; then
+      echo "virtual_keyboard_uinput=permission_or_device_restricted"
+  else
+      echo "virtual_keyboard_uinput=not_present"
+  fi
   printf 'session_wayland=%s\nsession_dir=%s\n' "${WAYLAND_DISPLAY:-unset}" "${XDG_RUNTIME_DIR:-unset}"
   for dir in "${XDG_RUNTIME_DIR:-/no-runtime}" /var/run/0-runtime-dir /run/user/0; do
       for name in wayland-1 wayland-0; do

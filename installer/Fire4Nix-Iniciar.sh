@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix R36H 0.94: preserve diagnosis from the very first failing preflight.
+# Fire4Nix R36H 0.95: preserve diagnosis from the very first failing preflight.
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
@@ -7,7 +7,49 @@ LOG_DIR=${FIRE4NIX_LOG_DIR:-$ROOT/logs}
 if ! mkdir -p "$LOG_DIR" 2>/dev/null || [ ! -w "$LOG_DIR" ]; then
     LOG_DIR=${TMPDIR:-/tmp}
 fi
-LOG="$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-$$.log"
+LOG="$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-$.log"
+GAMEPAD_PID=""
+stop_gamepad() {
+    [ -n "$GAMEPAD_PID" ] || return 0
+    # We only stop our own child, never a system-wide hotkey service.
+    kill "$GAMEPAD_PID" 2>/dev/null || true
+    wait "$GAMEPAD_PID" 2>/dev/null || true
+    GAMEPAD_PID=""
+}
+start_gamepad() {
+    [ "$MODE" = --open ] || return 0
+    if [ "${FIRE4NIX_GAMEPAD:-auto}" = 0 ]; then
+        echo "gamepad=disabled_by_user" >> "$LOG"
+        return 0
+    fi
+    cfg="$ROOT/config/fire4nix.gptk"
+    if [ ! -s "$cfg" ]; then
+        echo "gamepad=no_controller_profile" >> "$LOG"
+        return 0
+    fi
+    keybin=${FIRE4NIX_GPTOKEYB:-}
+    if [ -z "$keybin" ]; then
+        keybin=$(command -v gptokeyb 2>/dev/null || true)
+    fi
+    if [ -z "$keybin" ]; then
+        for candidate in /usr/bin/gptokeyb /usr/local/bin/gptokeyb /usr/sbin/gptokeyb; do
+            if [ -x "$candidate" ]; then keybin="$candidate"; break; fi
+        done
+    fi
+    if [ -z "$keybin" ] || [ ! -x "$keybin" ]; then
+        echo "gamepad=gptokeyb_missing_or_not_executable" >> "$LOG"
+        return 0
+    fi
+    if command -v pgrep >/dev/null 2>&1 && pgrep -x gptokeyb >/dev/null 2>&1; then
+        echo "gamepad=skipped_existing_gptokeyb_to_avoid_duplicate_events" >> "$LOG"
+        return 0
+    fi
+    # Do not use gptokeyb -k/-1: those options can kill an unrelated process.
+    "$keybin" -c "$cfg" >> "$LOG" 2>&1 &
+    GAMEPAD_PID=$!
+    printf 'gamepad=started pid=%s config=%s\n' "$GAMEPAD_PID" "$cfg" >> "$LOG"
+}
+
 if ! : > "$LOG" 2>/dev/null; then
     echo "Fire4Nix: cannot create diagnostic log under $LOG_DIR" >&2
     exit 73
@@ -15,6 +57,7 @@ fi
 finish() {
     code=$?
     trap - 0
+    stop_gamepad
     printf 'fire4nix_exit_code=%s\n' "$code" >> "$LOG"
     if [ -d /storage ] && [ -w /storage ]; then
         cp "$LOG" /storage/Fire4Nix-ultimo-resultado.txt 2>/dev/null || true
@@ -23,6 +66,8 @@ finish() {
     exit "$code"
 }
 trap finish 0
+trap 'exit 130' INT
+trap 'exit 143' TERM
 fail() {
     code=$1
     shift
@@ -35,7 +80,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=0.94\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=0.95\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest)
@@ -88,6 +133,7 @@ export FIRE4NIX_LOW_MEMORY=${FIRE4NIX_LOW_MEMORY:-1}
 export MALI_WAYLAND_AFBC=${MALI_WAYLAND_AFBC:-0}
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
 URL=${1:-$FIRE4NIX_HOME_URL}
+start_gamepad
 case "$MODE" in
   --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;
   --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
