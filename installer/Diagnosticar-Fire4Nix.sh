@@ -139,6 +139,8 @@ trap 'rm -f "$TMP"' 0
     sh "$ROOT/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1
     printf 'WPEPlatform_preflight_exit=%s\n' "$?"
     echo 'WPEPlatform_preflight_note=no_local_runtime_found'
+  elif [ -s "$BIN" ]; then
+    echo 'WPEPlatform_preflight=skipped_runtime_missing_no_launcher'
   else
     echo 'WPEPlatform_preflight=skipped_missing_binary'
   fi
