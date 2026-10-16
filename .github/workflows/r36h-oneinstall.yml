@@ -118,7 +118,7 @@ jobs:
           sh native/tests/test_launch_gamepad.sh
           sh native/tests/test_runtime_diagnostic.sh
           FIRE4NIX_TEST_PKG=out sh native/tests/test_runtime_selection.sh
-          FIRE4NIX_TEST_PKG=out sh native/tests/test_ondevice_testkit.sh
+          FIRE4NIX_TEST_PKG=out sh -x native/tests/test_ondevice_testkit.sh
           sh native/tests/test_segv_stage_diagnostic.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
