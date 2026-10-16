@@ -299,12 +299,50 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // The upstream WPE MiniBrowser sets WebKitSettings in g_object_new().
+    // Supplying settings at construction ensures low-memory flags take effect
+    // before WebKit starts allocating page and media resources.
+    GObject* settings = settingsType ?
+        static_cast<GObject*>(g_object_new(settingsType(), nullptr)) : nullptr;
+    if (settings && lowMemory()) {
+        setting(settings, "enable-webgl", FALSE);
+        setting(settings, "enable-webrtc", FALSE);
+        setting(settings, "enable-media-stream", FALSE);
+        setting(settings, "enable-mediasource", FALSE);
+        setting(settings, "enable-page-cache", FALSE);
+        setting(settings, "enable-webaudio", FALSE);
+        setting(settings, "media-playback-requires-user-gesture", TRUE);
+        setting(settings, "enable-encrypted-media", FALSE);
+        setting(settings, "enable-developer-extras", FALSE);
+    }
+    bool settingsAtConstruction = false;
+    if (settings) {
+        GObjectClass* klass = static_cast<GObjectClass*>(g_type_class_ref(webViewType()));
+        const GParamSpec* prop = g_object_class_find_property(klass, "settings");
+        settingsAtConstruction = prop && (prop->flags & G_PARAM_WRITABLE);
+        g_type_class_unref(klass);
+    }
     app.loop = g_main_loop_new(nullptr, FALSE);
     stage("creating WebKitWebView via GObject/WPEPlatform");
     // WPEPlatform: the GObject constructor initializes the selected display.
     // The old webkit_web_view_new_with_context() is a legacy backend API.
-    app.view = static_cast<GObject*>(g_object_new(webViewType(), nullptr));
-    if (!app.view) { stage("WebKitWebView creation failed"); return 3; }
+    app.view = static_cast<GObject*>(settingsAtConstruction ?
+        g_object_new(webViewType(), "settings", settings, nullptr) :
+        g_object_new(webViewType(), nullptr));
+    if (!app.view) {
+        stage("WebKitWebView creation failed");
+        if (settings) g_object_unref(settings);
+        g_main_loop_unref(app.loop);
+        dlclose(app.webkit);
+        return 3;
+    }
+    if (settings) {
+        if (!settingsAtConstruction && assignSettings)
+            assignSettings(app.view, settings);
+        if (!settingsAtConstruction && !assignSettings)
+            stage("WebKitSettings unavailable for this WebKit ABI");
+        g_object_unref(settings);
+    }
     stage("WebKitWebView created");
     gpointer nativeView = getWPEView(app.view);
     if (!nativeView || !G_IS_OBJECT(nativeView)) {
@@ -360,27 +398,6 @@ int main(int argc, char** argv) {
                 fullscreen(app.toplevel);
                 stage("requested WPEPlatform fullscreen");
             }
-        }
-    }
-    if (settingsType && assignSettings) {
-        GObject* settings = static_cast<GObject*>(g_object_new(settingsType(), nullptr));
-        if (settings) {
-            if (lowMemory()) {
-                setting(settings, "enable-webgl", FALSE);
-                setting(settings, "enable-webrtc", FALSE);
-                setting(settings, "enable-media-stream", FALSE);
-                setting(settings, "enable-mediasource", FALSE);
-                // Back/forward page cache retains entire documents in memory.
-                // Keep URL/history behavior but reclaim documents between pages.
-                setting(settings, "enable-page-cache", FALSE);
-                setting(settings, "enable-webaudio", FALSE);
-                // Avoid automatic video/audio work on a 1 GB RK3326 device.
-                setting(settings, "media-playback-requires-user-gesture", TRUE);
-                setting(settings, "enable-encrypted-media", FALSE);
-                setting(settings, "enable-developer-extras", FALSE);
-            }
-            assignSettings(app.view, settings);
-            g_object_unref(settings);
         }
     }
     if (g_signal_lookup("load-changed", G_OBJECT_TYPE(app.view)))
