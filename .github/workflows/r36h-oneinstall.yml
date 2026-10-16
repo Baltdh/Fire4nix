@@ -1,4 +1,4 @@
-name: Fire4Nix 1.00 R36H on-device ROCKNIX test kit
+name: Fire4Nix 1.01 R36H WPE SIGSEGV safe diagnostics
 on:
   push:
     paths:
@@ -10,6 +10,7 @@ on:
       - 'native/tests/test_runtime_selection.sh'
       - 'native/tests/test_runtime_staging.sh'
       - 'native/tests/test_ondevice_testkit.sh'
+      - 'native/tests/test_segv_stage_diagnostic.sh'
       - 'rocknix-integration/**'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
@@ -47,7 +48,7 @@ jobs:
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 1.00 R36H - teste guiado de compatibilidade no ROCKNIX para ROCKNIX 20261001.
+          Fire4Nix 1.01 R36H - localizar a falha 139 antes de abrir a janela para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -71,12 +72,17 @@ jobs:
           auditar ELF ARM64, WPEPlatform, subprocessos e checksums.
           Instalador prefere WPE com ABI compativel, sem copiar candidatos ruins;
           motor completo WebKit NAO esta incluido nem testado na Mali fisica.
-          TESTE NO R36H: sh Fire4Nix-Teste.sh --screen (diagnostico sem instalar)
+          PRIMEIRO TESTE NO R36H: sh Diagnosticar-Fire4Nix.sh --safe
+          --safe verifica ELF/simbolos sem carregar a biblioteca que falhou (139).
+          SEGUNDO TESTE, so depois: sh Diagnosticar-Fire4Nix.sh --screen
+          O diagnostico registra a ultima etapa executada pelo WPE em SIGSEGV.
+          Teste geral: sh Fire4Nix-Teste.sh --safe ou --screen
+          Se houver 139, fotografe WPEPlatform_fault_stage no relatorio.
           TESTE GRAFICO: sh Fire4Nix-Teste.sh --visual (somente se ja instalado)
           Para instalar atalhos independentes no menu Ports:
           sh Habilitar-Teste-Ports.sh
           Registra /storage/Fire4Nix-Teste/Fire4Nix-Ultimo-Teste.txt,
-          /storage/Fire4Nix-Teste/Fire4Nix-Diagnostico-100.txt e resumo.
+          /storage/Fire4Nix-Teste/Fire4Nix-Diagnostico-101.txt e resumo.
           Os atalhos de teste NAO substituem o navegador existente e NAO
           copiam os 174 MB do WebKit.
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
@@ -113,6 +119,7 @@ jobs:
           sh native/tests/test_runtime_diagnostic.sh
           FIRE4NIX_TEST_PKG=out sh native/tests/test_runtime_selection.sh
           FIRE4NIX_TEST_PKG=out sh native/tests/test_ondevice_testkit.sh
+          sh native/tests/test_segv_stage_diagnostic.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
@@ -323,10 +330,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.00-Teste-ROCKNIX.zip .)
-          unzip -t Fire4Nix-R36H-1.00-Teste-ROCKNIX.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.01-Diagnostico-139.zip .)
+          unzip -t Fire4Nix-R36H-1.01-Diagnostico-139.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.00-Teste-ROCKNIX
-          path: Fire4Nix-R36H-1.00-Teste-ROCKNIX.zip
+          name: Fire4Nix-R36H-1.01-Diagnostico-139
+          path: Fire4Nix-R36H-1.01-Diagnostico-139.zip
           retention-days: 30
