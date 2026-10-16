@@ -1,12 +1,12 @@
 #!/bin/sh
-# Fire4Nix 1.00 R36H: offline, non-destructive test and report from ROCKNIX.
+# Fire4Nix 1.01 R36H: offline, non-destructive test and report from ROCKNIX.
 # No downloads, firmware/OS edits, personal file access or secret collection.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 ROOT="$HERE/Fire4Nix"
 [ -s "$ROOT/bin/fire4nix-native-aarch64" ] || ROOT="$HERE"
 MODE=${1:---screen}
-case "$MODE" in --screen|--check|--visual|--collect) ;; *) echo "Use: sh Fire4Nix-Teste.sh [--screen|--check|--visual|--collect]" >&2; exit 2 ;; esac
+case "$MODE" in --safe|--screen|--check|--visual|--collect) ;; *) echo "Use: sh Fire4Nix-Teste.sh [--safe|--screen|--check|--visual|--collect]" >&2; exit 2 ;; esac
 # Keep the report on /storage when possible; otherwise local or /tmp.
 REPORT_DIR=${FIRE4NIX_TEST_REPORT_DIR:-}
 if [ -z "$REPORT_DIR" ]; then
@@ -22,10 +22,10 @@ if ! mkdir -p "$REPORT_DIR" 2>/dev/null; then
   echo "Fire4Nix: unable to create test report directory $REPORT_DIR" >&2
   exit 73
 fi
-REPORT=$(mktemp "$REPORT_DIR/Fire4Nix-Teste-100-XXXXXX.txt") || exit 73
-DIAG="$REPORT_DIR/Fire4Nix-Diagnostico-100.txt"
+REPORT=$(mktemp "$REPORT_DIR/Fire4Nix-Teste-101-XXXXXX.txt") || exit 73
+DIAG="$REPORT_DIR/Fire4Nix-Diagnostico-101.txt"
 LATEST="$REPORT_DIR/Fire4Nix-Ultimo-Teste.txt"
-STATUS_FILE="$REPORT_DIR/Fire4Nix-Resumo-100.txt"
+STATUS_FILE="$REPORT_DIR/Fire4Nix-Resumo-101.txt"
 BIN="$ROOT/bin/fire4nix-native-aarch64"
 DIAG_SCRIPT="$HERE/Diagnosticar-Fire4Nix.sh"
 [ -f "$DIAG_SCRIPT" ] || DIAG_SCRIPT="$ROOT/Diagnosticar-Fire4Nix.sh"
@@ -44,7 +44,7 @@ exit_visual=NA
 exit_selftest=NA
 exit_diagnostic=NA
 {
-  echo 'FIRE4NIX 1.00 / ROCKNIX R36H TEST REPORT'
+  echo 'FIRE4NIX 1.01 / ROCKNIX R36H TEST REPORT'
   date '+test_date=%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || true
   echo "mode=$MODE"
   echo "package_root=$ROOT"
@@ -66,11 +66,15 @@ exit_diagnostic=NA
   fi
   echo "selftest_exit=$exit_selftest"
   if [ -f "$DIAG_SCRIPT" ]; then
-    FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" >/dev/null 2>&1
+    if [ "$MODE" = --safe ]; then
+      FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" --safe >/dev/null 2>&1
+    else
+      FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" >/dev/null 2>&1
+    fi
     exit_diagnostic=$?
     echo "diagnostic_exit=$exit_diagnostic"
     if [ -f "$DIAG" ]; then
-      grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_version=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$DIAG" || true
+      grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_version=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$DIAG" || true
     fi
   else
     echo 'diagnostic_exit=127'
@@ -114,11 +118,12 @@ exit_diagnostic=NA
 } > "$REPORT" 2>&1
 cp "$REPORT" "$LATEST" 2>/dev/null || true
 {
-  echo 'FIRE4NIX 1.00 / RESUMO PARA FOTO'
-  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_preflight_exit=|wayland_socket=|visual_smoke_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-100 || true
+  echo 'FIRE4NIX 1.01 / RESUMO PARA FOTO'
+  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_smoke_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
   echo 'FIM DO RESUMO'
 } > "$STATUS_FILE"
-if [ "$MODE" = --screen ] || [ "$MODE" = --visual ] || [ "$MODE" = --check ]; then
+if [ "$MODE" = --safe ] || [ "$MODE" = --screen ] ||
+   [ "$MODE" = --visual ] || [ "$MODE" = --check ]; then
   cat "$STATUS_FILE"
   printf 'Relatorio completo: %s\n' "$LATEST"
   printf 'Diagnostico WPE: %s\n' "$DIAG"

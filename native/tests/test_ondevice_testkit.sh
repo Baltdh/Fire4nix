@@ -11,23 +11,23 @@ echo 'preserve-browser' > "$T/roms/ports/Fire4Nix.sh"
 FIRE4NIX_ROMS="$T/roms" sh "$T/pkg/Habilitar-Teste-Ports.sh" > "$T/enable.log"
 grep -q 'NO_WEBKIT_COPIED=1' "$T/enable.log"
 grep -q 'preserve-browser' "$T/roms/ports/Fire4Nix.sh"
-test -f "$T/roms/ports/Fire4Nix-Teste-100.sh"
-test -f "$T/roms/ports/Fire4Nix-Grafico-100.sh"
-test ! -d "$T/roms/ports/.Fire4Nix-Teste-100/Fire4Nix/runtime"
+test -f "$T/roms/ports/Fire4Nix-Teste-101.sh"
+test -f "$T/roms/ports/Fire4Nix-Grafico-101.sh"
+test ! -d "$T/roms/ports/.Fire4Nix-Teste-101/Fire4Nix/runtime"
 # Running via the actual Ports wrapper does not require a WebKit installation.
 FIRE4NIX_ROMS="$T/roms" FIRE4NIX_TEST_REPORT_DIR="$T/reports" \
-  sh "$T/roms/ports/Fire4Nix-Teste-100.sh" > "$T/screen.log"
+  sh "$T/roms/ports/Fire4Nix-Teste-101.sh" > "$T/screen.log"
 grep -q 'RESUMO PARA FOTO' "$T/screen.log"
 grep -q 'selftest_exit=0' "$T/screen.log"
 grep -q 'WPE_library=missing' "$T/screen.log"
 grep -q 'GRAPHICAL_HARDWARE_STATUS=UNVERIFIED' "$T/screen.log"
 test -s "$T/reports/Fire4Nix-Ultimo-Teste.txt"
-test -s "$T/reports/Fire4Nix-Diagnostico-100.txt"
-test -s "$T/reports/Fire4Nix-Resumo-100.txt"
+test -s "$T/reports/Fire4Nix-Diagnostico-101.txt"
+test -s "$T/reports/Fire4Nix-Resumo-101.txt"
 # A graphics test must refuse to claim success without installed WebKit.
 set +e
 FIRE4NIX_ROMS="$T/roms" FIRE4NIX_TEST_REPORT_DIR="$T/reports" \
-  sh "$T/roms/ports/Fire4Nix-Grafico-100.sh" > "$T/visual-missing.log"
+  sh "$T/roms/ports/Fire4Nix-Grafico-101.sh" > "$T/visual-missing.log"
 visual_missing=$?
 set -e
 test "$visual_missing" -eq 127
@@ -44,7 +44,7 @@ exit 70
 BROWSER
 set +e
 FIRE4NIX_ROMS="$T/roms" FIRE4NIX_TEST_REPORT_DIR="$T/reports" \
-  sh "$T/roms/ports/Fire4Nix-Grafico-100.sh" > "$T/visual-failed.log"
+  sh "$T/roms/ports/Fire4Nix-Grafico-101.sh" > "$T/visual-failed.log"
 visual_failed=$?
 set -e
 test "$visual_failed" -eq 70
