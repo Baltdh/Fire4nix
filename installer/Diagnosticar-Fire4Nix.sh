@@ -1,13 +1,15 @@
 #!/bin/sh
-# Fire4Nix 1.00: inspect the actual SD card runtime without starting the GUI.
+# Fire4Nix 1.01: inspect the actual SD card runtime without starting the GUI.
 # Privacy: only file presence, ELF dependencies and controlled exit codes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 SCREEN=0
+SAFE=0
 case "${1:-}" in
   --screen) SCREEN=1 ;;
+  --safe) SCREEN=1; SAFE=1 ;;
   "") ;;
-  *) echo "Usage: sh Diagnosticar-Fire4Nix.sh [--screen]" >&2; exit 2 ;;
+  *) echo "Usage: sh Diagnosticar-Fire4Nix.sh [--screen|--safe]" >&2; exit 2 ;;
 esac
 ROOT="$HERE/Fire4Nix"
 [ -s "$ROOT/bin/fire4nix-native-aarch64" ] || ROOT="$HERE"
@@ -39,7 +41,7 @@ done
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
-    OUT=/storage/Fire4Nix-Diagnostico-100.txt
+    OUT=/storage/Fire4Nix-Diagnostico-101.txt
   else
     OUT="$HERE/Fire4Nix-Diagnostico-100.txt"
   fi
@@ -53,7 +55,7 @@ fi
 TMP=$(mktemp "$DIR/.fire4nix-diag-XXXXXX") || exit 73
 trap 'rm -f "$TMP"' 0
 {
-  echo "Fire4Nix 1.00 / R36H standalone runtime diagnosis"
+  echo "Fire4Nix 1.01 / R36H standalone runtime diagnosis"
   printf 'arch=%s\n' "$(uname -m)"
   printf 'kernel=%s\n' "$(uname -r)"
   if [ -r /etc/os-release ]; then
@@ -119,7 +121,30 @@ trap 'rm -f "$TMP"' 0
   if [ -e /dev/uinput ] && [ -w /dev/uinput ]; then echo 'uinput=writable'
   elif [ -e /dev/uinput ]; then echo 'uinput=restricted'
   else echo 'uinput=not_detected'; fi
-  if [ -s "$BIN" ] && [ -n "$RUNTIME" ]; then
+  if [ -n "$RUNTIME" ]; then
+    if command -v readelf >/dev/null 2>&1; then
+      echo 'elf_static_inspection=readelf'
+      if readelf -h "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
+        echo 'wpe_elf_arch=AArch64'
+      else
+        echo 'wpe_elf_arch=unexpected_or_unreadable'
+      fi
+      if readelf --dyn-syms -W "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
+          grep -q 'webkit_web_view_get_wpe_view'; then
+        echo 'wpeplatform_static_symbol=present'
+      else
+        echo 'wpeplatform_static_symbol=absent_or_unreadable'
+      fi
+    else
+      echo 'elf_static_inspection=readelf_unavailable'
+    fi
+  fi
+  if [ "$SAFE" -eq 1 ]; then
+    echo 'WPEPlatform_preflight=skipped_safe_mode_no_library_execution'
+  elif [ -s "$BIN" ] && [ -n "$RUNTIME" ]; then
+    # Disable dumps of large WebKit process images after a suspected SIGSEGV.
+    # Preserve exact stderr and native stage checkpoints for photographs.
+    ulimit -c 0 2>/dev/null || true
     # Run only the ABI check, NOT a window or a webpage. It is valid even
     # when the new ZIP is on SD2 and the runtime is still on SD1.
     LD_LIBRARY_PATH="$RUNTIME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
@@ -127,6 +152,23 @@ trap 'rm -f "$TMP"' 0
        "$BIN" --check-platform > "$TMP.abi" 2>&1
     result=$?
     printf 'WPEPlatform_preflight_exit=%s\n' "$result"
+    if [ "$result" -eq 139 ]; then
+      echo 'WPEPlatform_fault=SIGSEGV_in_preflight'
+      if grep -Fq '[FIRE4NIX-NATIVE] dlopen success' "$TMP.abi"; then
+        echo 'WPEPlatform_fault_stage=after_dlopen_success'
+      elif grep -Fq '[FIRE4NIX-NATIVE] dlopen libWPEWebKit' "$TMP.abi"; then
+        echo 'WPEPlatform_fault_stage=during_dlopen_or_its_dependencies'
+      else
+        echo 'WPEPlatform_fault_stage=before_first_native_checkpoint_or_unknown'
+      fi
+    fi
+    echo 'WPEPlatform_native_checkpoints_begin'
+    grep -F '[FIRE4NIX-NATIVE]' "$TMP.abi" | tail -n 12 | cut -c 1-140 || true
+    echo 'WPEPlatform_native_checkpoints_end'
+    echo 'WPEPlatform_loader_messages_begin'
+    grep -E '(^| )(error|Error|Segmentation fault|undefined symbol|version .*not found|cannot open)' "$TMP.abi" |
+      tail -n 8 | cut -c 1-160 || true
+    echo 'WPEPlatform_loader_messages_end'
     awk -F= '/^\[FIRE4NIX-ABI\] wpe_version=/ { print "WPE_version=" $2 }' "$TMP.abi" | head -n 1
     grep '^\[FIRE4NIX-ABI\]' "$TMP.abi" | head -n 17 || true
     case "$result" in
@@ -153,8 +195,8 @@ mv -f "$TMP" "$OUT" || exit 73
 trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
-  echo '=== FIRE4NIX 1.00 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+  echo '=== FIRE4NIX 1.01 / RESUMO PARA FOTO ==='
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi
