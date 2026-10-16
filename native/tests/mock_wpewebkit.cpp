@@ -7,6 +7,7 @@ typedef struct { GObjectClass parent_class; } FakeViewClass;
 G_DEFINE_TYPE(FakeView, fake_view, G_TYPE_OBJECT)
 static guint changed;
 static guint terminated;
+static guint displayDisconnected;
 static guint closed;
 static guint keyboardEventSignal;
 struct FakeKeyEvent { int type; unsigned modifiers; unsigned keyval; };
@@ -17,6 +18,9 @@ static void fake_view_class_init(FakeViewClass*) {
     keyboardEventSignal = g_signal_new("event", fake_view_get_type(), G_SIGNAL_RUN_LAST,
                            0, g_signal_accumulator_true_handled, nullptr, nullptr,
                            G_TYPE_BOOLEAN, 1, G_TYPE_POINTER);
+    displayDisconnected = g_signal_new("disconnected", fake_view_get_type(),
+                          G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
+                          G_TYPE_NONE, 1, G_TYPE_ERROR);
     terminated = g_signal_new("web-process-terminated", fake_view_get_type(),
                              G_SIGNAL_RUN_LAST, 0, nullptr, nullptr, nullptr,
                              G_TYPE_NONE, 1, G_TYPE_INT);
@@ -30,6 +34,7 @@ extern "C" GType webkit_web_view_get_type(void) { return fake_view_get_type(); }
 extern "C" gpointer webkit_web_view_get_wpe_view(gpointer view) { return view; }
 #endif
 extern "C" gpointer wpe_view_get_toplevel(gpointer view) { return view; }
+extern "C" gpointer wpe_view_get_display(gpointer view) { return view; }
 extern "C" gboolean wpe_toplevel_fullscreen(gpointer) {
     fullscreenEnabled = TRUE;
     g_printerr("[MOCK-WPE] fullscreen requested\n");
@@ -73,6 +78,10 @@ static gboolean finished(gpointer v) {
     if (g_getenv("FIRE4NIX_MOCK_TERMINATE")) {
         g_signal_emit(v, terminated, 0, 1);
         g_printerr("[MOCK-WPE] web process terminated before load finish\n");
+    }
+    if (g_getenv("FIRE4NIX_MOCK_DISPLAY_DISCONNECT")) {
+        g_signal_emit(v, displayDisconnected, 0, nullptr);
+        g_printerr("[MOCK-WPE] display disconnected\n");
     }
     g_signal_emit(v,changed,0,3);
     (void)closed;
