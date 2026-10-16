@@ -1,4 +1,4 @@
-// Fire4Nix R36H v0.93 - minimal ARM64 WPEPlatform launcher.
+// Fire4Nix R36H v0.94 - resilient native WPEPlatform launcher.
 // Build on AArch64 Linux against GLib/GObject; load the *user-installed* WPE2.0
 // runtime with dlopen. Never pull GTK/Qt libraries into the launcher.
 #include <glib.h>
@@ -39,6 +39,8 @@ struct App {
     const char* initialUrl = nullptr;
     guint smokeTimeoutSource = 0;
     gpointer toplevel = nullptr;
+    GObject* display = nullptr;
+    gulong displayDisconnectedHandler = 0;
     ToplevelSetTitle setTitle = nullptr;
     GetEventType getEventType = nullptr;
     GetEventModifiers getEventModifiers = nullptr;
@@ -178,6 +180,17 @@ static gboolean onPlatformEvent(GObject*, gpointer event, gpointer data) {
     return FALSE; // Other keys go to the website (forms/text inputs).
 }
 
+static void platformDisplayDisconnected(GObject*, GError* error, gpointer data) {
+    App* app = static_cast<App*>(data);
+    if (error)
+        g_printerr("[FIRE4NIX-NATIVE] WPE display disconnected: %s\n", error->message);
+    else
+        stage("WPE display disconnected");
+    // Do not leave an invisible but still-running browser in Ports.
+    app->failed = true;
+    app->exitCode = 71;
+    if (app->loop) g_main_loop_quit(app->loop);
+}
 static void platformViewClosed(GObject*, gpointer data) {
     App* app = static_cast<App*>(data);
     stage("WPEView closed by compositor");
@@ -210,7 +223,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 0.93: [--selftest|--check-library|--check-platform|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 0.94: [--selftest|--check-library|--check-platform|--smoke] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -304,6 +317,21 @@ int main(int argc, char** argv) {
     if (g_signal_lookup("closed", G_OBJECT_TYPE(nativeView)))
         g_signal_connect(nativeView, "closed", G_CALLBACK(platformViewClosed), &app);
     stage("WPEPlatform WPEView available");
+    // Match the official WPE MiniBrowser: watch the actual display, not just
+    // the Wayland socket, which can remain present after a disconnect.
+    using GetDisplay = gpointer (*)(gpointer);
+    auto getDisplay = reinterpret_cast<GetDisplay>(dlsym(RTLD_DEFAULT, "wpe_view_get_display"));
+    if (getDisplay) {
+        gpointer display = getDisplay(nativeView);
+        if (display && G_IS_OBJECT(display)) {
+            app.display = G_OBJECT(display);
+            if (g_signal_lookup("disconnected", G_OBJECT_TYPE(app.display))) {
+                app.displayDisconnectedHandler = g_signal_connect(
+                    app.display, "disconnected", G_CALLBACK(platformDisplayDisconnected), &app);
+                stage("WPEPlatform display disconnect monitoring active");
+            } else stage("WPEPlatform display lacks disconnected signal");
+        } else stage("WPEPlatform display not available from WPEView");
+    } else stage("WPEPlatform wpe_view_get_display unavailable");
     // The normal ROCKNIX Sway session has a single 640x480 handheld display.
     // Request compositor-managed fullscreen instead of merely opening a tile.
     auto getToplevel = reinterpret_cast<GetToplevel>(dlsym(RTLD_DEFAULT, "wpe_view_get_toplevel"));
@@ -379,6 +407,10 @@ int main(int argc, char** argv) {
     if (app.smokeTimeoutSource &&
         g_main_context_find_source_by_id(nullptr, app.smokeTimeoutSource))
         g_source_remove(app.smokeTimeoutSource);
+    if (app.display && app.displayDisconnectedHandler) {
+        g_signal_handler_disconnect(app.display, app.displayDisconnectedHandler);
+        app.displayDisconnectedHandler = 0;
+    }
     g_object_unref(app.view);
     g_main_loop_unref(app.loop);
     dlclose(app.webkit);
