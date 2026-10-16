@@ -2,6 +2,7 @@
 // Do NOT ship this fake library inside the R36H release ZIP.
 #include <glib.h>
 #include <glib-object.h>
+#include <cstdio>
 #ifndef MOCK_NO_VERSION
 static unsigned part(unsigned index) {
     const char* value = g_getenv("FIRE4NIX_MOCK_WPE_VERSION");
