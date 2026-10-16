@@ -23,12 +23,24 @@ fi
 [ -n "$ROMS" ] || { echo "ROM directory not found. Set FIRE4NIX_ROMS." >&2; exit 2; }
 # An install-once command should not duplicate a 174 MB+ runtime on repeated runs.
 DEST="$ROMS/ports/fire4nix-completo"
+# If the upgrade explicitly bundles a new WebKit runtime, do not suppress it
+# merely because the launcher, keyboard and native executable are unchanged.
+bundled_runtime_matches_installed() {
+    [ ! -s "$SOURCE/runtime/lib/libWPEWebKit-2.0.so.1" ] && return 0
+    for file in lib/libWPEWebKit-2.0.so.1 \
+                libexec/wpe-webkit-2.0/WPEWebProcess \
+                libexec/wpe-webkit-2.0/WPENetworkProcess \
+                libexec/wpe-webkit-2.0/WPEGPUProcess; do
+        cmp -s "$SOURCE/runtime/$file" "$DEST/runtime/$file" || return 1
+    done
+}
 if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
    [ -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
    [ -f "$DEST/Fire4Nix-Iniciar.sh" ] &&
    [ -f "$ROMS/ports/Fire4Nix.sh" ] &&
    cmp -s "$SOURCE/bin/fire4nix-native-aarch64" "$DEST/bin/fire4nix-native-aarch64" &&
    cmp -s "$SOURCE/Fire4Nix-Iniciar.sh" "$DEST/Fire4Nix-Iniciar.sh" &&
+   bundled_runtime_matches_installed &&
    cmp -s "$SOURCE/config/fire4nix.gptk" "$DEST/config/fire4nix.gptk" &&
    cmp -s "$SOURCE/www/inicio.html" "$DEST/www/inicio.html" &&
    cmp -s "$SOURCE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh" &&
@@ -39,19 +51,47 @@ if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
     fi
 fi
 SRC_RUNTIME=
-for path in "$SOURCE/runtime" "$ROMS/tools/Fire4Nix/runtime" "$ROMS/ports/Fire4Nix/runtime" "$ROMS/ports/fire4nix-completo/runtime" /storage/games-internal/roms/tools/Fire4Nix/runtime /storage/games-external/roms/tools/Fire4Nix/runtime; do
-    if [ -s "$path/lib/libWPEWebKit-2.0.so.1" ]; then SRC_RUNTIME="$path"; break; fi
+SEEN_WPE=0
+# Validate compatibility BEFORE making a 174MB+ copy and prefer a verified
+# runtime over an older incompatible one, including one on the second SD.
+# Explicit override is always considered first, but still must pass validation.
+for path in "${FIRE4NIX_RUNTIME_SOURCE:-}" \
+    "$SOURCE/runtime" "$ROMS/tools/Fire4Nix/runtime" \
+    "$ROMS/ports/Fire4Nix/runtime" "$ROMS/ports/fire4nix-completo/runtime" \
+    /storage/games-internal/roms/tools/Fire4Nix/runtime \
+    /storage/games-external/roms/tools/Fire4Nix/runtime \
+    /storage/games-internal/roms/ports/fire4nix-completo/runtime \
+    /storage/games-external/roms/ports/fire4nix-completo/runtime; do
+    [ -n "$path" ] && [ -s "$path/lib/libWPEWebKit-2.0.so.1" ] || continue
+    SEEN_WPE=1
+    complete=1
+    for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+        [ -s "$path/libexec/wpe-webkit-2.0/$child" ] || complete=0
+    done
+    if [ "$complete" -ne 1 ]; then
+        echo "Skipping incomplete WebKit runtime: $path"
+        continue
+    fi
+    echo "Checking WebKit WPEPlatform compatibility: $path"
+    if LD_LIBRARY_PATH="$path/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+       WEBKIT_EXEC_PATH="$path/libexec/wpe-webkit-2.0" \
+       "$SOURCE/bin/fire4nix-native-aarch64" --check-platform >/dev/null 2>&1; then
+        SRC_RUNTIME="$path"
+        break
+    fi
+    echo "Skipping incompatible WebKit runtime (ABI/dependency failure): $path"
 done
 if [ -z "$SRC_RUNTIME" ]; then
-    echo "ERROR: the 174 MB WPE runtime is not in this ZIP or existing installs." >&2
-    echo "Cannot install a working offline browser from launcher-only files." >&2
+    if [ "$SEEN_WPE" -eq 1 ]; then
+        echo "ERROR: WebKit runtime candidates found, but none passed WPEPlatform preflight." >&2
+        echo "Previous Fire4Nix installation was not modified." >&2
+        exit 5
+    fi
+    echo "ERROR: no complete WebKit WPE runtime found on available SD cards." >&2
+    echo "Fire4Nix needs a ROCKNIX-compatible WebKit with subprocesses." >&2
     exit 3
 fi
-for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-    [ -s "$SRC_RUNTIME/libexec/wpe-webkit-2.0/$child" ] || {
-        echo "Missing WPE subprocess: $child" >&2; exit 3;
-    }
-done
+echo "Selected compatible WebKit runtime: $SRC_RUNTIME"
 mkdir -p "$ROMS/ports"
 # On Linux filesystems hardlinks can reuse the read-only WebKit runtime safely.
 # FAT/exFAT and separate SD cards cannot hardlink: keep the complete copy fallback.
