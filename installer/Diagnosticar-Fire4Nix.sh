@@ -131,6 +131,12 @@ trap 'rm -f "$TMP"' 0
       else
         echo 'wpe_elf_arch=unexpected_or_unreadable'
       fi
+      # ELF symbol version requirements help compare an externally built WPE
+      # against the device's actual glibc 2.41 (not the GitHub tree's version).
+      max_required=$(readelf --version-info "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
+        grep -o 'Name: GLIBC_[0-9][0-9.]*' |
+        sed 's/^Name: GLIBC_//' | sort -V | tail -n 1 || true)
+      printf 'wpe_glibc_max_required=%s\n' "${max_required:-not_available}"
       if readelf --dyn-syms -W "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
           grep -q 'webkit_web_view_get_wpe_view'; then
         echo 'wpeplatform_static_symbol=present'
@@ -199,7 +205,7 @@ trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
   echo '=== FIRE4NIX 1.01 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi
