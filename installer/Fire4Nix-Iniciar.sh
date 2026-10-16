@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix R36H 0.93: preserve diagnosis from the very first failing preflight.
+# Fire4Nix R36H 0.94: preserve diagnosis from the very first failing preflight.
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
@@ -35,7 +35,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=0.93\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=0.94\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest)
