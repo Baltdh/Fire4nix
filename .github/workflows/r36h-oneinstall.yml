@@ -46,7 +46,8 @@ jobs:
           O instalador verifica tambem a homepage e diagnosticos, e evita regravar
           o WPE quando hardlinks sao suportados (fallback copia para FAT/exFAT).
           Confirme em Diagnosticar-Fire4Nix.sh e Fire4Nix-ultimo-resultado.txt.
-          WPEPlatform usa modo fullscreen no Sway quando disponivel.
+          WPEPlatform aplica ajustes de memoria na criacao do WebView, registra
+          desconexao do display Wayland (codigo 71) e solicita fullscreen no Sway.
           Teclado virtual opcional usa setas e Enter sem hardware adicional.
           Diagnosticar-Fire4Nix.sh salva erros de biblioteca/Wayland sem a Internet.
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
@@ -174,6 +175,7 @@ jobs:
           FIRE4NIX_HOME_URL=file:///tmp/fire4nix-home.html LD_LIBRARY_PATH=/tmp/modern-wpe out/Fire4Nix/bin/fire4nix-native-aarch64 --smoke about:blank > /tmp/fire4nix-v090-smoke.log 2>&1
           grep -q 'fullscreen requested' /tmp/fire4nix-v090-smoke.log
           grep -q 'load-event=3' /tmp/fire4nix-v090-smoke.log
+          grep -q 'settings supplied during webview creation' /tmp/fire4nix-v090-smoke.log
           grep -q 'shortcut Ctrl+H: home' /tmp/fire4nix-v090-smoke.log
           grep -q 'load_uri request=file:///tmp/fire4nix-home.html' /tmp/fire4nix-v090-smoke.log
           grep -q 'shortcut Ctrl+R: reload' /tmp/fire4nix-v090-smoke.log
