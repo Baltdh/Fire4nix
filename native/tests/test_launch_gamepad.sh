@@ -47,7 +47,7 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
 grep -q 'gamepad_started:-c .*fire4nix.gptk' "$T/actions"
 grep -q 'browser_exit' "$T/actions"
 grep -q 'gamepad_stopped' "$T/actions"
-grep -q 'gamepad=started pid=' "$T/logs/"*.log
+grep -q 'gamepad=running pid=' "$T/logs/"*.log
 grep -q 'fire4nix_exit_code=0' "$T/logs/"*.log
 
 : > "$T/actions"
