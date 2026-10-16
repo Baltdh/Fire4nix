@@ -29,6 +29,7 @@ if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
    [ -f "$ROMS/ports/Fire4Nix.sh" ] &&
    cmp -s "$SOURCE/bin/fire4nix-native-aarch64" "$DEST/bin/fire4nix-native-aarch64" &&
    cmp -s "$SOURCE/Fire4Nix-Iniciar.sh" "$DEST/Fire4Nix-Iniciar.sh" &&
+   cmp -s "$SOURCE/config/fire4nix.gptk" "$DEST/config/fire4nix.gptk" &&
    cmp -s "$SOURCE/www/inicio.html" "$DEST/www/inicio.html" &&
    cmp -s "$SOURCE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh" &&
    cmp -s "$HERE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh"; then
