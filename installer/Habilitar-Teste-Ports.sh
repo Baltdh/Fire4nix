@@ -21,13 +21,13 @@ fi
   exit 2
 }
 mkdir -p "$ROMS/ports"
-KIT="$ROMS/ports/.Fire4Nix-Teste-100"
+KIT="$ROMS/ports/.Fire4Nix-Teste-101"
 # Use version-specific entries: do not replace the existing browser or tests.
 [ ! -e "$KIT" ] || {
   echo "Test kit already present: $KIT"
   exit 0
 }
-for name in Fire4Nix-Teste-100.sh Fire4Nix-Grafico-100.sh; do
+for name in Fire4Nix-Teste-101.sh Fire4Nix-Grafico-101.sh; do
   if [ -e "$ROMS/ports/$name" ]; then
     echo "ERROR: existing Ports entry $name will not be overwritten" >&2
     exit 7
@@ -52,19 +52,19 @@ cp "$HERE/Fire4Nix-Teste.sh" "$STAGE/"
 chmod +x "$STAGE/Fire4Nix/bin/fire4nix-native-aarch64" || true
 mv "$STAGE" "$KIT"
 trap - 0
-cat > "$ROMS/ports/Fire4Nix-Teste-100.sh" <<'ENTRY'
+cat > "$ROMS/ports/Fire4Nix-Teste-101.sh" <<'ENTRY'
 #!/bin/sh
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-exec sh "$HERE/.Fire4Nix-Teste-100/Fire4Nix-Teste.sh" --screen
+exec sh "$HERE/.Fire4Nix-Teste-101/Fire4Nix-Teste.sh" --screen
 ENTRY
-cat > "$ROMS/ports/Fire4Nix-Grafico-100.sh" <<'ENTRY'
+cat > "$ROMS/ports/Fire4Nix-Grafico-101.sh" <<'ENTRY'
 #!/bin/sh
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-exec sh "$HERE/.Fire4Nix-Teste-100/Fire4Nix-Teste.sh" --visual
+exec sh "$HERE/.Fire4Nix-Teste-101/Fire4Nix-Teste.sh" --visual
 ENTRY
-chmod +x "$ROMS/ports/Fire4Nix-Teste-100.sh" "$ROMS/ports/Fire4Nix-Grafico-100.sh"
+chmod +x "$ROMS/ports/Fire4Nix-Teste-101.sh" "$ROMS/ports/Fire4Nix-Grafico-101.sh"
 echo "TEST_KIT=$KIT"
-echo 'PORTS_ENTRIES=Fire4Nix-Teste-100.sh,Fire4Nix-Grafico-100.sh'
+echo 'PORTS_ENTRIES=Fire4Nix-Teste-101.sh,Fire4Nix-Grafico-101.sh'
 echo 'NO_WEBKIT_COPIED=1'
 echo 'Run diagnostics in Ports even if browser installation fails.'
 echo 'The graphics test uses the already installed Fire4Nix if available.'
