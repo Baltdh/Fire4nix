@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix 0.98: inspect the actual SD card runtime without starting the GUI.
+# Fire4Nix 0.99: inspect the actual SD card runtime without starting the GUI.
 # Privacy: only file presence, ELF dependencies and controlled exit codes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
@@ -39,9 +39,9 @@ done
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
-    OUT=/storage/Fire4Nix-Diagnostico-098.txt
+    OUT=/storage/Fire4Nix-Diagnostico-099.txt
   else
-    OUT="$HERE/Fire4Nix-Diagnostico-098.txt"
+    OUT="$HERE/Fire4Nix-Diagnostico-099.txt"
   fi
 fi
 # Keep the report even if /storage cannot be written, and never clobber it midway.
@@ -53,7 +53,7 @@ fi
 TMP=$(mktemp "$DIR/.fire4nix-diag-XXXXXX") || exit 73
 trap 'rm -f "$TMP"' 0
 {
-  echo "Fire4Nix 0.98 / R36H standalone runtime diagnosis"
+  echo "Fire4Nix 0.99 / R36H standalone runtime diagnosis"
   printf 'arch=%s\n' "$(uname -m)"
   printf 'kernel=%s\n' "$(uname -r)"
   if [ -r /etc/os-release ]; then
