@@ -38,7 +38,5 @@ FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/nonexistent" \
 grep -q '^WPE_library=missing$' "$T/missing.txt"
 grep -q '^WPE_runtime_source=not_found_on_checked_SD_paths$' "$T/missing.txt"
 # Binary exists in the extracted package; the library does not.
-grep -q '^WPEPlatform_preflight=skipped_runtime_missing_no_launcher
-echo "PASS: dual-SD override, external WPE library, legacy status 78, screen-friendly report and missing-runtime distinction"
- "$T/missing.txt"
+grep -q '^WPEPlatform_preflight=skipped_runtime_missing_no_launcher$' "$T/missing.txt"
 echo "PASS: dual-SD override, external WPE library, legacy status 78, screen-friendly report and missing-runtime distinction"
