@@ -87,7 +87,9 @@ trap 'rm -f "$TMP"' 0
       printf '%s=missing\n' "$process"
     fi
   done
-  if [ -n "$RUNTIME" ] && command -v ldd >/dev/null 2>&1; then
+  if [ "$SAFE" -eq 1 ]; then
+    echo 'WPE_dynamic_dependencies=skipped_in_safe_mode_no_loader'
+  elif [ -n "$RUNTIME" ] && command -v ldd >/dev/null 2>&1; then
     echo 'WPE_missing_dynamic_dependencies_begin'
     LD_LIBRARY_PATH="$RUNTIME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
       ldd "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
@@ -141,6 +143,7 @@ trap 'rm -f "$TMP"' 0
   fi
   if [ "$SAFE" -eq 1 ]; then
     echo 'WPEPlatform_preflight=skipped_safe_mode_no_library_execution'
+    echo 'SAFE_MODE_NOTE=readelf_only_without_ldd_or_WPE_execution'
   elif [ -s "$BIN" ] && [ -n "$RUNTIME" ]; then
     # Disable dumps of large WebKit process images after a suspected SIGSEGV.
     # Preserve exact stderr and native stage checkpoints for photographs.
