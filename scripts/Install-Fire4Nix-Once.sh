@@ -56,11 +56,18 @@ mkdir -p "$ROMS/ports"
 # On Linux filesystems hardlinks can reuse the read-only WebKit runtime safely.
 # FAT/exFAT and separate SD cards cannot hardlink: keep the complete copy fallback.
 HARDLINK_RUNTIME=0
-LINK_TEST="$ROMS/ports/.fire4nix-hardlink-test-$"
+# A private mktemp directory keeps the hardlink probe from clashing
+# with any other Fire4Nix installation running concurrently.
+LINK_TEST_DIR=$(mktemp -d "$ROMS/ports/.fire4nix-linkprobe-XXXXXXXX") || {
+    echo "Cannot create hardlink probe directory" >&2
+    exit 7
+}
+LINK_TEST="$LINK_TEST_DIR/wpe"
 if ln "$SRC_RUNTIME/lib/libWPEWebKit-2.0.so.1" "$LINK_TEST" 2>/dev/null; then
     HARDLINK_RUNTIME=1
-    rm -f "$LINK_TEST"
 fi
+rm -f "$LINK_TEST"
+rmdir "$LINK_TEST_DIR" || exit 7
 if [ "$HARDLINK_RUNTIME" -eq 1 ]; then
     echo "WPE runtime: filesystem supports space-saving hardlinks"
 else
@@ -123,6 +130,20 @@ if [ ! -s "$STAGE/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
         # On any unsupported file, start a clean full-copy fallback.
         if ! cp -al "$SRC_RUNTIME/." "$STAGE/runtime/" 2>/dev/null; then
             rm -rf "$STAGE/runtime"
+            # A filesystem may allow the probe but reject a different link.
+            # Recheck capacity BEFORE falling back to a 174MB+ full copy.
+            copy_kb=$(du -sk "$SRC_RUNTIME" 2>/dev/null | awk '{print $1}')
+            free_kb=$(df -Pk "$ROMS/ports" 2>/dev/null | awk 'NR==2 {print $4}')
+            case "$copy_kb:$free_kb" in
+              *[!0-9:]*|:*|*:)
+                echo "Cannot verify sufficient free space for WPE fallback copy" >&2
+                exit 6 ;;
+            esac
+            if [ "$free_kb" -lt "$((copy_kb + 32768))" ]; then
+                echo "Insufficient space for fallback copy after hardlink failure" >&2
+                exit 6
+            fi
+            echo "WPE hardlink copy failed; falling back to independent copy"
             mkdir -p "$STAGE/runtime"
             cp -a "$SRC_RUNTIME/." "$STAGE/runtime/"
         fi
