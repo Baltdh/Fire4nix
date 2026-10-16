@@ -1,4 +1,4 @@
-name: Fire4Nix 0.94 R36H native display resilience
+name: Fire4Nix 0.95 R36H ROCKNIX gamepad adapter
 on:
   push:
     paths:
@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev
-          mkdir -p out/Fire4Nix/bin out/Fire4Nix/www
+          mkdir -p out/Fire4Nix/bin out/Fire4Nix/www out/Fire4Nix/config
           g++ -std=c++17 -Os -flto -mtune=cortex-a35 -ffunction-sections -fdata-sections -Wall -Wextra -Werror native/fire4nix_wpeplatform.cpp \
             $(pkg-config --cflags --libs glib-2.0 gobject-2.0) -ldl -Wl,--gc-sections,-z,relro,-z,now \
             -o out/Fire4Nix/bin/fire4nix-native-aarch64
@@ -34,8 +34,9 @@ jobs:
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
+          cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.94 R36H - instalacao unica com monitor do Wayland/WPE para ROCKNIX 20261001.
+          Fire4Nix 0.95 R36H - instalacao unica com gamepad ROCKNIX opcional para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -53,12 +54,19 @@ jobs:
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
           Alt+Direita avancar,
           F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
-          Controles do gamepad R36H ainda nao homologados.
+          Controle via gptokeyb disponivel se ROCKNIX tiver o binario e
+          conseguir criar teclado/mouse virtual. Nao instala drivers.
+          Seletor + A inicio, Seletor + B fechar, Seletor + X recarregar.
+          FIRE4NIX_GAMEPAD=0 desliga e registra o motivo no log.
+          A controladora fisica e o Wayland no console ainda exigem validacao.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix/Fire4Nix-Iniciar.sh
+          grep -q '^a_hk = add_ctrl' out/Fire4Nix/config/fire4nix.gptk
+          grep -q '^up = repeat' out/Fire4Nix/config/fire4nix.gptk
+          sh native/tests/test_launch_gamepad.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
@@ -117,6 +125,10 @@ jobs:
           printf '<!-- homepage-only-update -->\n' >> "$t/pkg/Fire4Nix/www/inicio.html"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
           grep -q 'homepage-only-update' "$t/roms/ports/fire4nix-completo/www/inicio.html"
+          # Controller profile-only upgrades must not be silently skipped.
+          printf '# controller-profile-update\n' >> "$t/pkg/Fire4Nix/config/fire4nix.gptk"
+          FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
+          grep -q 'controller-profile-update' "$t/roms/ports/fire4nix-completo/config/fire4nix.gptk"
           # Source WebKit and installed WebKit can share an inode on link-capable filesystems.
           test "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -ef "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
           test -n "$(find "$t/roms/ports" -maxdepth 1 -name 'fire4nix-completo.backup-*' -print -quit)"
@@ -213,10 +225,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.94-Correcao-Janela.zip .)
-          unzip -t Fire4Nix-R36H-0.94-Correcao-Janela.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.95-Gamepad-ROCKNIX.zip .)
+          unzip -t Fire4Nix-R36H-0.95-Gamepad-ROCKNIX.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.94-Correcao-Janela
-          path: Fire4Nix-R36H-0.94-Correcao-Janela.zip
+          name: Fire4Nix-R36H-0.95-Gamepad-ROCKNIX
+          path: Fire4Nix-R36H-0.95-Gamepad-ROCKNIX.zip
           retention-days: 30
