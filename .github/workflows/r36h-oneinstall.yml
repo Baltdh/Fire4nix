@@ -5,6 +5,7 @@ on:
       - 'installer/**'
       - 'native/fire4nix_wpeplatform.cpp'
       - 'native/tests/mock_wpewebkit.cpp'
+      - 'native/tests/test_launch_gamepad.sh'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
   workflow_dispatch:
