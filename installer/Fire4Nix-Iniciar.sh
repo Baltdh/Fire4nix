@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix R36H 0.95: preserve diagnosis from the very first failing preflight.
+# Fire4Nix R36H 0.96: preserve diagnosis from the very first failing preflight.
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
@@ -7,7 +7,12 @@ LOG_DIR=${FIRE4NIX_LOG_DIR:-$ROOT/logs}
 if ! mkdir -p "$LOG_DIR" 2>/dev/null || [ ! -w "$LOG_DIR" ]; then
     LOG_DIR=${TMPDIR:-/tmp}
 fi
-LOG="$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-$.log"
+# mktemp avoids collisions between simultaneous sessions without relying on
+# process-ID expansion or synchronized handheld clocks.
+LOG=$(mktemp "$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-XXXXXX.log") || {
+    echo "Fire4Nix: unable to allocate unique diagnostic log" >&2
+    exit 73
+}
 GAMEPAD_PID=""
 stop_gamepad() {
     [ -n "$GAMEPAD_PID" ] || return 0
@@ -47,7 +52,17 @@ start_gamepad() {
     # Do not use gptokeyb -k/-1: those options can kill an unrelated process.
     "$keybin" -c "$cfg" >> "$LOG" 2>&1 &
     GAMEPAD_PID=$!
-    printf 'gamepad=started pid=%s config=%s\n' "$GAMEPAD_PID" "$cfg" >> "$LOG"
+    # A successful fork is not proof that gptokeyb can access SDL/uinput.
+    # Give it a short scheduling opportunity, then capture immediate failures.
+    sleep 0.15
+    if ! kill -0 "$GAMEPAD_PID" 2>/dev/null; then
+        helper_exit=0
+        wait "$GAMEPAD_PID" 2>/dev/null || helper_exit=$?
+        printf 'gamepad=helper_exited_early exit_code=%s\n' "$helper_exit" >> "$LOG"
+        GAMEPAD_PID=""
+        return 0
+    fi
+    printf 'gamepad=running pid=%s config=%s\n' "$GAMEPAD_PID" "$cfg" >> "$LOG"
 }
 
 if ! : > "$LOG" 2>/dev/null; then
@@ -80,7 +95,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=0.95\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=0.96\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest)

@@ -1,10 +1,11 @@
-name: Fire4Nix 0.95 R36H ROCKNIX gamepad adapter
+name: Fire4Nix 0.96 R36H reliable startup and storage
 on:
   push:
     paths:
       - 'installer/**'
       - 'native/fire4nix_wpeplatform.cpp'
       - 'native/tests/mock_wpewebkit.cpp'
+      - 'native/tests/test_launch_gamepad.sh'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
   workflow_dispatch:
@@ -36,7 +37,7 @@ jobs:
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.95 R36H - instalacao unica com gamepad ROCKNIX opcional para ROCKNIX 20261001.
+          Fire4Nix 0.96 R36H - instalacao unica com protecao de logs e armazenamento para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -57,7 +58,9 @@ jobs:
           Controle via gptokeyb disponivel se ROCKNIX tiver o binario e
           conseguir criar teclado/mouse virtual. Nao instala drivers.
           Seletor + A inicio, Seletor + B fechar, Seletor + X recarregar.
-          FIRE4NIX_GAMEPAD=0 desliga e registra o motivo no log.
+          FIRE4NIX_GAMEPAD=0 desliga; falha imediata do auxiliar e registrada.
+          mktemp cria logs independentes, e a instalacao evita uma copia grande
+          de WebKit se hardlinks falharem e o espaco nao for suficiente.
           A controladora fisica e o Wayland no console ainda exigem validacao.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
@@ -141,6 +144,44 @@ jobs:
           grep -q 'fat-fallback-update' "$t/roms/ports/fire4nix-completo/www/inicio.html"
           # Unlike ext4 hardlinks, the fallback must yield an independent file.
           test ! "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -ef "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
+          # Probe succeeds, but a later hardlink copy can fail (permissions,
+          # filesystem restrictions or unsupported files); copy independently.
+          mkdir -p "$t/partialcp"
+          cat > "$t/partialcp/cp" <<'FAIL_LINK_COPY'
+          #!/bin/sh
+          if [ "$1" = "-al" ]; then exit 18; fi
+          exec /usr/bin/cp "$@"
+          FAIL_LINK_COPY
+          chmod +x "$t/partialcp/cp"
+          printf '<!-- fallback-after-probe -->\n' >> "$t/pkg/Fire4Nix/www/inicio.html"
+          PATH="$t/partialcp:$PATH" FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
+          grep -q 'fallback-after-probe' "$t/roms/ports/fire4nix-completo/www/inicio.html"
+          test ! "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -ef "$t/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
+
+          # A failed hardlink copy must not silently start a full copy when
+          # available capacity fits only the link-only path.
+          mkdir -p "$t/limitedspace"
+          cp "$t/partialcp/cp" "$t/limitedspace/cp"
+          cat > "$t/limitedspace/df" <<'LOWSPACE'
+          #!/bin/sh
+          printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+          printf 'mock 50000 17231 32769 34%% /mock\n'
+          LOWSPACE
+          chmod +x "$t/limitedspace/df"
+          printf '<!-- blocked-lowspace-update -->\n' >> "$t/pkg/Fire4Nix/www/inicio.html"
+          set +e
+          PATH="$t/limitedspace:$PATH" FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh" > "$t/lowspace.log" 2>&1
+          limited_status=$?
+          set -e
+          test "$limited_status" -eq 6
+          grep -q 'Insufficient space for fallback copy' "$t/lowspace.log"
+          grep -q 'fallback-after-probe' "$t/roms/ports/fire4nix-completo/www/inicio.html"
+          if grep -q 'blocked-lowspace-update' "$t/roms/ports/fire4nix-completo/www/inicio.html"; then
+            echo 'FAIL: disk-space refusal replaced working homepage' >&2
+            exit 1
+          fi
+          test -z "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-staging-*' -print -quit)"
+          test -z "$(find "$t/roms/ports" -maxdepth 1 -name '.fire4nix-linkprobe-*' -print -quit)"
           # A new binary must trigger an upgrade, not be silently skipped.
           printf '\n# v090 update\n' >> "$t/pkg/Fire4Nix/bin/fire4nix-native-aarch64"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
@@ -225,10 +266,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.95-Gamepad-ROCKNIX.zip .)
-          unzip -t Fire4Nix-R36H-0.95-Gamepad-ROCKNIX.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX.zip .)
+          unzip -t Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.95-Gamepad-ROCKNIX
-          path: Fire4Nix-R36H-0.95-Gamepad-ROCKNIX.zip
+          name: Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX
+          path: Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX.zip
           retention-days: 30
