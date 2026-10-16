@@ -1,4 +1,4 @@
-// Fire4Nix R36H v0.97 - resilient native WPEPlatform launcher.
+// Fire4Nix R36H v0.98 - resilient native WPEPlatform launcher.
 // Build on AArch64 Linux against GLib/GObject; load the *user-installed* WPE2.0
 // runtime with dlopen. Never pull GTK/Qt libraries into the launcher.
 #include <glib.h>
@@ -13,6 +13,7 @@
 namespace {
 using LoadUri = void (*)(gpointer, const char*);
 using GetType = GType (*)();
+using GetVersionPart = unsigned (*)();
 using SetSettings = void (*)(gpointer, gpointer);
 using GetUri = const char* (*)(gpointer);
 using GetWPEView = gpointer (*)(gpointer);
@@ -223,7 +224,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 0.97: [--selftest|--check-library|--check-platform|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 0.98: [--selftest|--check-library|--check-platform|--smoke] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -252,6 +253,23 @@ int main(int argc, char** argv) {
         return 127;
     }
     stage("dlopen success");
+    // Get the version from the *loaded runtime*, not the launcher's build.
+    // WPEPlatform became stable in 2.54; availability still depends on the
+    // options used when compiling this particular library.
+    auto majorVersion = reinterpret_cast<GetVersionPart>(dlsym(app.webkit, "webkit_get_major_version"));
+    auto minorVersion = reinterpret_cast<GetVersionPart>(dlsym(app.webkit, "webkit_get_minor_version"));
+    auto microVersion = reinterpret_cast<GetVersionPart>(dlsym(app.webkit, "webkit_get_micro_version"));
+    if (majorVersion && minorVersion && microVersion) {
+        const unsigned major = majorVersion(), minor = minorVersion(), micro = microVersion();
+        g_printerr("[FIRE4NIX-ABI] wpe_version=%u.%u.%u\n", major, minor, micro);
+        if (major < 2 || (major == 2 && minor < 54))
+            stage("WPE version older than 2.54: WPEPlatform may be missing or experimental");
+        if (major == 2 && minor == 54 && micro == 0)
+            stage("WPE 2.54.0 detected: prefer WPE 2.54.1+ for Wayland 1.25+ build support");
+    } else {
+        stage("WPE version API unavailable; report as unknown, never guess from filename");
+        g_printerr("[FIRE4NIX-ABI] wpe_version=unknown\n");
+    }
     if (onlyLibrary) {
         dlclose(app.webkit);
         return 0;
@@ -280,6 +298,7 @@ int main(int argc, char** argv) {
             g_printerr("[FIRE4NIX-ABI] webkit_library=%s\n", providerInfo.dli_fname);
         const char* symbols[] = {
             "wpe_view_get_toplevel",
+            "wpe_view_get_display",
             "wpe_toplevel_fullscreen",
             "wpe_toplevel_set_title",
             "wpe_event_get_event_type",
