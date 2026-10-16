@@ -1,4 +1,4 @@
-name: Fire4Nix 0.96 R36H reliable startup and storage
+name: Fire4Nix 0.97 R36H dual-SD runtime diagnostics
 on:
   push:
     paths:
@@ -6,6 +6,7 @@ on:
       - 'native/fire4nix_wpeplatform.cpp'
       - 'native/tests/mock_wpewebkit.cpp'
       - 'native/tests/test_launch_gamepad.sh'
+      - 'native/tests/test_runtime_diagnostic.sh'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
   workflow_dispatch:
@@ -37,7 +38,7 @@ jobs:
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 0.96 R36H - instalacao unica com protecao de logs e armazenamento para ROCKNIX 20261001.
+          Fire4Nix 0.97 R36H - diagnostico do WebKit no SD e exibicao via terminal para ROCKNIX 20261001.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
@@ -51,7 +52,9 @@ jobs:
           WPEPlatform aplica ajustes de memoria na criacao do WebView, registra
           desconexao do display Wayland (codigo 71) e solicita fullscreen no Sway.
           Teclado virtual opcional usa setas e Enter sem hardware adicional.
-          Diagnosticar-Fire4Nix.sh salva erros de biblioteca/Wayland sem a Internet.
+          Diagnosticar-Fire4Nix.sh identifica WebKit de outro SD, dependencias
+          e codigos da API; --screen exibe resumo curto que pode ser fotografado.
+          Exemplo: sh Diagnosticar-Fire4Nix.sh --screen
           Atalhos: Ctrl+H inicio offline, Ctrl+R recarregar, Alt+Esquerda voltar,
           Alt+Direita avancar,
           F11 tela cheia/janela, Ctrl+Q sair. Dependem de entrada teclado no Sway.
@@ -70,6 +73,7 @@ jobs:
           grep -q '^a_hk = add_ctrl' out/Fire4Nix/config/fire4nix.gptk
           grep -q '^up = repeat' out/Fire4Nix/config/fire4nix.gptk
           sh native/tests/test_launch_gamepad.sh
+          sh native/tests/test_runtime_diagnostic.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
@@ -266,10 +270,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX.zip .)
-          unzip -t Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-0.97-Sonda-WPE-SD.zip .)
+          unzip -t Fire4Nix-R36H-0.97-Sonda-WPE-SD.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX
-          path: Fire4Nix-R36H-0.96-Estabilidade-ROCKNIX.zip
+          name: Fire4Nix-R36H-0.97-Sonda-WPE-SD
+          path: Fire4Nix-R36H-0.97-Sonda-WPE-SD.zip
           retention-days: 30

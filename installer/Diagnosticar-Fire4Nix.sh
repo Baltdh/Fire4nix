@@ -1,119 +1,159 @@
 #!/bin/sh
-# Fire4Nix 0.96: device-local, privacy-minimal diagnostics. No network/firmware writes.
+# Fire4Nix 0.97: inspect the actual SD card runtime without starting the GUI.
+# Privacy: only file presence, ELF dependencies and controlled exit codes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+SCREEN=0
+case "${1:-}" in
+  --screen) SCREEN=1 ;;
+  "") ;;
+  *) echo "Usage: sh Diagnosticar-Fire4Nix.sh [--screen]" >&2; exit 2 ;;
+esac
 ROOT="$HERE/Fire4Nix"
-[ -d "$ROOT" ] || ROOT="$HERE"
-if [ ! -f "$ROOT/bin/fire4nix-native-aarch64" ]; then
-  for d in /storage/games-internal/roms/ports/fire4nix-completo /storage/games-external/roms/ports/fire4nix-completo /storage/roms/ports/fire4nix-completo; do
-    if [ -f "$d/bin/fire4nix-native-aarch64" ]; then ROOT="$d"; break; fi
+[ -s "$ROOT/bin/fire4nix-native-aarch64" ] || ROOT="$HERE"
+# The downloaded ZIP may live on the second SD card. Check an installed copy.
+if [ ! -s "$ROOT/bin/fire4nix-native-aarch64" ]; then
+  for d in /storage/games-internal/roms/ports/fire4nix-completo \
+           /storage/games-external/roms/ports/fire4nix-completo \
+           /storage/roms/ports/fire4nix-completo; do
+    if [ -s "$d/bin/fire4nix-native-aarch64" ]; then ROOT="$d"; break; fi
   done
 fi
+# An explicit runtime is useful for harmless mock tests and unusual SD layouts.
+RUNTIME=""
+for candidate in "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" \
+ "$ROOT/runtime" "$HERE/Fire4Nix/runtime" \
+ "${FIRE4NIX_ROMS:-/no-roms}/tools/Fire4Nix/runtime" \
+ "${FIRE4NIX_ROMS:-/no-roms}/ports/fire4nix-completo/runtime" \
+ /storage/games-internal/roms/tools/Fire4Nix/runtime \
+ /storage/games-external/roms/tools/Fire4Nix/runtime \
+ /storage/games-internal/roms/ports/fire4nix-completo/runtime \
+ /storage/games-external/roms/ports/fire4nix-completo/runtime \
+ /storage/roms/tools/Fire4Nix/runtime \
+ /storage/roms/ports/fire4nix-completo/runtime; do
+  if [ -n "$candidate" ] && [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ]; then
+    RUNTIME="$candidate"
+    break
+  fi
+done
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
-    if [ -d /storage ] && [ -w /storage ]; then
-        OUT=/storage/Fire4Nix-Diagnostico-096.txt
-    else
-        OUT="$HERE/Fire4Nix-Diagnostico-096.txt"
-    fi
+  if [ -d /storage ] && [ -w /storage ]; then
+    OUT=/storage/Fire4Nix-Diagnostico-097.txt
+  else
+    OUT="$HERE/Fire4Nix-Diagnostico-097.txt"
+  fi
 fi
-TMP="$OUT.$$"
-if ! ( : > "$TMP" ) 2>/dev/null; then
-    echo "Fire4Nix: cannot write diagnostic to $OUT" >&2
-    exit 73
+# Keep the report even if /storage cannot be written, and never clobber it midway.
+DIR=$(dirname "$OUT")
+if ! mkdir -p "$DIR" 2>/dev/null; then
+  echo "Fire4Nix: cannot create output directory $DIR" >&2
+  exit 73
 fi
-trap 'rm -f "$TMP" 2>/dev/null || true' 0
+TMP=$(mktemp "$DIR/.fire4nix-diag-XXXXXX") || exit 73
+trap 'rm -f "$TMP"' 0
 {
-  echo "Fire4Nix 0.96 / R36H diagnostic"
-  date '+datetime=%Y-%m-%d %H:%M:%S %z' 2>/dev/null || true
-  printf 'arm=%s kernel=%s\n' "$(uname -m 2>/dev/null)" "$(uname -r 2>/dev/null)"
+  echo "Fire4Nix 0.97 / R36H standalone runtime diagnosis"
+  printf 'arch=%s\n' "$(uname -m)"
+  printf 'kernel=%s\n' "$(uname -r)"
   if [ -r /etc/os-release ]; then
-      grep -E '^(PRETTY_NAME|VERSION_ID|NAME)=' /etc/os-release | head -n 3 || true
-  fi
-  if command -v getconf >/dev/null 2>&1; then
-      getconf GNU_LIBC_VERSION 2>/dev/null || true
-  fi
-  if [ -r /proc/meminfo ]; then
-      grep -E '^(MemTotal|MemAvailable):' /proc/meminfo || true
+    grep -E '^(NAME|VERSION_ID)=' /etc/os-release | head -n 2 || true
   fi
   printf 'installed_root=%s\n' "$ROOT"
-  BIN="$ROOT/bin/fire4nix-native-aarch64"
-  if [ -s "$BIN" ]; then
-      echo "arm64_binary=present"
-      if command -v file >/dev/null 2>&1; then file "$BIN" 2>/dev/null || true; fi
-  else
-      echo "arm64_binary=missing"
+  if command -v getconf >/dev/null 2>&1; then
+    getconf GNU_LIBC_VERSION 2>/dev/null || true
   fi
-  LIB="$ROOT/runtime/lib/libWPEWebKit-2.0.so.1"
-  if [ -s "$LIB" ]; then
-      echo "WPE_library=present"
-      if command -v stat >/dev/null 2>&1; then
-          stat -c 'WPE_library_bytes=%s' "$LIB" 2>/dev/null || true
-      fi
+  if [ -r /proc/meminfo ]; then
+    grep -E '^(MemTotal|MemAvailable):' /proc/meminfo || true
+  fi
+  BIN="$ROOT/bin/fire4nix-native-aarch64"
+  if [ -s "$BIN" ]; then echo 'arm64_binary=present'; else echo 'arm64_binary=missing'; fi
+  if [ -n "$RUNTIME" ]; then
+    echo "WPE_library=present"
+    printf 'WPE_runtime_source=%s\n' "$RUNTIME"
+    if command -v stat >/dev/null 2>&1; then
+      stat -c 'WPE_library_bytes=%s' "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null || true
+    fi
   else
-      echo "WPE_library=missing"
+    echo 'WPE_library=missing'
+    echo 'WPE_runtime_source=not_found_on_checked_SD_paths'
   fi
   for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-      if [ -s "$ROOT/runtime/libexec/wpe-webkit-2.0/$process" ]; then
-          printf '%s=present\n' "$process"
-      else
-          printf '%s=missing\n' "$process"
-      fi
+    if [ -n "$RUNTIME" ] && [ -s "$RUNTIME/libexec/wpe-webkit-2.0/$process" ]; then
+      printf '%s=present\n' "$process"
+    else
+      printf '%s=missing\n' "$process"
+    fi
   done
+  if [ -n "$RUNTIME" ] && command -v ldd >/dev/null 2>&1; then
+    echo 'WPE_missing_dynamic_dependencies_begin'
+    LD_LIBRARY_PATH="$RUNTIME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+      ldd "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
+      awk '/=> not found/ { print $1 "=not_found" }' || true
+    echo 'WPE_missing_dynamic_dependencies_end'
+  else
+    echo 'WPE_dynamic_dependencies=not_examined'
+  fi
+  printf 'wayland_display=%s\n' "${WAYLAND_DISPLAY:-unset}"
+  printf 'wayland_runtime_dir=%s\n' "${XDG_RUNTIME_DIR:-unset}"
+  if [ -S "${XDG_RUNTIME_DIR:-/none}/${WAYLAND_DISPLAY:-missing}" ]; then
+    echo 'wayland_socket=present'
+  else
+    echo 'wayland_socket=not_confirmed'
+    for root in /var/run/0-runtime-dir /run/user/0; do
+      for socket in wayland-1 wayland-0; do
+        if [ -S "$root/$socket" ]; then echo 'alternate_wayland_socket=present'; fi
+      done
+    done
+  fi
+  if [ -e /dev/dri/renderD128 ]; then echo 'drm_render_node=present'
+  elif [ -d /dev/dri ]; then echo 'drm_render_node=not_confirmed'
+  else echo 'drm_render_node=directory_missing'; fi
   if [ -s "$ROOT/config/fire4nix.gptk" ]; then
-      echo "gamepad_config=present"
+    echo 'gamepad_profile=present'
+  else echo 'gamepad_profile=missing'; fi
+  if command -v gptokeyb >/dev/null 2>&1 ||
+      [ -x /usr/bin/gptokeyb ]; then
+    echo 'gptokeyb=detected'
+  else echo 'gptokeyb=not_detected'; fi
+  if [ -e /dev/uinput ] && [ -w /dev/uinput ]; then echo 'uinput=writable'
+  elif [ -e /dev/uinput ]; then echo 'uinput=restricted'
+  else echo 'uinput=not_detected'; fi
+  if [ -s "$BIN" ] && [ -n "$RUNTIME" ]; then
+    # Run only the ABI check, NOT a window or a webpage. It is valid even
+    # when the new ZIP is on SD2 and the runtime is still on SD1.
+    LD_LIBRARY_PATH="$RUNTIME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+       WEBKIT_EXEC_PATH="$RUNTIME/libexec/wpe-webkit-2.0" \
+       "$BIN" --check-platform > "$TMP.abi" 2>&1
+    result=$?
+    printf 'WPEPlatform_preflight_exit=%s\n' "$result"
+    grep '^\[FIRE4NIX-ABI\]' "$TMP.abi" | head -n 16 || true
+    case "$result" in
+      0) echo 'WPEPlatform_preflight_note=ABI_present_not_graphics_test' ;;
+      78) echo 'WPEPlatform_preflight_note=legacy_library_without_new_API' ;;
+      127) echo 'WPEPlatform_preflight_note=dynamic_loader_or_symbol_missing' ;;
+      *) echo 'WPEPlatform_preflight_note=inspect_loader_or_abi_logs' ;;
+    esac
+    rm -f "$TMP.abi"
+  elif [ -s "$BIN" ] && [ -f "$ROOT/Fire4Nix-Iniciar.sh" ]; then
+    sh "$ROOT/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1
+    printf 'WPEPlatform_preflight_exit=%s\n' "$?"
+    echo 'WPEPlatform_preflight_note=no_local_runtime_found'
+  elif [ -s "$BIN" ]; then
+    echo 'WPEPlatform_preflight=skipped_runtime_missing_no_launcher'
   else
-      echo "gamepad_config=missing"
+    echo 'WPEPlatform_preflight=skipped_missing_binary'
   fi
-  gamepad_bin=${FIRE4NIX_GPTOKEYB:-}
-  [ -n "$gamepad_bin" ] || gamepad_bin=$(command -v gptokeyb 2>/dev/null || true)
-  if [ -n "$gamepad_bin" ] && [ -x "$gamepad_bin" ]; then
-      echo "rocknix_gptokeyb=available"
-  elif [ -x /usr/bin/gptokeyb ]; then
-      echo "rocknix_gptokeyb=available"
-  else
-      echo "rocknix_gptokeyb=not_detected"
-  fi
-  if [ -r /dev/uinput ] && [ -w /dev/uinput ]; then
-      echo "virtual_keyboard_uinput=writable"
-  elif [ -e /dev/uinput ]; then
-      echo "virtual_keyboard_uinput=permission_or_device_restricted"
-  else
-      echo "virtual_keyboard_uinput=not_present"
-  fi
-  printf 'session_wayland=%s\nsession_dir=%s\n' "${WAYLAND_DISPLAY:-unset}" "${XDG_RUNTIME_DIR:-unset}"
-  for dir in "${XDG_RUNTIME_DIR:-/no-runtime}" /var/run/0-runtime-dir /run/user/0; do
-      for name in wayland-1 wayland-0; do
-          [ ! -S "$dir/$name" ] || printf 'wayland_socket=found:%s/%s\n' "$dir" "$name"
-      done
-  done
-  if [ -d /dev/dri ]; then
-      for node in /dev/dri/renderD* /dev/dri/card*; do
-          [ ! -e "$node" ] || printf 'drm_node=%s\n' "$node"
-      done
-  else
-      echo "drm_directory=missing"
-  fi
-  if [ -r /proc/modules ]; then
-      grep -E '^(panfrost|mali|rockchipdrm|drm) ' /proc/modules | cut -d ' ' -f 1 || true
-  fi
-  if [ -f "$ROOT/Fire4Nix-Iniciar.sh" ] && [ -f "$BIN" ]; then
-      echo "WPEPlatform_preflight_begin"
-      sh "$ROOT/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1
-      result=$?
-      printf 'WPEPlatform_preflight_exit=%s\n' "$result"
-      case "$result" in
-        0) echo "WPEPlatform_preflight_note=symbols_found_only_no_graphics_test" ;;
-        78) echo "WPEPlatform_preflight_note=legacy_API_missing" ;;
-        127) echo "WPEPlatform_preflight_note=runtime_or_loader_missing" ;;
-        *) echo "WPEPlatform_preflight_note=inspect_launcher_log" ;;
-      esac
-  else
-      echo "WPEPlatform_preflight=skipped_missing_launcher_or_binary"
-  fi
-  echo "NOTE: no MAC addresses, network identifiers, passwords or Terminal R36 logs collected"
-  echo "END"
+  echo 'DIAGNOSTIC_NOTE=no_network_no_passwords_no_personal_files'
+  echo 'GRAPHICS_STATUS=NOT_VERIFIED_BY_PREFLIGHT'
+  echo END
 } > "$TMP" 2>&1
 mv -f "$TMP" "$OUT" || exit 73
 trap - 0
-printf 'Fire4Nix diagnostic saved: %s\n' "$OUT"
+echo "Fire4Nix full diagnosis: $OUT"
+if [ "$SCREEN" -eq 1 ]; then
+  echo '=== FIRE4NIX 0.97 / RESUMO PARA FOTO ==='
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+    cut -c 1-100
+  echo '=== FIM DO RESUMO ==='
+fi
