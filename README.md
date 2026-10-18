@@ -1,5 +1,14 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+## Revisão 1.07 — diagnóstico com WebKit e binário em cartões diferentes
+
+- **Causa operacional comprovada**: no backup consolidado, o arquivo antigo `Fire4Nix/fire4nix` é ELF **x86-64** e não é compatível com o R36H **AArch64**. Use somente `Fire4Nix/bin/fire4nix-native-aarch64` dos pacotes atuais.
+- A maioria das bibliotecas gráficas antigas do backup está em `armhf` (32 bits); não misture com o processo ARM64. O ZIP de lançamento continua sem os 174 MB do motor WebKit.
+- `Fire4Nix-Investigar-139.sh` agora procura **separadamente** o executável nativo e o motor WPE no SD interno/externo (`roms/ports` e `roms/tools`); reporta `installed_root` e `wpe_runtime_root` distintos.
+- Para caminhos não padrão podem ser usados `FIRE4NIX_BINARY_ROOT` e `FIRE4NIX_RUNTIME_ROOT`. O modo `--safe` não executa o motor; `Fire4Nix-Tracar-139.sh` é um teste controlado de ABI sem abrir páginas.
+- A investigação técnica traz evidências e cenários: [Estudo de causas 1.07](docs/R36H_V107_DEEP_ROOT_CAUSE_STUDY.md). A correção do Wayland 1.25+ presente em WPE 2.54.1 é majoritariamente **de build** (bug [324760](https://bugs.webkit.org/show_bug.cgi?id=324760)), sem prova de curar SIGSEGV na inicialização.
+- O R36H físico precisa produzir um novo relatório antes que uma causa raiz específica possa ser afirmada. Não foram instalados novos drivers ou bibliotecas de sistema.
+
 ## Revisão 1.06 — rastreamento independente do inicializador antigo
 
 - O coletor `Fire4Nix-Investigar-139.sh --trace` agora executa **diretamente o ELF ARM64 já instalado**, com `LD_LIBRARY_PATH` restrito ao WPE selecionado e `LD_DEBUG` isolado. Não depende de atualizar previamente `Fire4Nix-Iniciar.sh` que estava no SD.
