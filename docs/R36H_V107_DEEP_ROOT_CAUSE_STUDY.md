@@ -6,6 +6,8 @@ Data de revisão: 18/10/2026. Este documento separa **achados nos arquivos**, **
 
 - Em `Fire4Nix_consolidated_latest_real_backup_beta_test_ready_v2.zip`, o arquivo `Fire4Nix/fire4nix` tem cabeçalho ELF **x86-64** (interpreter `/lib64/ld-linux-x86-64.so.2`). Não é binário utilizável no R36H AArch64.
 - A maioria das grandes bibliotecas gráficas desse backup fica em `rocknix_reference/runtime-libs/armhf/lib32-snapshot/`. São referências de **32 bits** e não podem ser diretamente carregadas pelo ELF de 64 bits.
+- O arquivo `wayland-client.pc` fornecido declara **Version: 1.23.1** e **libdir=/usr/lib32**. `opengl.pc` também declara libdir=/usr/lib32. Portanto são metadados da árvore 32 bits, inadequados para a toolchain AArch64; não se deve apontar `PKG_CONFIG_LIBDIR` ARM64 para esses arquivos.
+- [ROCKNIX tag 20261001, receita Wayland](https://github.com/ROCKNIX/distribution/blob/20261001/packages/wayland/wayland/package.mk) declara **Wayland 1.26.0**, distinta da referência 1.23.1. Não se pode inferir a versão ativa sem confirmar o dispositivo.
 - O backup não contém `libWPEWebKit-2.0.so.1` compilada. O código-fonte `wpewebkit-2.52.5.tar.xz` não substitui a biblioteca compilada.
 - O ELF de `Fire4Nix-R36H-1.06-Tracar-139-Ports.zip` é **AArch64** e exige diretamente até **GLIBC_2.34**. Isso não garante os requisitos transitivos de GLib, EGL ou WebKit.
 - O `swap.conf` fornecido define `ZRAM_SIZE=0`, `SWAP_FILE_SIZE=0`. Não há comprovação de que esse arquivo corresponde à configuração efetivamente ativa. Um déficit de memória após abrir páginas é diferente de SIGSEGV durante pré-teste `dlopen`.
