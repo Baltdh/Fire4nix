@@ -19,4 +19,5 @@ shift || true
 export FIRE4NIX_ENGINE_PRIORITY="${FIRE4NIX_ENGINE_PRIORITY:-wpe-platform,cog,chromium,firefox,browser.arm64}"
 export FIRE4NIX_ENGINE_SELECTED="wpe-platform"
 
-exec fire4nix_launch_engine "wpe-platform" "$target" "$@"
+# Shell functions cannot be passed to exec(1): dispatch directly and retain its exit code.
+fire4nix_launch_engine "wpe-platform" "$target" "$@"
