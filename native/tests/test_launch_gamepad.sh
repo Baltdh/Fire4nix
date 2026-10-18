@@ -19,6 +19,7 @@ done
 cat > "$T/install/bin/fire4nix-native-aarch64" <<'BROWSER'
 #!/bin/sh
 printf 'browser_start\n' >> "$FIRE4NIX_TEST_LOG"
+printf 'gpu_afbc=%s\n' "${MALI_WAYLAND_AFBC:-unset}" >> "$FIRE4NIX_TEST_LOG"
 sleep 1
 printf 'browser_exit\n' >> "$FIRE4NIX_TEST_LOG"
 exit 0
@@ -58,6 +59,19 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
 if grep -q 'gamepad_started' "$T/actions"; then echo "disabled gamepad incorrectly started" >&2; exit 1; fi
 grep -q 'browser_exit' "$T/actions"
 
+# Respect native ROCKNIX GPU policy and preserve explicit user override.
+: > "$T/actions"
+env -u MALI_WAYLAND_AFBC XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
+grep -q '^gpu_afbc=unset$' "$T/actions"
+: > "$T/actions"
+env MALI_WAYLAND_AFBC=1 XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
+grep -q '^gpu_afbc=1$' "$T/actions"
 # Preflights should never start gptokeyb.
 : > "$T/actions"
 env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
