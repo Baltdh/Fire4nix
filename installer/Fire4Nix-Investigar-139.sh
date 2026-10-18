@@ -64,6 +64,21 @@ if [ -n "$bin_root" ] && [ -n "$runtime_root" ]; then selected=$bin_root; fi
   printf 'installed_root=%s\n' "${bin_root:-not_found}"
   printf 'wpe_runtime_root=%s\n' "${runtime_root:-not_found}"
   printf 'report_directory=%s\n' "$REPORT_DIR"
+  # The historical backup contains an x86-64 ELF named fire4nix; it can
+  # never run on the AArch64 R36H. Keep checks static in --safe mode.
+  binary_arch=unknown
+  wpe_arch=unknown
+  if command -v readelf >/dev/null 2>&1; then
+    if [ -n "$bin_root" ]; then
+      machine=$(readelf -h "$bin_root/bin/fire4nix-native-aarch64" 2>/dev/null | grep "Machine:" | head -n 1 || true)
+      case "$machine" in *AArch64*) binary_arch=aarch64 ;; *X86-64*) binary_arch=x86_64 ;; esac
+    fi
+    if [ -n "$runtime_root" ]; then
+      machine=$(readelf -h "$runtime_root/runtime/lib/libWPEWebKit-2.0.so.1" 2>/dev/null | grep "Machine:" | head -n 1 || true)
+      case "$machine" in *AArch64*) wpe_arch=aarch64 ;; *X86-64*) wpe_arch=x86_64 ;; esac
+    fi
+  fi
+  printf "binary_elf_arch=%s\nwpe_elf_arch=%s\n" "$binary_arch" "$wpe_arch"
   if [ -n "$runtime_root" ]; then
     for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
       if [ -s "$runtime_root/runtime/libexec/wpe-webkit-2.0/$p" ]; then
@@ -109,7 +124,10 @@ else
   echo 'static_diagnostic=not_available' >> "$REPORT"
 fi
 
-if [ "$MODE" = --trace ] && [ -n "$selected" ]; then
+if [ "$MODE" = --trace ] && [ "$(uname -m)" = aarch64 ] &&
+   { [ "$binary_arch" = x86_64 ] || [ "$wpe_arch" = x86_64 ]; }; then
+  echo "trace=skipped_wrong_arch_elf_not_AArch64" >> "$REPORT"
+elif [ "$MODE" = --trace ] && [ -n "$selected" ]; then
   echo 'trace=starting_native_ABI_preflight_no_network_no_browser_window' >> "$REPORT"
   printf 'selected_binary=%s\nselected_runtime=%s\n' "$bin_root" "$runtime_root" >> "$REPORT"
   ulimit -c 0 2>/dev/null || true
