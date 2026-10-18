@@ -50,6 +50,12 @@ FIRE4NIX_ROOT="$APP" FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
   sh "$HERE/installer/Fire4Nix-Investigar-139.sh" --safe > "$T/safe.txt"
 test ! -s "$T/observed"
 grep -q 'native_preflight=NOT_RUN_SAFE_MODE' "$T/safe.txt"
+cat > "$APP/Fire4Nix-Iniciar.sh" <<'OUTDATED'
+#!/bin/sh
+echo 'outdated-launcher-was-invoked' >&2
+exit 88
+OUTDATED
+# The standalone collector must bypass outdated SD launchers.
 set +e
 MOCK_RESULT="$T/observed" FIRE4NIX_ROOT="$APP" \
   FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
@@ -62,6 +68,7 @@ grep -q '^crash_boundary=after_dlopen$' "$T/trace.txt"
 grep -q '^loader_last_relevant_lines_begin$' "$T/trace.txt"
 grep -q '^hardware_browser_rendering=NOT_VERIFIED$' "$T/trace.txt"
 grep -Fxq "observed_lib_path=$APP/runtime/lib" "$T/observed"
+if grep -q 'outdated-launcher-was-invoked' "$T/trace.txt"; then echo 'FAIL: tracer used legacy launcher' >&2; exit 1; fi
 if grep -q '^native_preflight_exit=' "$T/safe.txt"; then
   echo 'FAIL: safe mode loaded a mocked native executable' >&2; exit 1
 fi
