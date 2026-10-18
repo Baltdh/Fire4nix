@@ -80,7 +80,16 @@ trap 'rm -f "$TMP"' 0
       echo 'fontconfig_fonts=none_found'
     fi
   else
-    echo 'fontconfig_fonts=tool_missing_not_verified'
+    # ROCKNIX fontconfig package deliberately removes /usr/bin utilities.
+    # Missing fc-list is NOT evidence of missing fallback font files.
+    font_file=$(find /usr/share/fonts /storage/.fonts /storage/.local/share/fonts \
+       -type f \( -iname '*.ttf' -o -iname '*.otf' -o -iname '*.ttc' \) \
+       -print -quit 2>/dev/null || true)
+    if [ -n "$font_file" ]; then
+      echo 'fontconfig_fonts=files_present_cache_unverified'
+    else
+      echo 'fontconfig_fonts=tool_missing_no_known_font_files'
+    fi
   fi
   if [ -r /usr/share/mime/globs2 ] || [ -r /usr/share/mime/mime.cache ]; then
     echo 'shared_mime_database=present'
