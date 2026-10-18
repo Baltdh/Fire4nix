@@ -4,17 +4,17 @@
 set -u
 umask 077
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-MODE=\${1:---safe}
+MODE=${1:---safe}
 case "$MODE" in --safe|--trace) ;; *) echo "Usage: sh Fire4Nix-Investigar-139.sh [--safe|--trace]" >&2; exit 2 ;; esac
 
-REPORT_DIR=\${FIRE4NIX_INVEST_REPORT_DIR:-}
+REPORT_DIR=${FIRE4NIX_INVEST_REPORT_DIR:-}
 if [ -z "$REPORT_DIR" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
     REPORT_DIR=/storage/Fire4Nix-Investigacao-139
   elif [ -w "$HERE" ]; then
     REPORT_DIR="$HERE/Fire4Nix-Investigacao-139"
   else
-    REPORT_DIR=\${TMPDIR:-/tmp}/Fire4Nix-Investigacao-139
+    REPORT_DIR=${TMPDIR:-/tmp}/Fire4Nix-Investigacao-139
   fi
 fi
 mkdir -p "$REPORT_DIR" || exit 73
@@ -22,7 +22,7 @@ REPORT="$REPORT_DIR/Fire4Nix-139-ultimo.txt"
 RUN_DIR=$(mktemp -d "$REPORT_DIR/exec-XXXXXX") || exit 73
 
 selected=""
-for root in "\${FIRE4NIX_ROOT:-}" "$HERE/fire4nix-completo" "$HERE/Fire4Nix" "$HERE" \
+for root in "${FIRE4NIX_ROOT:-}" "$HERE/fire4nix-completo" "$HERE/Fire4Nix" "$HERE" \
   /storage/games-internal/roms/ports/fire4nix-completo \
   /storage/games-external/roms/ports/fire4nix-completo \
   /storage/roms/ports/fire4nix-completo \
@@ -43,7 +43,7 @@ done
   printf 'mode=%s\n' "$MODE"
   printf 'arch=%s\n' "$(uname -m)"
   printf 'kernel=%s\n' "$(uname -r)"
-  printf 'installed_root=%s\n' "\${selected:-not_found}"
+  printf 'installed_root=%s\n' "${selected:-not_found}"
   printf 'report_directory=%s\n' "$REPORT_DIR"
   if [ -n "$selected" ]; then
     for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
@@ -70,7 +70,7 @@ done
 
 DIAG="$HERE/Diagnosticar-Fire4Nix.sh"
 [ -f "$DIAG" ] || DIAG="$HERE/Fire4Nix/Diagnosticar-Fire4Nix.sh"
-[ -f "$DIAG" ] || DIAG="\${selected:-/nonexistent}/Diagnosticar-Fire4Nix.sh"
+[ -f "$DIAG" ] || DIAG="${selected:-/nonexistent}/Diagnosticar-Fire4Nix.sh"
 if [ -f "$DIAG" ]; then
   if [ -n "$selected" ]; then
     FIRE4NIX_DIAGNOSTIC_RUNTIME="$selected/runtime" \
