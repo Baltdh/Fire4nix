@@ -26,6 +26,22 @@ export FIRE4NIX_CONF="${FIRE4NIX_CONF:-$CONFIG_DIR/fire4nix.conf}"
 export FIRE4NIX_CACHE_DIR="${FIRE4NIX_CACHE_DIR:-$CONFIG_DIR/cache}"
 export FIRE4NIX_LOG_DIR="${FIRE4NIX_LOG_DIR:-$LOG_DIR}"
 export FIRE4NIX_RUNTIME_DIR="${FIRE4NIX_RUNTIME_DIR:-$RUNTIME_DIR}"
+# Never shadow the active ROCKNIX compositor socket with our private cache.
+# Scripts launched from an arbitrary directory often have no XDG_RUNTIME_DIR.
+# Prefer the active session, and only use our private directory as a last resort.
+if [[ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-wayland-0}" &&
+      ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/wayland-1" ]]; then
+    for session_dir in /var/run/0-runtime-dir /run/user/0 "/run/user/$(id -u)" ; do
+        [[ -d "$session_dir" ]] || continue
+        for display_name in "${WAYLAND_DISPLAY:-wayland-1}" wayland-1 wayland-0; do
+            if [[ -S "$session_dir/$display_name" ]]; then
+                export XDG_RUNTIME_DIR="$session_dir"
+                export WAYLAND_DISPLAY="$display_name"
+                break 2
+            fi
+        done
+    done
+fi
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$RUNTIME_DIR}"
 export FIRE4NIX_LOG="${FIRE4NIX_LOG:-$LOG_DIR/fire4nix.log}"
 LOG_FILE="$FIRE4NIX_LOG"
