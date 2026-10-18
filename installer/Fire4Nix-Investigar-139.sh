@@ -161,6 +161,8 @@ elif [ "$MODE" = --trace ] && [ -n "$selected" ]; then
   done
   echo 'loader_last_relevant_lines_end' >> "$REPORT"
   printf 'raw_trace_dir=%s\n' "$RUN_DIR" >> "$REPORT"
+elif [ "$MODE" = --trace ]; then
+  echo 'trace=skipped_missing_binary_or_runtime' >> "$REPORT"
 elif [ "$MODE" = --safe ]; then
   echo 'native_preflight=NOT_RUN_SAFE_MODE' >> "$REPORT"
 fi
