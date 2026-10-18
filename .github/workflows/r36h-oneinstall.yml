@@ -1,4 +1,4 @@
-name: Fire4Nix 1.05 R36H isolated loader and WPE SIGSEGV trace
+name: Fire4Nix 1.06 R36H standalone trace and ROCKNIX Ports
 on:
   push:
     paths:
@@ -44,6 +44,7 @@ jobs:
           cp installer/Diagnosticar-Fire4Nix.sh out/Diagnosticar-Fire4Nix.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix-Teste.sh
           cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix-Investigar-139.sh
+          cp installer/Fire4Nix-Tracar-139.sh out/Fire4Nix-Tracar-139.sh
           cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh
           cp installer/Fire4Nix-Direto.sh out/Fire4Nix-Direto.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix/Fire4Nix-Teste.sh
@@ -56,13 +57,16 @@ jobs:
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 1.05 R36H - isolar bibliotecas herdadas, capturar travamento 139 no loader.
+          Fire4Nix 1.06 R36H - coletar trace mesmo com inicializador antigo no SD.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           Copie Fire4Nix-Direto.sh para roms/ports/ para iniciar a partir do menu Ports.
           Versao 1.03 ignora instalacoes incompletas, procurando WPE com tres subprocessos.
           O diagnostico --safe registra Fontconfig, MIME, bwrap, colisao de libs e GLIBC.
           Fire4Nix-Investigar-139.sh --safe NAO executa WebKit.
           Fire4Nix-Investigar-139.sh --trace roda somente preflight ABI com LD_DEBUG.
+          Cole os 2 scripts na pasta roms/ports/: Fire4Nix-Investigar-139.sh e Fire4Nix-Tracar-139.sh.
+          Selecione Fire4Nix-Investigar-139 no Ports para diagnostico seguro; Fire4Nix-Tracar-139 para captura ELF 139.
+          O segundo script nao depende do inicializador antigo de WebKit no SD.
           Relatorio: /storage/Fire4Nix-Investigacao-139/Fire4Nix-139-ultimo.txt.
           Por padrao o launcher ignora LD_LIBRARY_PATH herdado de outros ports.
           FIRE4NIX_INHERIT_LIBRARY_PATH=1 restabelece temporariamente o modo antigo.
@@ -117,7 +121,8 @@ jobs:
           A controladora fisica e o Wayland no console ainda exigem validacao.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
-          chmod +x out/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh
+          chmod +x out/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh out/Fire4Nix-Tracar-139.sh
+          sh -n out/Fire4Nix-Tracar-139.sh
           sh -n out/Fire4Nix-Investigar-139.sh
           sh -n out/Fire4Nix/Fire4Nix-Investigar-139.sh
           chmod +x out/Fire4Nix-Direto.sh
@@ -358,11 +363,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.05-Isolamento-WPE-139.zip .)
-          unzip -t Fire4Nix-R36H-1.05-Isolamento-WPE-139.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.06-Tracar-139-Ports.zip .)
+          unzip -t Fire4Nix-R36H-1.06-Tracar-139-Ports.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.05-Isolamento-WPE-139
-          path: Fire4Nix-R36H-1.05-Isolamento-WPE-139.zip
+          name: Fire4Nix-R36H-1.06-Tracar-139-Ports
+          path: Fire4Nix-R36H-1.06-Tracar-139-Ports.zip
           if-no-files-found: error
           retention-days: 30
