@@ -59,87 +59,19 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
 if grep -q 'gamepad_started' "$T/actions"; then echo "disabled gamepad incorrectly started" >&2; exit 1; fi
 grep -q 'browser_exit' "$T/actions"
 
-# ROCKNIX RK3326 must be allowed to select its native AFBC policy.
+# Respect native ROCKNIX GPU policy and preserve explicit user override.
 : > "$T/actions"
 env -u MALI_WAYLAND_AFBC XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
   FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
   FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
   sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
-grep -q '^gpu_afbc=unset
-: > "$T/actions"
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-if grep -q 'gamepad_started' "$T/actions"; then echo "preflight started gamepad" >&2; exit 1; fi
-# A broken gptokeyb must be reported rather than logged as running.
-cat > "$T/failing-gptokeyb" <<'BROKEN'
-#!/bin/sh
-exit 42
-BROKEN
-chmod +x "$T/failing-gptokeyb"
-: > "$T/actions"
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/failing-gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
-grep -q 'browser_exit' "$T/actions"
-grep -q 'gamepad=helper_exited_early exit_code=42' "$T/logs/"*.log
-
-# Two launches within the same second may not share a diagnostic filename.
-before=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-after=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
-test "$after" -eq "$((before + 2))"
-echo "PASS: gamepad lifecycle, failure detection, preflights, unique diagnostics and opt-out"
- "$T/actions"
+grep -q '^gpu_afbc=unset$' "$T/actions"
 : > "$T/actions"
 env MALI_WAYLAND_AFBC=1 XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
   FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
   FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
   sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
-grep -q '^gpu_afbc=1
-: > "$T/actions"
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-if grep -q 'gamepad_started' "$T/actions"; then echo "preflight started gamepad" >&2; exit 1; fi
-# A broken gptokeyb must be reported rather than logged as running.
-cat > "$T/failing-gptokeyb" <<'BROKEN'
-#!/bin/sh
-exit 42
-BROKEN
-chmod +x "$T/failing-gptokeyb"
-: > "$T/actions"
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/failing-gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
-grep -q 'browser_exit' "$T/actions"
-grep -q 'gamepad=helper_exited_early exit_code=42' "$T/logs/"*.log
-
-# Two launches within the same second may not share a diagnostic filename.
-before=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
-    FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
-    FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
-    sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-after=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
-test "$after" -eq "$((before + 2))"
-echo "PASS: gamepad lifecycle, failure detection, preflights, unique diagnostics and opt-out"
- "$T/actions"
+grep -q '^gpu_afbc=1$' "$T/actions"
 # Preflights should never start gptokeyb.
 : > "$T/actions"
 env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
