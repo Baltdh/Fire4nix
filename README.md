@@ -1,5 +1,16 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+## Revisão 1.03 — compatibilidade e diagnóstico seguro
+
+- **Motivo do navegador ainda não abrir:** o ZIP traz o lançador e o binário AArch64, **não** o motor WPE WebKit de aproximadamente 174 MB. O runtime existente do usuário passou por SIGSEGV 139 antes da janela. A causa interna **não** foi comprovada.
+- `Fire4Nix-Direto.sh` agora ignora cópias incompletas (WPE sem `WPEWebProcess`, `WPENetworkProcess` ou `WPEGPUProcess`) e procura a próxima instalação no SD.
+- `Diagnosticar-Fire4Nix.sh --safe` inspeciona **sem carregar WebKit**: fontes Fontconfig, banco MIME, presença do bwrap, potenciais conflitos de bibliotecas `libc`/EGL/Wayland e requisitos de símbolo GLIBC do ELF principal.
+- Os avisos não são diagnóstico definitivo de SIGSEGV: dependências transitivas, ABI, sandbox, WebKit e GPU Mali requerem confirmação no console.
+- Para relatório: execute `sh Diagnosticar-Fire4Nix.sh --safe` a partir da pasta extraída ou use o terminal R36 para ler `/storage/Fire4Nix-Diagnostico-101.txt`; o pacote inclui o relatório em texto para foto.
+
+Fontes: [WPE FAQ de problemas no startup](https://wpewebkit.org/about/faq.html), [nova API WPEPlatform](https://wpewebkit.org/blog/2026-10-06-wpe-platform.html), [ROCKNIX Ports](https://rocknix.org/systems/ports/).
+
+
 Desenvolvimento experimental do Fire4Nix para Rockchip RK3326/AArch64 e ROCKNIX 20261001, tela 640 × 480.
 
 ## Versão 1.02 — correções de inicialização

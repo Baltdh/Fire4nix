@@ -30,7 +30,7 @@ elif [ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-wayland-0}" ] &
     WAYLAND_DISPLAY=wayland-1
     export WAYLAND_DISPLAY
 fi
-log "fire4nix_portable_launcher=1.02"
+log "fire4nix_portable_launcher=1.03"
 log "launcher=$0"
 log "wayland=${XDG_RUNTIME_DIR:-missing}/${WAYLAND_DISPLAY:-missing}"
 status=127
@@ -46,6 +46,17 @@ for root in "${FIRE4NIX_ROOT:-}" "$HERE/fire4nix-completo" "$HERE/Fire4Nix" "$HE
     if [ -f "$root/Fire4Nix-Iniciar.sh" ] &&
        [ -s "$root/bin/fire4nix-native-aarch64" ] &&
        [ -s "$root/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
+        # Require the three auxiliary processes before selecting this SD.
+        missing_child=""
+        for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+            if [ ! -s "$root/runtime/libexec/wpe-webkit-2.0/$child" ]; then
+                missing_child="$missing_child $child"
+            fi
+        done
+        if [ -n "$missing_child" ]; then
+            log "skipped_incomplete_runtime=$root missing=$missing_child"
+            continue
+        fi
         selected=$root
         log "selected_install=$selected"
         log 'launch_mode=native-wpeplatform'

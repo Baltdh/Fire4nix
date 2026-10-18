@@ -41,9 +41,9 @@ done
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
-    OUT=/storage/Fire4Nix-Diagnostico-101.txt
+    OUT=/storage/Fire4Nix-Diagnostico-103.txt
   else
-    OUT="$HERE/Fire4Nix-Diagnostico-100.txt"
+    OUT="$HERE/Fire4Nix-Diagnostico-103.txt"
   fi
 fi
 # Keep the report even if /storage cannot be written, and never clobber it midway.
@@ -55,7 +55,7 @@ fi
 TMP=$(mktemp "$DIR/.fire4nix-diag-XXXXXX") || exit 73
 trap 'rm -f "$TMP"' 0
 {
-  echo "Fire4Nix 1.01 / R36H standalone runtime diagnosis"
+  echo "Fire4Nix 1.03 / R36H standalone runtime diagnosis"
   printf 'arch=%s\n' "$(uname -m)"
   printf 'kernel=%s\n' "$(uname -r)"
   if [ -r /etc/os-release ]; then
@@ -70,6 +70,42 @@ trap 'rm -f "$TMP"' 0
   fi
   BIN="$ROOT/bin/fire4nix-native-aarch64"
   if [ -s "$BIN" ]; then echo 'arm64_binary=present'; else echo 'arm64_binary=missing'; fi
+  # Static/pre-launch environment inspection recommended by WPE upstream.
+  # These warnings indicate missing prerequisites, not the cause of a 139.
+  if command -v fc-list >/dev/null 2>&1; then
+    font_sample=$(fc-list -f '%{file}\n' 2>/dev/null | sed -n '/./{p;q;}' || true)
+    if [ -n "$font_sample" ] && [ -r "$font_sample" ]; then
+      echo 'fontconfig_fonts=present'
+    else
+      echo 'fontconfig_fonts=none_found'
+    fi
+  else
+    echo 'fontconfig_fonts=tool_missing_not_verified'
+  fi
+  if [ -r /usr/share/mime/globs2 ] || [ -r /usr/share/mime/mime.cache ]; then
+    echo 'shared_mime_database=present'
+  else
+    echo 'shared_mime_database=not_found_local_HTML_may_fail'
+  fi
+  if command -v bwrap >/dev/null 2>&1; then
+    echo 'bubblewrap=present_in_PATH'
+  else
+    echo 'bubblewrap=missing_from_PATH_sandbox_unverified'
+  fi
+  if [ -n "$RUNTIME" ]; then
+    for name in libc.so.6 libm.so.6 libpthread.so.0 ld-linux-aarch64.so.1 libEGL.so.1 libGLESv2.so.2 libgbm.so.1 libdrm.so.2 libwayland-client.so.0; do
+      if [ -e "$RUNTIME/lib/$name" ]; then
+        printf 'private_library_conflict_candidate=%s\n' "$name"
+      fi
+    done
+    if [ -r "$RUNTIME/lib/libWPEWebKit-2.0.so.1" ]; then
+      echo 'webkit_process_path_override=build_dependent_unverified'
+    fi
+  fi
+  if command -v getconf >/dev/null 2>&1; then
+    device_glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || true)
+    printf 'device_glibc=%s\n' "${device_glibc:-unknown}"
+  fi
   if [ -n "$RUNTIME" ]; then
     echo "WPE_library=present"
     printf 'WPE_runtime_source=%s\n' "$RUNTIME"
@@ -137,6 +173,18 @@ trap 'rm -f "$TMP"' 0
         grep -o 'Name: GLIBC_[0-9][0-9.]*' |
         sed 's/^Name: GLIBC_//' | sort -V | tail -n 1 || true)
       printf 'wpe_glibc_max_required=%s\n' "${max_required:-not_available}"
+      # This compares only the top-level WPE library; transitive dependencies
+      # may still require newer GLIBC and must be evaluated separately.
+      if [ -n "${device_glibc:-}" ] && [ -n "$max_required" ]; then
+        latest_glibc=$(printf '%s\n%s\n' "$device_glibc" "$max_required" | sort -V | tail -n 1)
+        if [ "$latest_glibc" = "$max_required" ] && [ "$max_required" != "$device_glibc" ]; then
+          echo 'wpe_direct_glibc_compat=requires_newer_than_device'
+        else
+          echo 'wpe_direct_glibc_compat=direct_library_requirement_not_newer'
+        fi
+      else
+        echo 'wpe_direct_glibc_compat=unknown'
+      fi
       if readelf --dyn-syms -W "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
           grep -q 'webkit_web_view_get_wpe_view'; then
         echo 'wpeplatform_static_symbol=present'
@@ -204,8 +252,8 @@ mv -f "$TMP" "$OUT" || exit 73
 trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
-  echo '=== FIRE4NIX 1.01 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+  echo '=== FIRE4NIX 1.03 / RESUMO PARA FOTO ==='
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi
