@@ -1,4 +1,4 @@
-name: Fire4Nix 1.01 R36H WPE SIGSEGV safe diagnostics
+name: Fire4Nix 1.02 R36H Ports direct, Wayland and WPE diagnostics
 on:
   push:
     paths:
@@ -11,6 +11,9 @@ on:
       - 'native/tests/test_runtime_staging.sh'
       - 'native/tests/test_ondevice_testkit.sh'
       - 'native/tests/test_segv_stage_diagnostic.sh'
+      - 'native/tests/test_ports_direct.sh'
+      - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
+      - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
       - 'scripts/Install-Fire4Nix-Once.sh'
       - '.github/workflows/r36h-oneinstall.yml'
@@ -38,6 +41,7 @@ jobs:
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Diagnosticar-Fire4Nix.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix-Teste.sh
+          cp installer/Fire4Nix-Direto.sh out/Fire4Nix-Direto.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix/Fire4Nix-Teste.sh
           cp installer/Habilitar-Teste-Ports.sh out/Habilitar-Teste-Ports.sh
           cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
@@ -48,8 +52,12 @@ jobs:
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 1.01 R36H - localizar a falha 139 antes de abrir a janela para ROCKNIX 20261001.
+          Fire4Nix 1.02 R36H - executar por Ports em qualquer pasta e localizar a falha WPE 139.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
+          Copie Fire4Nix-Direto.sh para roms/ports/ para iniciar a partir do menu Ports.
+          O atalho encontra instalacoes em SD interno/externo sem precisar mover o navegador.
+          O arquivo manager pode mostrar View em vez de executar: use a entrada Ports.
+          Falha 139 continua sendo erro nativo WPE; veja /storage/Fire4Nix-PORTS-ultimo.txt.
           NAO contem a biblioteca WebKit ~174 MB nem seus WPEWebProcess/WPENetworkProcess/WPEGPUProcess.
           O instalador copia os arquivos WPE JA INSTALADOS no R36H para uma nova pasta unica.
           Se faltarem os arquivos, CANCELA e nao modifica o sistema.
@@ -97,6 +105,9 @@ jobs:
           A controladora fisica e o Wayland no console ainda exigem validacao.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
+          chmod +x out/Fire4Nix-Direto.sh
+          sh -n out/Fire4Nix-Direto.sh
+          sh native/tests/test_ports_direct.sh
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix-Teste.sh out/Habilitar-Teste-Ports.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix-Teste.sh
@@ -330,10 +341,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.01-Diagnostico-139.zip .)
-          unzip -t Fire4Nix-R36H-1.01-Diagnostico-139.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.02-Ports-Direto.zip .)
+          unzip -t Fire4Nix-R36H-1.02-Ports-Direto.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.01-Diagnostico-139
+          name: Fire4Nix-R36H-1.02-Ports-Direto
           path: Fire4Nix-R36H-1.01-Diagnostico-139.zip
           retention-days: 30
