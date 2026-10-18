@@ -1,12 +1,23 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+## Revisão 1.05 — isolamento ELF e diagnóstico do travamento 139
+
+- **Correção no launcher**: antes, o Fire4Nix herdava `LD_LIBRARY_PATH` de outros ports/cartões. Agora usa somente `runtime/lib` da instalação selecionada; modo de compatibilidade temporário: `FIRE4NIX_INHERIT_LIBRARY_PATH=1`. Não altera drivers ou `LD_PRELOAD` configurados pelo ROCKNIX.
+- **Novo diagnóstico simples**: `Fire4Nix-Investigar-139.sh --safe` cria `/storage/Fire4Nix-Investigacao-139/Fire4Nix-139-ultimo.txt` sem carregar WebKit. Funciona a partir da pasta extraída ou em `roms/ports/`.
+- **Rastreamento opt-in**: `sh Fire4Nix-Investigar-139.sh --trace` executa **apenas** `--check-platform`, com `LD_DEBUG=libs,versions,files` e sem abrir páginas. Registra se houve falha antes, durante ou depois de `dlopen` e anota as bibliotecas carregadas. Os rastros detalhados ficam restritos em subpasta local; revise caminhos privados antes de compartilhá-los.
+- **CI ARM64**: novos testes verificam isolamento/compatibilidade de bibliotecas, código 139 preservado e que `--safe` não executa o binário.
+- **Importante**: o WPE 2.54.1 corrige compatibilidade do backend Wayland com versões mais novas do Wayland. Isso é relevante **somente depois** de confirmar que o runtime chega à inicialização gráfica; o `--check-platform` não cria uma janela. A última biblioteca listada no rastreamento também não comprova, por si só, ser a responsável pelo crash.
+- **O motor WPE de ~174 MB ainda não está incluído neste ZIP e a renderização física no R36H não está validada.**
+
+Leia também: [investigação técnica anterior](docs/R36H_V104_RESEARCH_COMMUNITY_ROCKNIX_WPE.md) e [nota upstream WPE 2.54.1](https://wpewebkit.org/release/wpewebkit-2.54.1.html).
+
 ## Revisão 1.03 — compatibilidade e diagnóstico seguro
 
 - **Motivo do navegador ainda não abrir:** o ZIP traz o lançador e o binário AArch64, **não** o motor WPE WebKit de aproximadamente 174 MB. O runtime existente do usuário passou por SIGSEGV 139 antes da janela. A causa interna **não** foi comprovada.
 - `Fire4Nix-Direto.sh` agora ignora cópias incompletas (WPE sem `WPEWebProcess`, `WPENetworkProcess` ou `WPEGPUProcess`) e procura a próxima instalação no SD.
 - `Diagnosticar-Fire4Nix.sh --safe` inspeciona **sem carregar WebKit**: fontes Fontconfig, banco MIME, presença do bwrap, potenciais conflitos de bibliotecas `libc`/EGL/Wayland e requisitos de símbolo GLIBC do ELF principal.
 - Os avisos não são diagnóstico definitivo de SIGSEGV: dependências transitivas, ABI, sandbox, WebKit e GPU Mali requerem confirmação no console.
-- Para relatório: execute `sh Diagnosticar-Fire4Nix.sh --safe` a partir da pasta extraída ou use o terminal R36 para ler `/storage/Fire4Nix-Diagnostico-101.txt`; o pacote inclui o relatório em texto para foto.
+- Para relatório: execute `sh Diagnosticar-Fire4Nix.sh --safe` a partir da pasta extraída ou use o terminal R36 para ler `/storage/Fire4Nix-Diagnostico-103.txt`; o pacote inclui o relatório em texto para foto.
 
 Fontes: [WPE FAQ de problemas no startup](https://wpewebkit.org/about/faq.html), [nova API WPEPlatform](https://wpewebkit.org/blog/2026-10-06-wpe-platform.html), [ROCKNIX Ports](https://rocknix.org/systems/ports/).
 
