@@ -145,7 +145,13 @@ if [ "$WPE_PLATFORM" = wayland ] &&
     fail 69 "Wayland socket unavailable: start Fire4Nix from ROCKNIX Ports under Sway"
 fi
 export FIRE4NIX_LOW_MEMORY=${FIRE4NIX_LOW_MEMORY:-1}
-export MALI_WAYLAND_AFBC=${MALI_WAYLAND_AFBC:-0}
+# RK3326 ROCKNIX provides GPU selection through its own profile.d.
+# Recent ROCKNIX code migrates away from a global MALI_WAYLAND_AFBC=0.
+# Do not impose this legacy tuning on the WebKit process; respect any
+# explicit environment override provided by the user / GPU driver.
+printf 'mali_wayland_afbc=%s\n' "${MALI_WAYLAND_AFBC:-not_overridden}" >> "$LOG"
+printf 'mali_default_display=%s\n' "${MALI_DEFAULT_DISPLAY:-unconfigured}" >> "$LOG"
+printf 'wsialloc_use_gbm=%s\n' "${WSIALLOC_USE_GBM:-unconfigured}" >> "$LOG"
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
 URL=${1:-$FIRE4NIX_HOME_URL}
 start_gamepad
