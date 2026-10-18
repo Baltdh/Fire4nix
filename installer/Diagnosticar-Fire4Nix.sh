@@ -41,9 +41,9 @@ done
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
-    OUT=/storage/Fire4Nix-Diagnostico-101.txt
+    OUT=/storage/Fire4Nix-Diagnostico-103.txt
   else
-    OUT="$HERE/Fire4Nix-Diagnostico-100.txt"
+    OUT="$HERE/Fire4Nix-Diagnostico-103.txt"
   fi
 fi
 # Keep the report even if /storage cannot be written, and never clobber it midway.
