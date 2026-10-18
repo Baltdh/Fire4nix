@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix R36H 1.01: preserve diagnosis from the very first failing preflight.
+# Fire4Nix R36H 1.05: preserve diagnosis from the very first failing preflight.
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
@@ -95,7 +95,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=1.01\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=1.05\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest)
@@ -117,7 +117,27 @@ CHILD="$ROOT/runtime/libexec/wpe-webkit-2.0"
 for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
     [ -s "$CHILD/$child" ] || fail 127 "Missing WebKit subprocess: $child"
 done
-export LD_LIBRARY_PATH="$ROOT/runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# A previous PortMaster/SD launch can leave incompatible system libraries on
+# LD_LIBRARY_PATH. Default to the selected Fire4Nix runtime only. Keep the
+# previous behavior behind an explicit opt-in for controlled comparisons.
+if [ "${FIRE4NIX_INHERIT_LIBRARY_PATH:-0}" = 1 ]; then
+    printf 'library_path_mode=compat_inherited\n' >> "$LOG"
+    export LD_LIBRARY_PATH="$ROOT/runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+else
+    if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+        printf 'library_path_mode=isolated_discarded_inherited_paths\n' >> "$LOG"
+    else
+        printf 'library_path_mode=isolated_no_inherited_paths\n' >> "$LOG"
+    fi
+    export LD_LIBRARY_PATH="$ROOT/runtime/lib"
+fi
+# Do not unset LD_PRELOAD: ROCKNIX may use a platform-provided Mali hook.
+for lib in libc.so.6 ld-linux-aarch64.so.1 libwayland-client.so.0 \
+           libgbm.so.1 libdrm.so.2 libEGL.so.1 libGLESv2.so.2 libmali.so; do
+    if [ -e "$ROOT/runtime/lib/$lib" ]; then
+        printf 'warning=private_system_or_gpu_library:%s\n' "$lib" >> "$LOG"
+    fi
+done
 export WEBKIT_EXEC_PATH="$CHILD"
 export WPE_PLATFORM=wayland
 unset WPE_DISPLAY
@@ -155,6 +175,18 @@ printf 'wsialloc_use_gbm=%s\n' "${WSIALLOC_USE_GBM:-unconfigured}" >> "$LOG"
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
 URL=${1:-$FIRE4NIX_HOME_URL}
 start_gamepad
+# Enable ELF loader tracing ONLY for an explicit offline preflight. Never
+# enable it during interactive browsing: verbose paths can reveal local data.
+if [ "${FIRE4NIX_LOADER_DEBUG:-0}" = 1 ] &&
+   { [ "$MODE" = --check-library ] || [ "$MODE" = --check-platform ]; }; then
+    ulimit -c 0 2>/dev/null || true
+    LD_DEBUG=libs,versions,files
+    LD_DEBUG_OUTPUT="$LOG_DIR/Fire4Nix-LD-$(date +%Y%m%d-%H%M%S)-$"
+    export LD_DEBUG LD_DEBUG_OUTPUT
+    printf 'loader_debug=enabled\nloader_debug_prefix=%s\n' "$LD_DEBUG_OUTPUT" >> "$LOG"
+else
+    printf 'loader_debug=disabled\n' >> "$LOG"
+fi
 case "$MODE" in
   --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;
   --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
