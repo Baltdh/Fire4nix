@@ -72,4 +72,25 @@ if grep -q 'outdated-launcher-was-invoked' "$T/trace.txt"; then echo 'FAIL: trac
 if grep -q '^native_preflight_exit=' "$T/safe.txt"; then
   echo 'FAIL: safe mode loaded a mocked native executable' >&2; exit 1
 fi
-echo 'PASS: isolated/compat library path, no firmware changes, offline safe/trace reports'
+# Simulate real dual-SD layout: ELF in Ports, 174MB runtime under tools.
+mkdir -p "$T/remote-tools"
+mv "$APP/runtime" "$T/remote-tools/runtime"
+: > "$T/observed"
+MOCK_RESULT="$T/observed" FIRE4NIX_BINARY_ROOT="$APP" \
+  FIRE4NIX_RUNTIME_ROOT="$T/remote-tools" \
+  FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
+  sh "$HERE/installer/Fire4Nix-Investigar-139.sh" --safe > "$T/split-safe.txt"
+grep -Fxq "installed_root=$APP" "$T/split-safe.txt"
+grep -Fxq "wpe_runtime_root=$T/remote-tools" "$T/split-safe.txt"
+grep -q "native_preflight=NOT_RUN_SAFE_MODE" "$T/split-safe.txt"
+test ! -s "$T/observed"
+MOCK_RESULT="$T/observed" FIRE4NIX_BINARY_ROOT="$APP" \
+  FIRE4NIX_RUNTIME_ROOT="$T/remote-tools" \
+  FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
+  sh "$HERE/installer/Fire4Nix-Investigar-139.sh" --trace > "$T/split-trace.txt"
+grep -Fxq "observed_lib_path=$T/remote-tools/runtime/lib" "$T/observed"
+grep -q "^native_preflight_exit=139$" "$T/split-trace.txt"
+grep -q "^crash_boundary=after_dlopen$" "$T/split-trace.txt"
+grep -Fxq "selected_runtime=$T/remote-tools" "$T/split-trace.txt"
+if grep -q "outdated-launcher-was-invoked" "$T/split-trace.txt"; then exit 1; fi
+echo 'PASS: isolated/compat library path, split native/runtime, no firmware edits, offline reports'
