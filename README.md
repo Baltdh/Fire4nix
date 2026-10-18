@@ -1,5 +1,11 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+## Revisão 1.06 — rastreamento independente do inicializador antigo
+
+- O coletor `Fire4Nix-Investigar-139.sh --trace` agora executa **diretamente o ELF ARM64 já instalado**, com `LD_LIBRARY_PATH` restrito ao WPE selecionado e `LD_DEBUG` isolado. Não depende de atualizar previamente `Fire4Nix-Iniciar.sh` que estava no SD.
+- Para uso **sem terminal**: extraia o ZIP 1.06, coloque `Fire4Nix-Investigar-139.sh` e `Fire4Nix-Tracar-139.sh` na pasta `roms/ports/` do cartão e execute pelo menu **Ports** do ROCKNIX. O primeiro gera auditoria segura; o segundo executa apenas a verificação offline ABI e captura a falha 139.
+- O relatório fica em `/storage/Fire4Nix-Investigacao-139/Fire4Nix-139-ultimo.txt` quando `/storage` permite gravação. O motor WPE/WebKit de ~174 MB e os drivers do sistema **não são copiados nem modificados**. A renderização gráfica continua sem validação real.
+
 ## Revisão 1.05 — isolamento ELF e diagnóstico do travamento 139
 
 - **Correção no launcher**: antes, o Fire4Nix herdava `LD_LIBRARY_PATH` de outros ports/cartões. Agora usa somente `runtime/lib` da instalação selecionada; modo de compatibilidade temporário: `FIRE4NIX_INHERIT_LIBRARY_PATH=1`. Não altera drivers ou `LD_PRELOAD` configurados pelo ROCKNIX.
