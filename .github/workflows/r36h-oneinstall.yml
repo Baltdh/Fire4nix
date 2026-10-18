@@ -1,4 +1,4 @@
-name: Fire4Nix 1.03 R36H runtime and launch prerequisites
+name: Fire4Nix 1.05 R36H isolated loader and WPE SIGSEGV trace
 on:
   push:
     paths:
@@ -13,6 +13,7 @@ on:
       - 'native/tests/test_segv_stage_diagnostic.sh'
       - 'native/tests/test_ports_direct.sh'
       - 'native/tests/test_runtime_prereqs.sh'
+      - 'native/tests/test_isolated_loader.sh'
       - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
       - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
@@ -42,6 +43,8 @@ jobs:
           cp installer/Fire4Nix-Iniciar.sh out/Fire4Nix/Fire4Nix-Iniciar.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Diagnosticar-Fire4Nix.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix-Teste.sh
+          cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix-Investigar-139.sh
+          cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh
           cp installer/Fire4Nix-Direto.sh out/Fire4Nix-Direto.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix/Fire4Nix-Teste.sh
           cp installer/Habilitar-Teste-Ports.sh out/Habilitar-Teste-Ports.sh
@@ -53,11 +56,16 @@ jobs:
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
-          Fire4Nix 1.03 R36H - conferir compatibilidade do runtime, fontes, MIME e ELF.
+          Fire4Nix 1.05 R36H - isolar bibliotecas herdadas, capturar travamento 139 no loader.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           Copie Fire4Nix-Direto.sh para roms/ports/ para iniciar a partir do menu Ports.
           Versao 1.03 ignora instalacoes incompletas, procurando WPE com tres subprocessos.
           O diagnostico --safe registra Fontconfig, MIME, bwrap, colisao de libs e GLIBC.
+          Fire4Nix-Investigar-139.sh --safe NAO executa WebKit.
+          Fire4Nix-Investigar-139.sh --trace roda somente preflight ABI com LD_DEBUG.
+          Relatorio: /storage/Fire4Nix-Investigacao-139/Fire4Nix-139-ultimo.txt.
+          Por padrao o launcher ignora LD_LIBRARY_PATH herdado de outros ports.
+          FIRE4NIX_INHERIT_LIBRARY_PATH=1 restabelece temporariamente o modo antigo.
           Isso nao comprova a causa do segfault 139, e nao substitui o motor WebKit.
           O atalho encontra instalacoes em SD interno/externo sem precisar mover o navegador.
           O arquivo manager pode mostrar View em vez de executar: use a entrada Ports.
@@ -109,10 +117,14 @@ jobs:
           A controladora fisica e o Wayland no console ainda exigem validacao.
           Nao desativa sandbox nem modifica /usr ou drivers Mali.
           README
+          chmod +x out/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh
+          sh -n out/Fire4Nix-Investigar-139.sh
+          sh -n out/Fire4Nix/Fire4Nix-Investigar-139.sh
           chmod +x out/Fire4Nix-Direto.sh
           sh -n out/Fire4Nix-Direto.sh
           sh native/tests/test_ports_direct.sh
           sh native/tests/test_runtime_prereqs.sh
+          sh native/tests/test_isolated_loader.sh
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix-Teste.sh out/Habilitar-Teste-Ports.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix-Teste.sh
@@ -346,11 +358,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.03-Runtime-Auditoria.zip .)
-          unzip -t Fire4Nix-R36H-1.03-Runtime-Auditoria.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.05-Isolamento-WPE-139.zip .)
+          unzip -t Fire4Nix-R36H-1.05-Isolamento-WPE-139.zip | tail -1
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.03-Runtime-Auditoria
-          path: Fire4Nix-R36H-1.03-Runtime-Auditoria.zip
+          name: Fire4Nix-R36H-1.05-Isolamento-WPE-139
+          path: Fire4Nix-R36H-1.05-Isolamento-WPE-139.zip
           if-no-files-found: error
           retention-days: 30
