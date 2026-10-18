@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix 1.05: investigate WebKit exit 139 without changing ROCKNIX.
+# Fire4Nix 1.06: investigate WebKit exit 139 without changing ROCKNIX.
 # --safe never loads WPE. --trace runs only a native ABI preflight, no websites.
 set -u
 umask 077
@@ -31,15 +31,14 @@ for root in "${FIRE4NIX_ROOT:-}" "$HERE/fire4nix-completo" "$HERE/Fire4Nix" "$HE
   /storage/roms/tools/Fire4Nix; do
   [ -n "$root" ] && [ -d "$root" ] || continue
   if [ -s "$root/bin/fire4nix-native-aarch64" ] &&
-     [ -s "$root/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
-     [ -f "$root/Fire4Nix-Iniciar.sh" ]; then
+     [ -s "$root/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
     selected=$root
     break
   fi
 done
 
 {
-  echo 'Fire4Nix 1.05 / WPE 139 investigation'
+  echo 'Fire4Nix 1.06 / WPE 139 investigation'
   printf 'mode=%s\n' "$MODE"
   printf 'arch=%s\n' "$(uname -m)"
   printf 'kernel=%s\n' "$(uname -r)"
@@ -92,9 +91,14 @@ fi
 if [ "$MODE" = --trace ] && [ -n "$selected" ]; then
   echo 'trace=starting_native_ABI_preflight_no_network_no_browser_window' >> "$REPORT"
   ulimit -c 0 2>/dev/null || true
-  FIRE4NIX_GAMEPAD=0 FIRE4NIX_LOADER_DEBUG=1 \
-    FIRE4NIX_INHERIT_LIBRARY_PATH=0 FIRE4NIX_LOG_DIR="$RUN_DIR" \
-    sh "$selected/Fire4Nix-Iniciar.sh" --check-platform \
+  # Run the ELF directly: the installed SD may contain a 1.01/1.03 launcher
+  # without the new isolated library policy or LD_DEBUG support.
+  # ROCKNIX owns GPU/Mali variables and LD_PRELOAD; we never change them.
+  LD_LIBRARY_PATH="$selected/runtime/lib" \
+    WEBKIT_EXEC_PATH="$selected/runtime/libexec/wpe-webkit-2.0" \
+    WPE_PLATFORM=wayland LD_DEBUG=libs,versions,files \
+    LD_DEBUG_OUTPUT="$RUN_DIR/Fire4Nix-LD" \
+    "$selected/bin/fire4nix-native-aarch64" --check-platform \
     > "$RUN_DIR/native-output.txt" 2>&1
   status=$?
   printf 'native_preflight_exit=%s\n' "$status" >> "$REPORT"
