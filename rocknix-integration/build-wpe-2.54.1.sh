@@ -11,8 +11,13 @@ case "$mode" in
   *) echo "Usage: $0 [--plan|--configure|--build|--stage]" >&2; exit 2 ;;
 esac
 
-# Point these at the *actual ROCKNIX 20261001 cross-build SDK*.
+# Match the device rootfs, not just the CPU. The tested R36H reports glibc 2.41,
+# matching ROCKNIX 20260801, whereas 20261001 recipes require glibc 2.44.
 # Using the host compiler is NOT a valid R36H build.
+RELEASE=${FIRE4NIX_ROCKNIX_RELEASE:-20260801}
+case "$RELEASE" in 20260801|20261001) ;; *) echo 'ERROR: unsupported ROCKNIX release; use an audited SDK' >&2; exit 4 ;; esac
+TARGET_GLIBC=2.41
+[ "$RELEASE" != 20261001 ] || TARGET_GLIBC=2.44
 ARCHIVE=${FIRE4NIX_WPE_ARCHIVE:-}
 TOOLCHAIN=${FIRE4NIX_ROCKNIX_TOOLCHAIN:-}
 WORK=${FIRE4NIX_WPE_WORK:-./build-wpe-2541-rk3326}
@@ -21,14 +26,19 @@ BUILD="$WORK/build"
 
 echo "source=wpewebkit-$VERSION.tar.xz"
 echo "sha256=$SOURCE_SHA256"
-echo "target=ROCKNIX-20261001-aarch64-cortex-a35"
+echo "target=ROCKNIX-$RELEASE-aarch64-cortex-a35"
+echo "target_glibc_recipe=$TARGET_GLIBC"
+echo "device_observed_glibc=2.41"
+if [ "$RELEASE" != 20260801 ]; then
+  echo "WARNING: selected release differs from tested R36H glibc 2.41; do not deploy before ABI audit" >&2
+fi
 echo "backend=WPEPlatform Wayland (DRM/headless optional)"
 echo "expected_runtime=libWPEWebKit-2.0.so.1 + WebKit child processes + dependencies"
 echo "status=source build recipe; runtime NOT yet compiled or distributed"
 if [ "$mode" = --plan ]; then
   echo 'To configure, set FIRE4NIX_WPE_ARCHIVE to the official tarball and'
   echo 'FIRE4NIX_ROCKNIX_TOOLCHAIN to a cross toolchain CMake file built'
-  echo 'from the ROCKNIX 20261001 source environment.'
+  echo 'from the matching ROCKNIX release source environment.'
   echo 'Then run this script with --configure, --build and --stage.'
   echo 'Stage requires a separate ROCKNIX SDK DESTDIR and the runtime audit script.'
   echo 'No build or installation is performed by --plan.'
@@ -89,6 +99,7 @@ else
     DESTDIR="$WORK/destdir"
     mkdir -p "$DESTDIR"
     DESTDIR="$DESTDIR" cmake --install "$BUILD"
+    FIRE4NIX_TARGET_GLIBC_MAX="$TARGET_GLIBC" \
     FIRE4NIX_WPE_DESTDIR="$DESTDIR" \
       FIRE4NIX_WPE_RUNTIME_OUT="${FIRE4NIX_WPE_RUNTIME_OUT:-$WORK/fire4nix-runtime}" \
       sh "$STAGER" --stage
