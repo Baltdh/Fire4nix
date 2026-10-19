@@ -66,7 +66,9 @@ record_elf() {
     echo "${label}_symlink=no"
   fi
   if command -v stat >/dev/null 2>&1; then
-    stat -Lc "${label}_size_bytes=%s\n${label}_blocks_512=%b\n${label}_hardlinks=%h" "$path" 2>/dev/null || true
+    stat -Lc "${label}_size_bytes=%s" "$path" 2>/dev/null || true
+    stat -Lc "${label}_blocks_512=%b" "$path" 2>/dev/null || true
+    stat -Lc "${label}_hardlinks=%h" "$path" 2>/dev/null || true
   else
     wc -c < "$path" | awk -v p="$label" '{print p "_size_bytes=" $1}'
   fi
