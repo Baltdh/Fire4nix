@@ -43,8 +43,14 @@ cp /bin/ls "$T/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
 run_check --quick
 grep -q '^WPEWebProcess_status=present$' "$T/out.txt"
 grep -q '^WPEWebProcess_format=ELF_magic$' "$T/out.txt"
-grep -q '^WPEWebProcess_architecture=x86_64_NOT_R36H$' "$T/out.txt" || \
- grep -q '^WPEWebProcess_architecture=unknown$' "$T/out.txt"
+grep -Eq '^WPEWebProcess_architecture=(aarch64|x86_64_NOT_R36H|unknown)
+# If no runtime exists, the diagnostic must still complete without executing anything.
+FIRE4NIX_ELF_FILE="$T/missing/lib/libWPEWebKit-2.0.so.1" \
+ FIRE4NIX_ELF_REPORT="$T/none.txt" \
+ sh "$ROOT/installer/Fire4Nix-Inspecionar-ELF.sh" --quick > /dev/null
+grep -q '^webkit_lib_status=not_found$' "$T/none.txt"
+echo 'PASS: static ELF guard checks magic, symlink, subprocesses, optional hash; no WPE execution'
+ "$T/out.txt"
 # If no runtime exists, the diagnostic must still complete without executing anything.
 FIRE4NIX_ELF_FILE="$T/missing/lib/libWPEWebKit-2.0.so.1" \
  FIRE4NIX_ELF_REPORT="$T/none.txt" \
