@@ -17,10 +17,14 @@ OUT=${FIRE4NIX_WPE_RUNTIME_OUT:-}
   echo 'ERROR: explicit ROCKNIX WPE DESTDIR and runtime output are required' >&2
   exit 2
 }
-command -v readelf >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1 || {
+command -v readelf >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1 && command -v sort >/dev/null 2>&1 || {
   echo 'ERROR: readelf and sha256sum required for AArch64 verification' >&2
   exit 2
 }
+# The current physical R36H reports glibc 2.41, so reject newer symbols.
+# Explicit opt-in for other firmware only after independently auditing its rootfs.
+TARGET_GLIBC_MAX=${FIRE4NIX_TARGET_GLIBC_MAX:-2.41}
+case "$TARGET_GLIBC_MAX" in 2.41|2.44) ;; *) echo 'ERROR: unsupported target glibc; audit the actual rootfs first' >&2; exit 2 ;; esac
 # Prevent accidental copying of the build host's /usr into a browser package.
 case "$INPUT" in
   /|/usr|/usr/|/usr/local|/usr/local/|.) echo 'ERROR: unsafe input directory' >&2; exit 2 ;;
@@ -48,9 +52,24 @@ check_arm64() {
     return 1
   }
 }
+# This scans version requirements, not merely the ELF machine type. It cannot
+# prove that the ROCKNIX rootfs provides every transitive dependency.
+check_glibc_max() {
+  required=$(readelf -V "$1" 2>/dev/null | grep -oE 'Name: GLIBC_[0-9]+\.[0-9]+' | sed 's/Name: GLIBC_//' | sort -Vu | tail -n 1 || true)
+  [ -n "$required" ] || return 0
+  if ! awk -v required="$required" -v max="$TARGET_GLIBC_MAX" 'BEGIN {
+       split(required, r, "."); split(max, m, ".");
+       exit !(r[1] < m[1] || (r[1] == m[1] && r[2] <= m[2]))
+     }'; then
+    echo "ERROR: $(basename "$1") needs GLIBC_$required; device limit is GLIBC_$TARGET_GLIBC_MAX" >&2
+    return 1
+  fi
+}
 check_arm64 "$LIBROOT/libWPEWebKit-2.0.so.1" || exit 4
+check_glibc_max "$LIBROOT/libWPEWebKit-2.0.so.1" || exit 4
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
   check_arm64 "$CHILDROOT/$p" || exit 4
+  check_glibc_max "$CHILDROOT/$p" || exit 4
 done
 if ! readelf --dyn-syms -W "$LIBROOT/libWPEWebKit-2.0.so.1" | grep -q 'webkit_web_view_get_wpe_view'; then
   echo 'ERROR: library has no WPEPlatform webkit_web_view_get_wpe_view symbol' >&2
@@ -65,6 +84,10 @@ mkdir -p "$TEMP/lib" "$TEMP/libexec/wpe-webkit-2.0"
 # DESTDIR is expected to contain only this WPE install, not an OS sysroot.
 for lib in "$LIBROOT/"*.so "$LIBROOT/"*.so.*; do
   [ -e "$lib" ] || [ -L "$lib" ] || continue
+  if [ ! -L "$lib" ]; then
+    check_arm64 "$lib" || exit 4
+    check_glibc_max "$lib" || exit 4
+  fi
   cp -a "$lib" "$TEMP/lib/"
 done
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
@@ -91,6 +114,7 @@ done
 {
   echo 'Fire4Nix WPE runtime staged from ROCKNIX SDK DESTDIR.'
   echo 'AArch64 ELF and WPEPlatform exported symbol checked.'
+  echo "Max allowed direct GLIBC requirement: GLIBC_$TARGET_GLIBC_MAX"
   echo 'Dynamic dependencies must still be validated against the exact target rootfs.'
   echo 'Graphical startup and Mali/Wayland have NOT been tested here.'
   for p in "$TEMP/lib/libWPEWebKit-2.0.so.1" "$TEMP/libexec/wpe-webkit-2.0/WPEWebProcess"; do
