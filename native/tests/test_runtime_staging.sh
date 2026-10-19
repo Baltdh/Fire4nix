@@ -34,4 +34,27 @@ set -e
 test "$missing" -eq 3
 test ! -e "$T/incomplete"
 grep -q 'missing staged WPEGPUProcess' "$T/missing-child.log"
-echo 'PASS: WPE staged DESTDIR gets ARM64 ABI/child checks, SHA-256 manifest and no-overwrite protection'
+# Even a perfectly valid AArch64 ELF must be rejected if its required
+# GLIBC symbols are newer than the target R36H (reported 2.41).
+mkdir -p "$T/fake-bin"
+cat > "$T/fake-bin/readelf" <<'READELF'
+#!/bin/sh
+if [ "${1:-}" = -V ] && [ "${FIRE4NIX_TEST_NEWER_GLIBC:-0}" = 1 ]; then
+  echo '  Name: GLIBC_2.44  Flags: none  Version: 2'
+  exit 0
+fi
+exec /usr/bin/readelf "$@"
+READELF
+chmod +x "$T/fake-bin/readelf"
+# Restore missing subprocess; failure should now be specifically ABI-related.
+cp "$ROOT/out/Fire4Nix/bin/fire4nix-native-aarch64" "$T/staged/usr/libexec/wpe-webkit-2.0/WPEGPUProcess"
+set +e
+FIRE4NIX_TEST_NEWER_GLIBC=1 PATH="$T/fake-bin:$PATH" \
+  FIRE4NIX_WPE_DESTDIR="$T/staged" FIRE4NIX_WPE_RUNTIME_OUT="$T/too-new" \
+  sh "$ROOT/rocknix-integration/stage-wpe-runtime.sh" --stage > "$T/too-new.log" 2>&1
+too_new=$?
+set -e
+test "$too_new" -eq 4
+grep -q 'needs GLIBC_2.44; device limit is GLIBC_2.41' "$T/too-new.log"
+test ! -e "$T/too-new"
+echo 'PASS: ELF/glibc guard refuses newer symbols; staging remains atomic and mock-only'
