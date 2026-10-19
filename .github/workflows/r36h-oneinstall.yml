@@ -1,4 +1,4 @@
-name: Fire4Nix 1.07 R36H dual-SD native/WPE validation
+name: Fire4Nix 1.08 R36H ELF and ABI guards
 on:
   push:
     paths:
@@ -14,6 +14,7 @@ on:
       - 'native/tests/test_ports_direct.sh'
       - 'native/tests/test_runtime_prereqs.sh'
       - 'native/tests/test_isolated_loader.sh'
+      - 'native/tests/test_elf_guard.sh'
       - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
       - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
@@ -45,6 +46,8 @@ jobs:
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix-Teste.sh
           cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix-Investigar-139.sh
           cp installer/Fire4Nix-Tracar-139.sh out/Fire4Nix-Tracar-139.sh
+          cp installer/Fire4Nix-Inspecionar-ELF.sh out/Fire4Nix-Inspecionar-ELF.sh
+          cp installer/Fire4Nix-Inspecionar-ELF.sh out/Fire4Nix/Fire4Nix-Inspecionar-ELF.sh
           cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh
           cp installer/Fire4Nix-Direto.sh out/Fire4Nix-Direto.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix/Fire4Nix-Teste.sh
@@ -131,6 +134,8 @@ jobs:
           sh native/tests/test_ports_direct.sh
           sh native/tests/test_runtime_prereqs.sh
           sh native/tests/test_isolated_loader.sh
+          sh native/tests/test_elf_guard.sh
+          sh -n out/Fire4Nix-Inspecionar-ELF.sh
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix-Teste.sh out/Habilitar-Teste-Ports.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
           sh -n out/Fire4Nix-Teste.sh
@@ -139,7 +144,7 @@ jobs:
           sh -n out/Preparar-WPE-ROCKNIX-2.54.1.sh
           sh -n out/Empacotar-WPE-ROCKNIX.sh
           sh out/Empacotar-WPE-ROCKNIX.sh --help | grep -q 'isolated ROCKNIX AArch64 DESTDIR'
-          sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --plan | grep -q 'target=ROCKNIX-20261001-aarch64-cortex-a35'
+          sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --plan | grep -q 'target=ROCKNIX-20260801-aarch64-cortex-a35'
           set +e
           sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --configure >/tmp/fire4nix-no-sdk.log 2>&1
           no_sdk_status=$?
@@ -364,11 +369,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.07-Duas-SDs-Runtime.zip .)
-          unzip -t Fire4Nix-R36H-1.07-Duas-SDs-Runtime.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.08-Inspecao-ELF-ABI.zip .)
+          unzip -t Fire4Nix-R36H-1.08-Inspecao-ELF-ABI.zip | tail -1
+          # 170 MiB ZIP ceiling agreed with user. This package does NOT bundle WPE.
+          bytes=$(stat -c %s Fire4Nix-R36H-1.08-Inspecao-ELF-ABI.zip)
+          test "$bytes" -le $((170 * 1024 * 1024))
+          sha256sum Fire4Nix-R36H-1.08-Inspecao-ELF-ABI.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.07-Duas-SDs-Runtime
-          path: Fire4Nix-R36H-1.07-Duas-SDs-Runtime.zip
+          name: Fire4Nix-R36H-1.08-Inspecao-ELF-ABI
+          path: Fire4Nix-R36H-1.08-Inspecao-ELF-ABI.zip
           if-no-files-found: error
           retention-days: 30
