@@ -1,5 +1,5 @@
 #!/bin/sh
-# No real WebKit, no network, no changes outside private temp fixtures.
+# Offline test: no browser, no network, no changes outside private temp fixtures.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
 T=$(mktemp -d)
@@ -8,7 +8,7 @@ mkdir -p "$T/runtime/lib" "$T/runtime/libexec/wpe-webkit-2.0"
 LIB="$T/runtime/lib/libWPEWebKit-2.0.so.1"
 run_check() {
   FIRE4NIX_ELF_FILE="$LIB" FIRE4NIX_ELF_REPORT="$T/out.txt" \
-     sh "$ROOT/installer/Fire4Nix-Inspecionar-ELF.sh" "$@" > "$T/stdout.txt"
+    sh "$ROOT/installer/Fire4Nix-Inspecionar-ELF.sh" "$@" > "$T/stdout.txt"
 }
 printf 'MOCK-lib\n' > "$LIB"
 run_check --quick
@@ -38,22 +38,15 @@ printf 'mock library\n' > "$LIB"
 run_check --hash
 grep -q '^sha256_whole_library_begin$' "$T/out.txt"
 grep -q '^sha256_whole_library_end$' "$T/out.txt"
-# Verify independent subprocess inspection and non-AArch64 detection.
+# GNU CI runners exist in both ARM64 and x86_64 variants.
 cp /bin/ls "$T/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
 run_check --quick
 grep -q '^WPEWebProcess_status=present$' "$T/out.txt"
 grep -q '^WPEWebProcess_format=ELF_magic$' "$T/out.txt"
-grep -Eq '^WPEWebProcess_architecture=(aarch64|x86_64_NOT_R36H|unknown)
-# If no runtime exists, the diagnostic must still complete without executing anything.
+grep -Eq '^WPEWebProcess_architecture=(aarch64|x86_64_NOT_R36H|unknown)$' "$T/out.txt"
+# Missing runtime produces a report instead of executing any binary.
 FIRE4NIX_ELF_FILE="$T/missing/lib/libWPEWebKit-2.0.so.1" \
- FIRE4NIX_ELF_REPORT="$T/none.txt" \
- sh "$ROOT/installer/Fire4Nix-Inspecionar-ELF.sh" --quick > /dev/null
+  FIRE4NIX_ELF_REPORT="$T/none.txt" \
+  sh "$ROOT/installer/Fire4Nix-Inspecionar-ELF.sh" --quick > /dev/null
 grep -q '^webkit_lib_status=not_found$' "$T/none.txt"
-echo 'PASS: static ELF guard checks magic, symlink, subprocesses, optional hash; no WPE execution'
- "$T/out.txt"
-# If no runtime exists, the diagnostic must still complete without executing anything.
-FIRE4NIX_ELF_FILE="$T/missing/lib/libWPEWebKit-2.0.so.1" \
- FIRE4NIX_ELF_REPORT="$T/none.txt" \
- sh "$ROOT/installer/Fire4Nix-Inspecionar-ELF.sh" --quick > /dev/null
-grep -q '^webkit_lib_status=not_found$' "$T/none.txt"
-echo 'PASS: static ELF guard checks magic, symlink, subprocesses, optional hash; no WPE execution'
+echo 'PASS: ELF magic, compressed placeholders, symlinks, subprocesses and optional hash'
