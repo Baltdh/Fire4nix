@@ -1,0 +1,73 @@
+name: Experimental WPE 2.54.1 ARM64 build (NOT ROCKNIX validated)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-wpe:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native ARM64 build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build python3 ruby perl bison flex gperf \
+            gettext pkg-config libglib2.0-dev libgcrypt20-dev libgpg-error-dev \
+            libicu-dev libsqlite3-dev libxml2-dev libxslt1-dev libjpeg-dev \
+            libpng-dev libwebp-dev libwoff-dev libharfbuzz-dev libfreetype-dev \
+            libfontconfig1-dev liblcms2-dev libhyphen-dev libsecret-1-dev \
+            libtasn1-6-dev libsystemd-dev libudev-dev libwayland-dev \
+            libegl-dev libgles2-mesa-dev libgbm-dev libdrm-dev libepoxy-dev \
+            libxkbcommon-dev libatk1.0-dev libsoup-3.0-dev libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev libavif-dev libjxl-dev \
+            libwpe-1.0-dev libwpebackend-fdo-1.0-dev
+      - name: Download verified WPE source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/wpewebkit-2.54.1.tar.xz \
+            https://wpewebkit.org/releases/wpewebkit-2.54.1.tar.xz
+          echo '0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9  /tmp/wpewebkit-2.54.1.tar.xz' | sha256sum -c -
+          mkdir -p source
+          tar -xf /tmp/wpewebkit-2.54.1.tar.xz -C source --strip-components=1
+      - name: Configure ARM64 WPEPlatform (experimental host ABI)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S source -B build -G Ninja \
+            -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+            -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
+            -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
+            -DENABLE_WPE_LEGACY_API=OFF -DENABLE_SPELLCHECK=OFF \
+            -DENABLE_WEB_AUDIO=OFF -DENABLE_VIDEO=OFF
+      - name: Compile WebKit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2
+      - name: Stage and verify ELF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p stage
+          DESTDIR="$PWD/stage" cmake --install build
+          FIRE4NIX_WPE_DESTDIR="$PWD/stage" \
+          FIRE4NIX_WPE_RUNTIME_OUT="$PWD/wpe-runtime" \
+            sh rocknix-integration/stage-wpe-runtime.sh --stage
+          grep -q 'Machine:.*AArch64' <(readelf -h wpe-runtime/lib/libWPEWebKit-2.0.so.1)
+          {
+            echo 'WARNING: built on Ubuntu ARM64, not against ROCKNIX 20261001 sysroot.'
+            echo 'This is a build experiment, NOT an installable/validated ROCKNIX runtime.'
+            echo 'Do NOT overwrite your working SD-card runtime with this artifact.'
+            ldd --version | head -n 1
+          } > wpe-runtime/HOST-ABI-WARNING.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WPE-2.54.1-Ubuntu-ARM64-EXPERIMENTAL-NOT-ROCKNIX
+          path: wpe-runtime/
+          if-no-files-found: error
+          retention-days: 7
