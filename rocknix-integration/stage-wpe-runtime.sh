@@ -55,7 +55,7 @@ check_arm64() {
 # This scans version requirements, not merely the ELF machine type. It cannot
 # prove that the ROCKNIX rootfs provides every transitive dependency.
 check_glibc_max() {
-  required=$(readelf -V "$1" 2>/dev/null | grep -oE 'Name: GLIBC_[0-9]+\\.[0-9]+' | sed 's/Name: GLIBC_//' | sort -Vu | tail -n 1 || true)
+  required=$(readelf -V "$1" 2>/dev/null | grep -oE 'Name: GLIBC_[0-9]+\.[0-9]+' | sed 's/Name: GLIBC_//' | sort -Vu | tail -n 1 || true)
   [ -n "$required" ] || return 0
   if ! awk -v required="$required" -v max="$TARGET_GLIBC_MAX" 'BEGIN {
        split(required, r, "."); split(max, m, ".");
