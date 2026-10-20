@@ -66,7 +66,8 @@ exit_diagnostic=NA
   fi
   echo "selftest_exit=$exit_selftest"
   if [ -f "$DIAG_SCRIPT" ]; then
-    if [ "$MODE" = --safe ]; then
+    if [ "$MODE" = --safe ] || [ "$MODE" = --screen ]; then
+      # Both summary modes must remain static after the external exFAT fault.
       FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" --safe >/dev/null 2>&1
     else
       FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" >/dev/null 2>&1
