@@ -37,7 +37,6 @@ printf 'WPE_library=missing\nWPEPlatform_preflight=skipped_safe_mode_no_library_
 DIAG
 chmod +x "$T/kit/Fire4Nix/bin/fire4nix-native-aarch64"
 FIRE4NIX_TEST_REPORT_DIR="$T/kit-reports" sh "$T/kit/Fire4Nix-Teste.sh" --screen > "$T/screen"
-grep -q '^--safe
- "$T/kit-reports/Fire4Nix-Diagnostico-101.txt.mode"
+grep -q '^--safe$' "$T/kit-reports/Fire4Nix-Diagnostico-101.txt.mode"
 grep -q 'WPEPlatform_preflight=skipped_safe_mode_no_library_execution' "$T/screen"
 echo 'PASS: safe R36H diagnostics, bad ELF detected, no browser or firmware execution'
