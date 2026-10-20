@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'rocknix-integration/check-rocknix-sdk.sh'
+      - 'rocknix-integration/check-rocknix-compiler.sh'
+      - 'native/tests/test_compiler_preflight.sh'
       - 'rocknix-integration/build-wpe-2.54.1.sh'
       - 'native/tests/test_sdk_preflight.sh'
       - '.github/workflows/sdk-preflight.yml'
@@ -21,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sh -n rocknix-integration/check-rocknix-sdk.sh
+      - run: sh -n rocknix-integration/check-rocknix-compiler.sh
       - run: sh -n rocknix-integration/build-wpe-2.54.1.sh
       - run: sh -n native/tests/test_sdk_preflight.sh
       - run: sh native/tests/test_sdk_preflight.sh
+      - run: sh native/tests/test_compiler_preflight.sh
