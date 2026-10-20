@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/build-aarch64-dependencies-smoke.sh'
       - 'scripts/configure-aarch64-wpe-2541-smoke.sh'
+      - 'scripts/build-wpeplatform-aarch64-objects.sh'
       - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
       - '.github/workflows/r36h-first-real-arm64-deps.yml'
   workflow_dispatch:
@@ -83,6 +84,22 @@ jobs:
             "$FIRE4NIX_BUILD_WORK/reports/wpe-media-cache-check.txt"
           echo 'WPE CMake configuration passed on Ubuntu native ARM64 (build not started).' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Compile real WPEPlatform core and Wayland/headless ARM64 objects (not WebKit browser)
+        shell: bash
+        timeout-minutes: 22
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-wpeplatform-aarch64-objects.sh
+          timeout 1200s bash scripts/build-wpeplatform-aarch64-objects.sh \
+            | tee "$FIRE4NIX_BUILD_WORK/wpeplatform-console.log"
+          grep -Fxq 'WPEPLATFORM_OBJECT_TEST=PASS_REAL_AARCH64_OBJECTS' \
+            "$FIRE4NIX_BUILD_WORK/reports/WPEPLATFORM-REAL-ARM64-OBJECTS.txt"
+          {
+            echo '## Real WPEPlatform objects compiled on Ubuntu ARM64'
+            cat "$FIRE4NIX_BUILD_WORK/reports/WPEPLATFORM-REAL-ARM64-OBJECTS.txt"
+            echo '**No WebKit engine linked; not a ROCKNIX runnable browser.**'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Save diagnostic build logs and ELF audit report only
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,5 +109,6 @@ jobs:
             /tmp/fire4nix-real-arm64-deps/reports/
             /tmp/fire4nix-real-arm64-deps/build-console.log
             /tmp/fire4nix-real-arm64-deps/wpe-configure-console.log
+            /tmp/fire4nix-real-arm64-deps/wpeplatform-console.log
           retention-days: 14
           if-no-files-found: warn
