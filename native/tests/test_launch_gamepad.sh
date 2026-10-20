@@ -10,6 +10,8 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 mkdir -p "$T/install/bin" "$T/install/config" "$T/install/runtime/libexec/wpe-webkit-2.0" "$T/install/runtime/lib" "$T/logs"
+mkdir -p "$T/install/www"
+cp "$source_dir/installer/www/primeiro-teste-r36h.html" "$T/install/www/primeiro-teste-r36h.html"
 cp "$source_dir/installer/Fire4Nix-Iniciar.sh" "$T/install/Fire4Nix-Iniciar.sh"
 cp "$source_dir/installer/config/fire4nix.gptk" "$T/install/config/fire4nix.gptk"
 # CI runs on an ARM64 host; compile a real ELF shared-object header for
@@ -22,6 +24,7 @@ done
 cat > "$T/install/bin/fire4nix-native-aarch64" <<'BROWSER'
 #!/bin/sh
 printf 'browser_start\n' >> "$FIRE4NIX_TEST_LOG"
+printf 'browser_url=%s\n' "${1:-none}" >> "$FIRE4NIX_TEST_LOG"
 printf 'gpu_afbc=%s\n' "${MALI_WAYLAND_AFBC:-unset}" >> "$FIRE4NIX_TEST_LOG"
 sleep 1
 printf 'browser_exit\n' >> "$FIRE4NIX_TEST_LOG"
@@ -37,7 +40,7 @@ GAMEPAD
 chmod +x "$T/gptokeyb"
 
 # A socket is checked by the launcher; a test stub suffices because the browser is mocked.
-python3 -c 'import socket,sys,time; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(12)' "$T/wayland-test" &
+python3 -c 'import socket,sys,time; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(45)' "$T/wayland-test" &
 socket_pid=$!
 i=0
 while [ ! -S "$T/wayland-test" ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
@@ -140,5 +143,38 @@ blocked=$?
 set -e
 test "$blocked" -eq 65
 grep -q 'runtime_gstreamer_status=BLOCKED_GST_CAT_DEFAULT' "$T/gst-block.log"
+test ! -s "$T/actions"
+# Fixed local first-test mode must use only a packaged offline file:// URL.
+rm -f "$T/install/runtime/lib/libgstvideo-1.0.so.0"
+: > "$T/actions"
+env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --first-offline-test >/dev/null
+grep -Fxq "browser_url=file://$T/install/www/primeiro-teste-r36h.html" "$T/actions"
+# Explicitly prevent a remote URL from being injected into the offline mode.
+: > "$T/actions"
+set +e
+env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --first-offline-test https://example.invalid \
+  > "$T/blocked-remote.log" 2>&1
+rc=$?
+set -e
+test "$rc" -eq 2
+test ! -s "$T/actions"
+# Missing offline fixture must fail closed before launching any executable.
+mv "$T/install/www/primeiro-teste-r36h.html" "$T/fixture-hidden"
+: > "$T/actions"
+set +e
+env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --first-offline-test \
+  > "$T/missing-offline.log" 2>&1
+rc=$?
+set -e
+test "$rc" -eq 66
 test ! -s "$T/actions"
 echo "PASS: gamepad lifecycle, failure detection, preflights, unique diagnostics and opt-out"
