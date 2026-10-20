@@ -6,6 +6,7 @@ on:
       - 'scripts/build-aarch64-dependencies-smoke.sh'
       - 'scripts/configure-aarch64-wpe-2541-smoke.sh'
       - 'scripts/build-wpeplatform-aarch64-objects.sh'
+      - 'native/tests/test_wpeplatform_target_discovery.sh'
       - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
       - '.github/workflows/r36h-first-real-arm64-deps.yml'
   workflow_dispatch:
@@ -37,6 +38,7 @@ jobs:
           test "$(uname -m)" = aarch64
           bash -n scripts/build-aarch64-dependencies-smoke.sh
           bash scripts/build-aarch64-dependencies-smoke.sh --plan
+          bash native/tests/test_wpeplatform_target_discovery.sh
           echo "ARCH=$(uname -m)" >> "$GITHUB_STEP_SUMMARY"
           echo "NOTE: Ubuntu ARM64 build smoke, NOT a matching ROCKNIX SDK." >> "$GITHUB_STEP_SUMMARY"
 

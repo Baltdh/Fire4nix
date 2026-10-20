@@ -12,11 +12,14 @@ report="$work/reports/WPEPLATFORM-REAL-ARM64-OBJECTS.txt"
 mkdir -p "$work/reports"
 FIRE4NIX_WPE_BUILD_DIR="$work/wpe-cmake" FIRE4NIX_MEDIA_PROFILE=minimal \
   sh "$repo/rocknix-integration/verify-wpe-media-cache.sh" --check
-ninja -C "$work/wpe-cmake" -t targets all | grep -Eq '^WPEPlatform: phony$|^WPEPlatform:.*' || {
-  echo 'ERROR: upstream WPEPlatform target missing' >&2; exit 5
-}
+# Consume the complete Ninja output before searching. grep -q in a pipe can
+# close early and make Ninja fail with SIGPIPE under pipefail on large graphs.
+targets="$work/reports/wpeplatform-ninja-targets.txt"
+if ! ninja -C "$work/wpe-cmake" -t targets all > "$targets"; then
+  echo 'ERROR: could not enumerate Ninja targets' >&2; exit 5
+fi
 for target in WPEPlatform WPEPlatformWayland WPEPlatformHeadless; do
-  if ! ninja -C "$work/wpe-cmake" -t targets all | grep -Eq "^$target: phony$|^$target:"; then
+  if ! grep -Eq "^$target:" "$targets"; then
     echo "ERROR: missing $target build target" >&2; exit 5
   fi
 done
