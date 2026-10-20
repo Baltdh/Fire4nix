@@ -1,0 +1,79 @@
+name: Fire4Nix first real ARM64 dependency build (not ROCKNIX runtime)
+
+on:
+  push:
+    paths:
+      - 'scripts/build-aarch64-dependencies-smoke.sh'
+      - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
+      - '.github/workflows/r36h-first-real-arm64-deps.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fire4nix-real-arm64-deps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-real-arm64-dependencies:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 65
+    env:
+      FIRE4NIX_BUILD_WORK: ${{ runner.temp }}/fire4nix-real-arm64-deps
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Checkout pinned Fire4Nix branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate that this is native ARM64 and that scripts parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          bash -n scripts/build-aarch64-dependencies-smoke.sh
+          bash scripts/build-aarch64-dependencies-smoke.sh --plan
+          echo "ARCH=$(uname -m)" >> "$GITHUB_STEP_SUMMARY"
+          echo "NOTE: Ubuntu ARM64 build smoke, NOT a matching ROCKNIX SDK." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install native ARM64 library build requirements
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential autoconf automake libtool meson ninja-build \
+            pkg-config curl ca-certificates gettext python3 python3-packaging \
+            libglib2.0-dev libgnutls28-dev libicu-dev libnghttp2-dev \
+            libsqlite3-dev libbrotli-dev zlib1g-dev libssl-dev \
+            libxml2-dev libgcrypt20-dev libtasn1-6-dev
+
+      - name: Compile real native ARM64 Soup3/TLS/PSL/ASN1 prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$FIRE4NIX_BUILD_WORK"
+          bash scripts/build-aarch64-dependencies-smoke.sh --build \
+            | tee "$FIRE4NIX_BUILD_WORK/build-console.log"
+          grep -Fqx 'ELF_AUDIT_STATUS=ALL_REAL_FILES_AARCH64_GLIBC_AT_MOST_2_41' \
+            "$FIRE4NIX_BUILD_WORK/reports/ARM64-REAL-DEPENDENCIES.txt"
+          echo '## Build result' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Four real libraries compiled on Ubuntu ARM64; ELF headers and GLIBC requirements checked.' \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo 'Offline GIO GnuTLS + libsoup session probe passed. No R36H firmware touched.' \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo '**Not a ROCKNIX SDK build; Ubuntu binaries must NOT be copied to R36H.**' \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save diagnostic build logs and ELF audit report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-real-ARM64-prerequisite-build-diagnostics
+          path: |
+            ${{ runner.temp }}/fire4nix-real-arm64-deps/reports/
+            ${{ runner.temp }}/fire4nix-real-arm64-deps/build-console.log
+          retention-days: 14
+          if-no-files-found: warn
