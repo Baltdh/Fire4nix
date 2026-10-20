@@ -93,6 +93,32 @@ done
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
   cp -a "$CHILDROOT/$p" "$TEMP/libexec/wpe-webkit-2.0/$p"
 done
+# Reject broken GStreamer ELF before committing a runtime. The R36H rescue
+# package showed GST_CAT_DEFAULT as undefined in six gst* libraries, and
+# the target system's libgstreamer does not export it. This is a static guard;
+# external dependencies still need target-rootfs testing.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+AUDITOR="$SCRIPT_DIR/audit-wpe-gstreamer.sh"
+[ -f "$AUDITOR" ] || { echo 'ERROR: GStreamer ABI auditor missing alongside staging script' >&2; exit 5; }
+if ! FIRE4NIX_GST_REPORT="$TEMP/GSTREAMER-ABI-REPORT.txt" sh "$AUDITOR" --strict "$TEMP" >/dev/null; then
+  cat "$TEMP/GSTREAMER-ABI-REPORT.txt" >&2
+  echo 'ERROR: packaged GStreamer ELF has unresolved GST_CAT_DEFAULT; refuse runtime' >&2
+  exit 5
+fi
+# The first browser profile is intentionally built with USE_GSTREAMER=OFF.
+# Validate DT_NEEDED of all staged ELF, not just presence of libgst files.
+# Profiles/flags can be ignored by a misconfigured SDK or stale build dir.
+if [ "${FIRE4NIX_REQUIRE_MEDIA_FREE:-0}" = 1 ]; then
+  for media_elf in "$TEMP/lib/"*.so "$TEMP/lib/"*.so.* "$TEMP/libexec/wpe-webkit-2.0/"*; do
+    [ -f "$media_elf" ] || continue
+    [ -L "$media_elf" ] && continue
+    if readelf -d "$media_elf" 2>/dev/null | grep -E 'Shared library: \[libgst[^]]*\]' >/dev/null; then
+      echo "ERROR: media-free build still links GStreamer: $(basename "$media_elf")" >&2
+      exit 5
+    fi
+  done
+  echo 'PROFILE=MEDIA_FREE VERIFIED' > "$TEMP/MEDIA-PROFILE.txt"
+fi
 # Refuse broken or external SONAME links. Symlinks must resolve within lib.
 for lib in "$TEMP/lib/"*.so*; do
   [ -L "$lib" ] || continue
