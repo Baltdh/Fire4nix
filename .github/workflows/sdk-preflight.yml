@@ -1,0 +1,26 @@
+name: Fire4Nix WPE SDK sysroot preflight
+on:
+  push:
+    paths:
+      - 'rocknix-integration/check-rocknix-sdk.sh'
+      - 'rocknix-integration/build-wpe-2.54.1.sh'
+      - 'native/tests/test_sdk_preflight.sh'
+      - '.github/workflows/sdk-preflight.yml'
+  pull_request:
+    paths:
+      - 'rocknix-integration/check-rocknix-sdk.sh'
+      - 'rocknix-integration/build-wpe-2.54.1.sh'
+      - 'native/tests/test_sdk_preflight.sh'
+      - '.github/workflows/sdk-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight-mock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh -n rocknix-integration/check-rocknix-sdk.sh
+      - run: sh -n rocknix-integration/build-wpe-2.54.1.sh
+      - run: sh -n native/tests/test_sdk_preflight.sh
+      - run: sh native/tests/test_sdk_preflight.sh
