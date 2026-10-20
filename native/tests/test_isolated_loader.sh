@@ -7,7 +7,8 @@ trap 'rm -rf "$T"' 0
 APP="$T/my Fire4Nix"
 mkdir -p "$APP/bin" "$APP/runtime/lib" "$APP/runtime/libexec/wpe-webkit-2.0" "$T/logs" "$T/reports" "$T/foreign"
 cp "$HERE/installer/Fire4Nix-Iniciar.sh" "$APP/Fire4Nix-Iniciar.sh"
-printf 'mock webkit\n' > "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
+# CI runs on real ARM64; mock the WebKit shared-object ELF header.
+printf 'int dummy_webkit(void){return 1;}\n' | cc -shared -fPIC -x c - -o "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
 printf 'mock EGL\n' > "$APP/runtime/lib/libEGL.so.1"
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
   printf 'mock process\n' > "$APP/runtime/libexec/wpe-webkit-2.0/$p"
@@ -30,8 +31,8 @@ status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib" "$T/observed"
-grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs/"*.log
-grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs/"*.log
+grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs"/Fire4Nix-*
+grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs"/Fire4Nix-*
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
   echo 'FAIL: inherited foreign runtime leaked into isolated mode' >&2; exit 1
 fi
@@ -50,8 +51,8 @@ compat_rc=$?
 set -e
 test "$compat_rc" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/compat-xml:$T/compat-gl" "$T/observed"
-grep -q "rocknix_compat_provider=$T/compat-xml/libxml2.so.2" "$T/logs/"*.log
-grep -q "rocknix_compat_provider=$T/compat-gl/libGL.so.1" "$T/logs/"*.log
+grep -q "rocknix_compat_provider=$T/compat-xml/libxml2.so.2" "$T/logs"/Fire4Nix-*
+grep -q "rocknix_compat_provider=$T/compat-gl/libGL.so.1" "$T/logs"/Fire4Nix-*
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
   echo 'FAIL: unrelated LD_LIBRARY_PATH inherited' >&2; exit 1
 fi
@@ -64,7 +65,7 @@ status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/foreign" "$T/observed"
-grep -q 'library_path_mode=compat_inherited' "$T/logs/"*.log
+grep -q 'library_path_mode=compat_inherited' "$T/logs"/Fire4Nix-*
 : > "$T/observed"
 FIRE4NIX_ROOT="$APP" FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
   sh "$HERE/installer/Fire4Nix-Investigar-139.sh" --safe > "$T/safe.txt"

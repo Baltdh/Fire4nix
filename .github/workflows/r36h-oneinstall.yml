@@ -18,6 +18,7 @@ on:
       - 'native/tests/test_wpe_gstreamer_guard.sh'
       - 'native/tests/test_wpe_dependency_audit.sh'
       - 'native/tests/test_r36h_safe_probe.sh'
+      - 'native/tests/test_wpe_cmake_cache_gate.sh'
       - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
       - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
@@ -59,6 +60,7 @@ jobs:
           cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
           cp rocknix-integration/check-rocknix-sdk.sh out/check-rocknix-sdk.sh
           cp rocknix-integration/check-rocknix-compiler.sh out/check-rocknix-compiler.sh
+          cp rocknix-integration/verify-wpe-media-cache.sh out/verify-wpe-media-cache.sh
           cp rocknix-integration/stage-wpe-runtime.sh out/Empacotar-WPE-ROCKNIX.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/audit-wpe-gstreamer.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/Fire4Nix-Auditar-GStreamer.sh
@@ -156,6 +158,7 @@ jobs:
           sh native/tests/test_isolated_loader.sh
           sh native/tests/test_elf_guard.sh
           sh native/tests/test_wpe_gstreamer_guard.sh
+          sh native/tests/test_wpe_cmake_cache_gate.sh
           sh native/tests/test_wpe_dependency_audit.sh
           sh native/tests/test_r36h_safe_probe.sh
           sh -n out/Fire4Nix-Auditar-GStreamer.sh
@@ -227,13 +230,16 @@ jobs:
           missing_status=$?
           set -e
           test "$missing_status" -eq 127
-          grep -q 'Missing local WPE WebKit runtime' "$t/logs/"*.log
-          grep -q 'fire4nix_exit_code=127' "$t/logs/"*.log
+          grep -q 'Missing local WPE WebKit runtime' "$t/logs"/Fire4Nix-*
+          grep -q 'fire4nix_exit_code=127' "$t/logs"/Fire4Nix-*
           FIRE4NIX_DIAGNOSTIC_OUT="$t/diagnostic.txt" sh "$t/pkg/Diagnosticar-Fire4Nix.sh"
           grep -q 'WPE_library=missing' "$t/diagnostic.txt"
           grep -q 'WPEPlatform_preflight_exit=127' "$t/diagnostic.txt"
           mkdir -p "$t/roms/tools/Fire4Nix/runtime/lib" "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0"
-          printf 'dummy-webkit-library' > "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+          # The installer now statically rejects garbage, even if it is >0 bytes.
+          # Build an actual ARM64 ELF fixture for this migration test only.
+          printf 'void mock_wpe(void) {}\n' |
+            cc -shared -fPIC -x c - -o "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
           for bin in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
             printf 'dummy' > "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$bin"
           done

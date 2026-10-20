@@ -72,6 +72,15 @@ for path in "${FIRE4NIX_RUNTIME_SOURCE:-}" \
         echo "Skipping incomplete WebKit runtime: $path"
         continue
     fi
+    # Never dynamically inspect a candidate with a broken or foreign ELF:
+    # R36H field logs showed a full-size (174006016-byte) unreadable WebKit.
+    # The old installer's --check-platform used dlopen before validating bytes.
+    if ! command -v readelf >/dev/null 2>&1 ||
+       ! readelf -h "$path/lib/libWPEWebKit-2.0.so.1" 2>/dev/null |
+            grep -q 'Machine:.*AArch64'; then
+        echo "Skipping incompatible WebKit runtime (invalid ELF or readelf missing): $path"
+        continue
+    fi
     echo "Checking WebKit WPEPlatform compatibility: $path"
     if LD_LIBRARY_PATH="$path/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
        WEBKIT_EXEC_PATH="$path/libexec/wpe-webkit-2.0" \

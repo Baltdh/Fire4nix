@@ -76,6 +76,10 @@ COMPILER_PROBE="$SCRIPT_DIR/check-rocknix-compiler.sh"
   exit 4
 }
 sh "$COMPILER_PROBE" --check || exit 4
+# The observed R36H WPE links nine GST modules. Stop if upstream CMake
+# silently ignores our media-free -D options; names alone are not proof.
+MEDIA_GATE="$SCRIPT_DIR/verify-wpe-media-cache.sh"
+[ -f "$MEDIA_GATE" ] || { echo 'ERROR: WPE media cache verification script missing' >&2; exit 4; }
 if [ "$mode" = --probe-compiler ]; then
   echo 'status=COMPILER_VERIFIED_NO_WEBKIT_BUILD'
   exit 0
@@ -128,6 +132,11 @@ if [ "$mode" = --configure ]; then
     -DENABLE_INTROSPECTION=OFF \
     -DENABLE_DOCUMENTATION=OFF \
     "$@"
+  FIRE4NIX_WPE_BUILD_DIR="$BUILD" FIRE4NIX_MEDIA_PROFILE="$MEDIA_PROFILE" \
+    sh "$MEDIA_GATE" --check || {
+      echo 'ERROR: CMake did not honor GStreamer-free configuration; refusing WPE build' >&2
+      exit 5
+    }
   # A later --build/--stage must not silently use a different media profile.
   printf '%s\n' "$MEDIA_PROFILE" > "$BUILD/fire4nix-media-profile.txt"
 else
@@ -139,6 +148,11 @@ else
     echo 'ERROR: configure again to record a verifiable media profile' >&2
     exit 5
   }
+  FIRE4NIX_WPE_BUILD_DIR="$BUILD" FIRE4NIX_MEDIA_PROFILE="$MEDIA_PROFILE" \
+    sh "$MEDIA_GATE" --check || {
+      echo 'ERROR: cached WPE media options changed since configuration' >&2
+      exit 5
+    }
   configured_profile=$(cat "$BUILD/fire4nix-media-profile.txt")
   [ "$configured_profile" = "$MEDIA_PROFILE" ] || {
     echo "ERROR: configured media_profile=$configured_profile, requested=$MEDIA_PROFILE; do not mix outputs" >&2

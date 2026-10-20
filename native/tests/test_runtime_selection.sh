@@ -24,7 +24,9 @@ for name in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
  echo dummy > "$T/roms/ports/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$name"
 done
 printf 'old-incompatible-lib' > "$T/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
-printf 'working-new-lib' > "$T/roms/ports/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+# The selection must use a genuine AArch64 ELF mock, not arbitrary text.
+printf 'const char *wpe_marker = "working-new-lib";\n' |
+  cc -x c -shared -fPIC -o "$T/roms/ports/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -
 FIRE4NIX_ROMS="$T/roms" sh "$T/pkg/Instalar-Fire4Nix-Uma-Vez.sh" > "$T/install.log"
 grep -q 'Skipping incompatible WebKit runtime' "$T/install.log"
 grep -q 'Selected compatible WebKit runtime:' "$T/install.log"
@@ -33,7 +35,8 @@ grep -q 'working-new-lib' "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWeb
 # even if every single script and launcher byte remains unchanged.
 mkdir -p "$T/pkg/Fire4Nix/runtime/lib" "$T/pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0"
 cp -a "$T/roms/ports/Fire4Nix/runtime/." "$T/pkg/Fire4Nix/runtime/"
-printf 'new-bundled-WPE' > "$T/pkg/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+printf 'const char *wpe_marker = "new-bundled-WPE";\n' |
+  cc -x c -shared -fPIC -o "$T/pkg/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1" -
 FIRE4NIX_ROMS="$T/roms" sh "$T/pkg/Instalar-Fire4Nix-Uma-Vez.sh" > "$T/upgrade.log"
 grep -q 'new-bundled-WPE' "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
 ! grep -q 'already installed' "$T/upgrade.log"
