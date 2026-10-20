@@ -9,7 +9,7 @@ if ! mkdir -p "$LOG_DIR" 2>/dev/null || [ ! -w "$LOG_DIR" ]; then
 fi
 # mktemp avoids collisions between simultaneous sessions without relying on
 # process-ID expansion or synchronized handheld clocks.
-LOG=$(mktemp "$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-XXXXXX.log") || {
+LOG=$(mktemp "$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-XXXXXX") || {
     echo "Fire4Nix: unable to allocate unique diagnostic log" >&2
     exit 73
 }
@@ -95,7 +95,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=1.05\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=1.16\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest)
@@ -114,6 +114,29 @@ fi
 LIB="$ROOT/runtime/lib/libWPEWebKit-2.0.so.1"
 CHILD="$ROOT/runtime/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing local WPE WebKit runtime"
+# Read-only ELF preflight. A full-size file is NOT necessarily a valid ELF:
+# the recovered R36H runtime measured 174006016 bytes but readelf rejected it.
+# Never call dlopen() on a known invalid or foreign-architecture library.
+if ! command -v readelf >/dev/null 2>&1; then
+    printf 'runtime_elf_status=NOT_CHECKED_READELF_MISSING\n' >> "$LOG"
+    fail 65 "Cannot verify WPE library ELF: readelf unavailable"
+fi
+if ! readelf -h "$LIB" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
+    printf 'runtime_elf_status=INVALID_OR_NOT_AARCH64\n' >> "$LOG"
+    fail 65 "Invalid WebKit ELF (or wrong architecture); refusing unsafe launch"
+fi
+printf 'runtime_elf_status=VALID_AARCH64_HEADER\n' >> "$LOG"
+# The old recovery had six libgst* libraries referencing an unresolved
+# GST_CAT_DEFAULT. Statically reject these without triggering the loader.
+for gst_name in video app audio gl pbutils tag; do
+    gst_lib="$ROOT/runtime/lib/libgst${gst_name}-1.0.so.0"
+    [ -f "$gst_lib" ] || continue
+    if readelf --dyn-syms -W "$gst_lib" 2>/dev/null |
+        grep -Eq 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)'; then
+        printf 'runtime_gstreamer_status=BLOCKED_GST_CAT_DEFAULT library=%s\n' "$gst_lib" >> "$LOG"
+        fail 65 "Broken GStreamer ABI in libgst${gst_name}; refusing unsafe launch"
+    fi
+done
 for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
     [ -s "$CHILD/$child" ] || fail 127 "Missing WebKit subprocess: $child"
 done
