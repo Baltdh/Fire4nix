@@ -227,8 +227,8 @@ jobs:
           missing_status=$?
           set -e
           test "$missing_status" -eq 127
-          grep -q 'Missing local WPE WebKit runtime' "$t/logs/"*.log
-          grep -q 'fire4nix_exit_code=127' "$t/logs/"*.log
+          grep -q 'Missing local WPE WebKit runtime' "$t/logs"/Fire4Nix-*
+          grep -q 'fire4nix_exit_code=127' "$t/logs"/Fire4Nix-*
           FIRE4NIX_DIAGNOSTIC_OUT="$t/diagnostic.txt" sh "$t/pkg/Diagnosticar-Fire4Nix.sh"
           grep -q 'WPE_library=missing' "$t/diagnostic.txt"
           grep -q 'WPEPlatform_preflight_exit=127' "$t/diagnostic.txt"
