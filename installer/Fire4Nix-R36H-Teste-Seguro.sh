@@ -10,7 +10,9 @@ esac
 umask 077
 TMPBASE=${FIRE4NIX_SAFE_TMPDIR:-${TMPDIR:-/tmp}}
 [ -d "$TMPBASE" ] && [ -w "$TMPBASE" ] || { echo 'ERROR: no writable temporary directory (no SD fallback)' >&2; exit 73; }
-REPORT=$(mktemp "$TMPBASE/Fire4Nix-Seguro-XXXXXX.txt") || exit 73
+# BusyBox mktemp (ROCKNIX) rejects filename suffixes after the XXXXXX template.
+# Keep the random Xs at the end; never fall back to a potentially corrupt SD.
+REPORT=$(mktemp "$TMPBASE/Fire4Nix-Seguro-XXXXXX") || exit 73
 log() { printf '%s\n' "$*" >> "$REPORT"; }
 log 'FIRE4NIX_R36H_TESTE=1.15'
 log 'test_mode=STATIC_READ_ONLY'
