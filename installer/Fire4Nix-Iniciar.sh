@@ -91,7 +91,7 @@ fail() {
     exit "$code"
 }
 # At most 12 log files; never delete the stable last-result copy in /storage.
-ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
+ls -1t "$LOG_DIR"/Fire4Nix-[0-9]*-?????? 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
