@@ -7,8 +7,8 @@ VERSION=2.54.1
 SOURCE_SHA256=0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9
 mode=${1:---plan}
 case "$mode" in
-  --plan|--preflight|--configure|--build|--stage) ;;
-  *) echo "Usage: $0 [--plan|--preflight|--configure|--build|--stage]" >&2; exit 2 ;;
+  --plan|--preflight|--probe-compiler|--configure|--build|--stage) ;;
+  *) echo "Usage: $0 [--plan|--preflight|--probe-compiler|--configure|--build|--stage]" >&2; exit 2 ;;
 esac
 
 # Match the device rootfs, not just the CPU. The tested R36H reports glibc 2.41,
@@ -58,6 +58,18 @@ fi
   echo "ERROR: ROCKNIX cross-toolchain CMake file required; no host fallback" >&2
   exit 4
 }
+# Probe the actual cross compiler, not just the SDK directory it claims to use.
+# The test compiles tiny C/C++ executables without running them on the host.
+COMPILER_PROBE="$SCRIPT_DIR/check-rocknix-compiler.sh"
+[ -f "$COMPILER_PROBE" ] || {
+  echo 'ERROR: compiler preflight script missing beside WPE build recipe' >&2
+  exit 4
+}
+sh "$COMPILER_PROBE" --check || exit 4
+if [ "$mode" = --probe-compiler ]; then
+  echo 'status=COMPILER_VERIFIED_NO_WEBKIT_BUILD'
+  exit 0
+fi
 # Fail before CMake spends hours on a host or mismatched target sysroot.
 # This is not a proof of a working toolchain or actual WPE runtime.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
