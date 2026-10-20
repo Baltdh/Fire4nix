@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix: read-only ELF dependency selection report (no ldd, dlopen or execution).
+# Fire4Nix v1.11: read-only ELF dependency selection report (no ldd, dlopen or execution).
 # sh inspect-wpe-dependencies.sh [--audit|--strict] [runtime/aarch64]
 set -u
 MODE=${1:---audit}
@@ -22,7 +22,7 @@ trap 'rm -f "$TMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 : > "$TMP" || exit 2
-missing=0; malformed=0; total=0; suspicious=0
+missing=0; blocked=0; malformed=0; total=0; suspicious=0
 needed_list() {
   readelf -d "$1" 2>/dev/null | awk '/\(NEEDED\)/ { gsub(/^.*Shared library: \[/,""); gsub(/\].*$/,""); print }'
 }
@@ -32,36 +32,51 @@ valid_elf() {
 # Examine candidates in recommended order without dlopen; log unusable stubs.
 resolve() {
   dep=$1
+  # A NEEDED name containing a slash is interpreted as a pathname, not
+  # resolved from the regular SONAME directories.
+  case "$dep" in */*)
+    printf '  UNSUPPORTED_NEEDED_WITH_SLASH=%s\n' "$dep" >> "$TMP"
+    blocked=$((blocked+1))
+    return 0 ;;
+  esac
   selected=''
+  invalid=''
+  saved_ifs=$IFS
   IFS=:
   for searchdir in "$LIB" $SYSPATH; do
     [ -n "$searchdir" ] || continue
     candidate=$searchdir/$dep
     if [ -e "$candidate" ] || [ -L "$candidate" ]; then
-      if valid_elf "$candidate"; then
-        selected=$candidate
-        break
-      fi
-      printf '  REJECT_CANDIDATE=%s\n' "$candidate" >> "$TMP"
+      # A bad earlier ELF can be fatal (file too short, exit 127). Never
+      # silently skip it in favor of a later directory's usable candidate.
+      if valid_elf "$candidate"; then selected=$candidate
+      else invalid=$candidate; fi
+      break
     fi
   done
-  unset IFS
-  if [ -n "$selected" ]; then printf '  RESOLVED=%s -> %s\n' "$dep" "$selected" >> "$TMP"
+  IFS=$saved_ifs
+  if [ -n "$invalid" ]; then
+    printf '  BLOCKED_FIRST_CANDIDATE=%s -> %s\n' "$dep" "$invalid" >> "$TMP"
+    blocked=$((blocked+1))
+  elif [ -n "$selected" ]; then
+    printf '  RESOLVED=%s -> %s\n' "$dep" "$selected" >> "$TMP"
   else
     printf '  MISSING_OR_INCOMPATIBLE=%s\n' "$dep" >> "$TMP"
     missing=$((missing+1))
   fi
 }
 {
-  echo 'Fire4Nix WPE dependency audit v2: STATIC ONLY'
+  echo 'Fire4Nix WPE dependency audit v1.11: STATIC ONLY'
   echo "mode=$MODE"
   echo "runtime=$ROOT"
   echo "expected_machine=$MACHINE"
   echo "model_system_search_dirs=$SYSPATH"
-  echo 'note=runtime_loader_may_choose_differently_due_to_RPATH_RUNPATH_LD_LIBRARY_PATH'
+  echo 'note=runtime_loader_may_choose_differently_due_to_RPATH_RUNPATH_LD_LIBRARY_PATH_CACHE_ORIGIN'
   echo 'note=ELF_presence_does_not_establish_symbol_or_ABI_compatibility'
 } >> "$TMP"
-for elf in "$LIB"/*.so "$LIB"/*.so.* "$ROOT"/libexec/wpe-webkit-2.0/*; do
+for elf in "$LIB"/*.so "$LIB"/*.so.* "$ROOT"/libexec/wpe-webkit-2.0/* \
+           "$LIB"/wpe-webkit-2.0/injected-bundle/*.so \
+           "$LIB"/wpe-webkit-2.0/injected-bundle/*.so.*; do
   [ -f "$elf" ] || continue
   [ -L "$elf" ] && continue
   total=$((total+1))
@@ -72,7 +87,7 @@ for elf in "$LIB"/*.so "$LIB"/*.so.* "$ROOT"/libexec/wpe-webkit-2.0/*; do
     continue
   fi
   readelf -d "$elf" 2>/dev/null | grep -E '\((SONAME|RPATH|RUNPATH)\)' >> "$TMP" || true
-  if readelf --dyn-syms -W "$elf" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT([[:space:]]|$)' >/dev/null; then
+  if readelf --dyn-syms -W "$elf" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
     printf 'UNRESOLVED_REFERENCE_GST_CAT_DEFAULT=%s\n' "$elf" >> "$TMP"
     suspicious=$((suspicious+1))
   fi
@@ -90,9 +105,10 @@ done
   echo "elf_files_scanned=$total"
   echo "invalid_elf_or_machine=$malformed"
   echo "missing_or_incompatible_needed=$missing"
+  echo "blocked_first_candidate=$blocked"
   echo "libraries_with_undefined_GST_CAT_DEFAULT=$suspicious"
   if [ "$total" -eq 0 ]; then echo 'status=NO_ELF_FOUND'
-  elif [ "$malformed" -ne 0 ] || [ "$missing" -ne 0 ]; then echo 'status=BLOCK_INCOMPLETE_DEPENDENCIES'
+  elif [ "$malformed" -ne 0 ] || [ "$missing" -ne 0 ] || [ "$blocked" -ne 0 ]; then echo 'status=BLOCK_INCOMPLETE_DEPENDENCIES'
   elif [ "$suspicious" -ne 0 ]; then echo 'status=REVIEW_GST_SYMBOL_ABI'
   else echo 'status=STATIC_DEPENDENCIES_FOUND_NOT_EXECUTION_VERIFIED'; fi
   echo 'runtime_executed=no'
@@ -101,5 +117,5 @@ done
 mv "$TMP" "$REPORT" || exit 2
 cat "$REPORT"
 printf 'REPORT=%s\n' "$REPORT"
-if [ "$MODE" = --strict ] && { [ "$malformed" -ne 0 ] || [ "$missing" -ne 0 ] || [ "$suspicious" -ne 0 ] || [ "$total" -eq 0 ]; }; then exit 6; fi
+if [ "$MODE" = --strict ] && { [ "$malformed" -ne 0 ] || [ "$missing" -ne 0 ] || [ "$blocked" -ne 0 ] || [ "$suspicious" -ne 0 ] || [ "$total" -eq 0 ]; }; then exit 6; fi
 exit 0
