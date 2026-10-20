@@ -100,9 +100,20 @@ if [ "$mode" = --configure ]; then
     -DENABLE_WPE_LEGACY_API=OFF \
     -DENABLE_SPELLCHECK=OFF \
     "$@"
+  # A later --build/--stage must not silently use a different media profile.
+  printf '%s\n' "$MEDIA_PROFILE" > "$BUILD/fire4nix-media-profile.txt"
 else
   [ -f "$BUILD/build.ninja" ] || {
     echo 'ERROR: run --configure with the ROCKNIX SDK first' >&2
+    exit 5
+  }
+  [ -f "$BUILD/fire4nix-media-profile.txt" ] || {
+    echo 'ERROR: configure again to record a verifiable media profile' >&2
+    exit 5
+  }
+  configured_profile=$(cat "$BUILD/fire4nix-media-profile.txt")
+  [ "$configured_profile" = "$MEDIA_PROFILE" ] || {
+    echo "ERROR: configured media_profile=$configured_profile, requested=$MEDIA_PROFILE; do not mix outputs" >&2
     exit 5
   }
   if [ "$mode" = --build ]; then
