@@ -58,18 +58,6 @@ fi
   echo "ERROR: ROCKNIX cross-toolchain CMake file required; no host fallback" >&2
   exit 4
 }
-# Probe the actual cross compiler, not just the SDK directory it claims to use.
-# The test compiles tiny C/C++ executables without running them on the host.
-COMPILER_PROBE="$SCRIPT_DIR/check-rocknix-compiler.sh"
-[ -f "$COMPILER_PROBE" ] || {
-  echo 'ERROR: compiler preflight script missing beside WPE build recipe' >&2
-  exit 4
-}
-sh "$COMPILER_PROBE" --check || exit 4
-if [ "$mode" = --probe-compiler ]; then
-  echo 'status=COMPILER_VERIFIED_NO_WEBKIT_BUILD'
-  exit 0
-fi
 # Fail before CMake spends hours on a host or mismatched target sysroot.
 # This is not a proof of a working toolchain or actual WPE runtime.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
@@ -78,6 +66,18 @@ PREFLIGHT="$SCRIPT_DIR/check-rocknix-sdk.sh"
 sh "$PREFLIGHT" --check || exit 4
 if [ "$mode" = --preflight ]; then
   echo 'status=SDK_IDENTITY_CHECKED_NO_BUILD'
+  exit 0
+fi
+# Probe the actual cross compiler, not just the SDK directory it claims to use.
+# The test compiles tiny C/C++ executables without running them on the host.
+COMPILER_PROBE="$SCRIPT_DIR/check-rocknix-compiler.sh"
+[ -f "$COMPILER_PROBE" ] || {
+  echo 'ERROR: compiler preflight script missing beside WPE build recipe' >&2 >&2
+  exit 4
+}
+sh "$COMPILER_PROBE" --check || exit 4
+if [ "$mode" = --probe-compiler ]; then
+  echo 'status=COMPILER_VERIFIED_NO_WEBKIT_BUILD'
   exit 0
 fi
 
