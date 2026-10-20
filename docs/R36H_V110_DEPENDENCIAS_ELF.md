@@ -38,21 +38,21 @@ Relatório: `/storage/Fire4Nix-Dependencias-ELF.txt`. O modo `--audit` retorna 0
 ## Atualização 1.11 — correção do falso positivo de resolução ELF (20/10/2026)
 
 ### Defeito encontrado em 1.10
-Quando a auditoria encontrava um candidato ELF inválido em um diretório mais cedo na busca, ela continuava procurando candidatos posteriores. Isso podia registrar \`RESOLVED\` incorretamente. Um teste controlado confirmou que um symlink para \`/dev/null\` precedendo uma biblioteca ELF válida resulta em \`file too short\` e retorno 127 ao executar o loader Linux. A presença da cópia válida posterior **não** garante que ela seja utilizada.
+Quando a auditoria encontrava um candidato ELF inválido em um diretório mais cedo na busca, ela continuava procurando candidatos posteriores. Isso podia registrar `RESOLVED` incorretamente. Um teste controlado confirmou que um symlink para `/dev/null` precedendo uma biblioteca ELF válida resulta em `file too short` e retorno 127 ao executar o loader Linux. A presença da cópia válida posterior **não** garante que ela seja utilizada.
 
 ### Mudança real
-- \`inspect-wpe-dependencies.sh\`: registra \`BLOCKED_FIRST_CANDIDATE\` e bloqueia \`--strict\` (exit 6), em vez de saltar para outra biblioteca.
-- Entradas \`DT_NEEDED\` contendo \`/\` agora são marcadas como não suportadas pela aproximação de busca SONAME; não são falsamente consideradas resolvidas.
-- Analisa também \`lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so\`, presente no ZIP recuperado.
+- `inspect-wpe-dependencies.sh`: registra `BLOCKED_FIRST_CANDIDATE` e bloqueia `--strict` (exit 6), em vez de saltar para outra biblioteca.
+- Entradas `DT_NEEDED` contendo `/` agora são marcadas como não suportadas pela aproximação de busca SONAME; não são falsamente consideradas resolvidas.
+- Analisa também `lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so`, presente no ZIP recuperado.
 - Testes de regressão cobrem o primeiro ELF inválido com outro válido posteriormente, além do bundle.
-- Nenhuma alteração em \`/usr/lib\`, no navegador instalado, glibc, GL4ES ou Mali.
+- Nenhuma alteração em `/usr/lib`, no navegador instalado, glibc, GL4ES ou Mali.
 
 ### Fontes primárias consultadas
 - Linux manual do carregador dinâmico, inclusive prioridades DT_RPATH, LD_LIBRARY_PATH, DT_RUNPATH e cache: https://man7.org/linux/man-pages/man8/ld.so.8.html
-- Documentação oficial GstInfo: \`GST_CAT_DEFAULT\` é macro normalmente definido por módulo, não é uma API global de \`libgstreamer-1.0\`: https://gstreamer.freedesktop.org/documentation/gstreamer/gstinfo.html
+- Documentação oficial GstInfo: `GST_CAT_DEFAULT` é macro normalmente definido por módulo, não é uma API global de `libgstreamer-1.0`: https://gstreamer.freedesktop.org/documentation/gstreamer/gstinfo.html
 - Dependências das opções GStreamer no WebKit: https://github.com/WebKit/WebKit/blob/webkitglib/2.54/Source/cmake/GStreamerDependencies.cmake
 
 ### Implicações e pendências
-- \`--audit\` continua sendo estático, sem prova de execução, porque não simula com fidelidade total \`RPATH/RUNPATH\`, cache, \`$ORIGIN\` e dependências transitivas.
+- `--audit` continua sendo estático, sem prova de execução, porque não simula com fidelidade total `RPATH/RUNPATH`, cache, `$ORIGIN` e dependências transitivas.
 - **Não é necessário repetir** o SHA do ZIP recuperado, salvo se for alterado. Falta corrigir o WPE executável, não sua integridade.
-- Na próxima compilação WPE minimal, verificar a configuração CMake gerada e \`DT_NEEDED\` real antes de instalar em um diretório novo. A compilação cruzada não ocorreu nesta PR.
+- Na próxima compilação WPE minimal, verificar a configuração CMake gerada e `DT_NEEDED` real antes de instalar em um diretório novo. A compilação cruzada não ocorreu nesta PR.
