@@ -17,6 +17,7 @@ on:
       - 'native/tests/test_elf_guard.sh'
       - 'native/tests/test_wpe_gstreamer_guard.sh'
       - 'native/tests/test_wpe_dependency_audit.sh'
+      - 'native/tests/test_r36h_safe_probe.sh'
       - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
       - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
