@@ -56,6 +56,7 @@ jobs:
           cp installer/Habilitar-Teste-Ports.sh out/Habilitar-Teste-Ports.sh
           cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
           cp rocknix-integration/check-rocknix-sdk.sh out/check-rocknix-sdk.sh
+          cp rocknix-integration/check-rocknix-compiler.sh out/check-rocknix-compiler.sh
           cp rocknix-integration/stage-wpe-runtime.sh out/Empacotar-WPE-ROCKNIX.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/audit-wpe-gstreamer.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/Fire4Nix-Auditar-GStreamer.sh
@@ -163,7 +164,9 @@ jobs:
           sh -n out/Habilitar-Teste-Ports.sh
           sh -n out/Preparar-WPE-ROCKNIX-2.54.1.sh
           sh -n out/check-rocknix-sdk.sh
+          sh -n out/check-rocknix-compiler.sh
           test -s out/check-rocknix-sdk.sh
+          test -s out/check-rocknix-compiler.sh
           sh -n out/Empacotar-WPE-ROCKNIX.sh
           sh -n out/audit-wpe-gstreamer.sh
           sh out/Empacotar-WPE-ROCKNIX.sh --help | grep -q 'isolated ROCKNIX AArch64 DESTDIR'
