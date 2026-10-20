@@ -98,7 +98,7 @@ done
 printf 'version=1.16\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
-  --open|--smoke|--headless|--check-library|--check-platform|--selftest)
+  --open|--first-offline-test|--smoke|--headless|--check-library|--check-platform|--selftest)
     MODE=$1
     shift ;;
   --*) fail 2 "Unsupported Fire4Nix option: $1" ;;
@@ -223,7 +223,16 @@ printf 'mali_wayland_afbc=%s\n' "${MALI_WAYLAND_AFBC:-not_overridden}" >> "$LOG"
 printf 'mali_default_display=%s\n' "${MALI_DEFAULT_DISPLAY:-unconfigured}" >> "$LOG"
 printf 'wsialloc_use_gbm=%s\n' "${WSIALLOC_USE_GBM:-unconfigured}" >> "$LOG"
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
-URL=${1:-$FIRE4NIX_HOME_URL}
+if [ "$MODE" = --first-offline-test ]; then
+    [ "$#" -eq 0 ] || fail 2 "Offline hardware test does not accept external URLs"
+    OFFLINE_TEST_PAGE="$ROOT/www/primeiro-teste-r36h.html"
+    [ -s "$OFFLINE_TEST_PAGE" ] || fail 66 "Missing first-test offline HTML file"
+    URL="file://$OFFLINE_TEST_PAGE"
+    printf 'first_offline_test=enabled\nfirst_offline_url=%s\n' "$URL" >> "$LOG"
+    MODE=--open
+else
+    URL=${1:-$FIRE4NIX_HOME_URL}
+fi
 start_gamepad
 # Enable ELF loader tracing ONLY for an explicit offline preflight. Never
 # enable it during interactive browsing: verbose paths can reveal local data.
