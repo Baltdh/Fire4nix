@@ -35,6 +35,26 @@ grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs/"*.log
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
   echo 'FAIL: inherited foreign runtime leaked into isolated mode' >&2; exit 1
 fi
+# Verified ARM64 ROCKNIX compatibility providers must be appended without
+# inheriting arbitrary library paths from unrelated Ports.
+mkdir -p "$T/compat-xml" "$T/compat-gl"
+printf 'int libmock(void){return 1;}\n' | cc -shared -fPIC -x c - -o "$T/compat-xml/libxml2.so.2"
+printf 'int glmock(void){return 2;}\n' | cc -shared -fPIC -x c - -o "$T/compat-gl/libGL.so.1"
+: > "$T/observed"
+set +e
+MOCK_RESULT="$T/observed" LD_LIBRARY_PATH="$T/foreign" FIRE4NIX_GAMEPAD=0 \
+ FIRE4NIX_ROCKNIX_XML2_PATH="$T/compat-xml/libxml2.so.2" \
+ FIRE4NIX_ROCKNIX_GL_PATH="$T/compat-gl/libGL.so.1" \
+ FIRE4NIX_LOG_DIR="$T/logs" sh "$APP/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
+compat_rc=$?
+set -e
+test "$compat_rc" -eq 139
+grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/compat-xml:$T/compat-gl" "$T/observed"
+grep -q "rocknix_compat_provider=$T/compat-xml/libxml2.so.2" "$T/logs/"*.log
+grep -q "rocknix_compat_provider=$T/compat-gl/libGL.so.1" "$T/logs/"*.log
+if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
+  echo 'FAIL: unrelated LD_LIBRARY_PATH inherited' >&2; exit 1
+fi
 : > "$T/observed"
 set +e
 MOCK_RESULT="$T/observed" LD_LIBRARY_PATH="$T/foreign" FIRE4NIX_INHERIT_LIBRARY_PATH=1 \
@@ -93,4 +113,4 @@ grep -q "^native_preflight_exit=139$" "$T/split-trace.txt"
 grep -q "^crash_boundary=after_dlopen$" "$T/split-trace.txt"
 grep -Fxq "selected_runtime=$T/remote-tools" "$T/split-trace.txt"
 if grep -q "outdated-launcher-was-invoked" "$T/split-trace.txt"; then exit 1; fi
-echo 'PASS: isolated/compat library path, split native/runtime, no firmware edits, offline reports'
+echo 'PASS: isolated/verified ROCKNIX compat library path, dual SD, no firmware edits, offline reports'
