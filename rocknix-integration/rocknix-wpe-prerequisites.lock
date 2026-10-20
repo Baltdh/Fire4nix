@@ -1,0 +1,7 @@
+# Lock of upstream source archives for currently MISSING ROCKNIX 20260801 WPE prerequisites.
+# Format: package|sha256-hex|https-url. No binaries or target builds are included.
+# Origins: GNOME upstream .sha256sum, GNU release SHA256, Buildroot libpsl.hash.
+libsoup3|6891765aac3e949017945c3eaebd8cc8216df772456dc9f460976fbdb7ada234|https://download.gnome.org/sources/libsoup/3.6/libsoup-3.6.5.tar.xz
+libtasn1|1d8a444a223cc5464240777346e125de51d8e6abf0b8bac742ac84609167dc87|https://ftp.gnu.org/gnu/libtasn1/libtasn1-4.21.0.tar.gz
+glib-networking|b80e2874157cd55071f1b6710fa0b911d5ac5de106a9ee2a4c9c7bee61782f8e|https://download.gnome.org/sources/glib-networking/2.80/glib-networking-2.80.1.tar.xz
+libpsl|1dcc9ceae8b128f3c0b3f654decd0e1e891afc6ff81098f227ef260449dae208|https://github.com/rockdaboot/libpsl/releases/download/0.21.5/libpsl-0.21.5.tar.gz
