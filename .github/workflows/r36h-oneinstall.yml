@@ -69,6 +69,7 @@ jobs:
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
+          cp installer/www/primeiro-teste-r36h.html out/Fire4Nix/www/primeiro-teste-r36h.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
           Fire4Nix 1.07 R36H - localiza ELF e WebKit em cartoes/pastas diferentes.
@@ -196,6 +197,8 @@ jobs:
           sh native/tests/test_segv_stage_diagnostic.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
+          test -s out/Fire4Nix/www/primeiro-teste-r36h.html
+          python3 native/tests/test_r36h_offline_firstpaint.py
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
           grep -q 'keyboardToggle' out/Fire4Nix/www/inicio.html
           grep -q 'Espaço' out/Fire4Nix/www/inicio.html
