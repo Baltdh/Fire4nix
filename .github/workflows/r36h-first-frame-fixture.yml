@@ -1,0 +1,26 @@
+name: Fire4Nix R36H offline first-frame acceptance fixture
+
+on:
+  push:
+    paths:
+      - 'installer/www/primeiro-teste-r36h.html'
+      - 'native/tests/test_r36h_offline_firstpaint.py'
+      - '.github/workflows/r36h-first-frame-fixture.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  first-offline-page:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify offline first-frame HTML/CSS/JS test page
+        run: python3 native/tests/test_r36h_offline_firstpaint.py
+      - name: Report limitation
+        run: |
+          echo "Static 640x480 offline test page: validated." >> "$GITHUB_STEP_SUMMARY"
+          echo "This test DOES NOT render WebKit or prove hardware operation." >> "$GITHUB_STEP_SUMMARY"
