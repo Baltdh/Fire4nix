@@ -23,6 +23,25 @@ FIRE4NIX_EXPECTED_MACHINE="$MACHINE" FIRE4NIX_ABI_SYSTEM_DIRS="$T/sys" FIRE4NIX_
 grep -q '^status=STATIC_DEPENDENCIES_FOUND_NOT_EXECUTION_VERIFIED$' "$T/pass.txt"
 grep -q 'NEEDED=libexample.so.1' "$T/pass.txt"
 grep -q "RESOLVED=libexample.so.1 -> $T/sys/libexample.so.1" "$T/pass.txt"
+# Loader regression: bad first provider remains fatal even with later valid ELF.
+mkdir "$T/earlier"
+ln -s /dev/null "$T/earlier/libexample.so.1"
+set +e
+FIRE4NIX_EXPECTED_MACHINE="$MACHINE" FIRE4NIX_ABI_SYSTEM_DIRS="$T/earlier:$T/sys" FIRE4NIX_ABI_REPORT="$T/first-invalid.txt" sh "$SCRIPT" --strict "$T/runtime" > /dev/null
+first_rc=$?
+set -e
+test "$first_rc" -eq 6
+grep -q "BLOCKED_FIRST_CANDIDATE=libexample.so.1 -> $T/earlier/libexample.so.1" "$T/first-invalid.txt"
+if grep -q 'RESOLVED=libexample.so.1' "$T/first-invalid.txt"; then
+  echo 'FAIL: ignored first invalid candidate and reported second path' >&2
+  exit 1
+fi
+# The WebKit injected bundle must be covered by the static inventory.
+mkdir -p "$T/runtime/lib/wpe-webkit-2.0/injected-bundle"
+cp "$T/runtime/lib/libWPEWebKit-2.0.so.1" "$T/runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+FIRE4NIX_EXPECTED_MACHINE="$MACHINE" FIRE4NIX_ABI_SYSTEM_DIRS="$T/sys" FIRE4NIX_ABI_REPORT="$T/bundle.txt" sh "$SCRIPT" --strict "$T/runtime" > /dev/null
+grep -q 'ELF=.*libWPEInjectedBundle.so' "$T/bundle.txt"
+test "$(grep -c 'NEEDED=libexample.so.1' "$T/bundle.txt")" -eq 2
 # A character-device placeholder must never count as a working ELF.
 mv "$T/sys/libexample.so.1" "$T/sys/real-elf"
 ln -s /dev/null "$T/sys/libexample.so.1"
@@ -43,4 +62,4 @@ rc=$?
 set -e
 [ "$rc" -eq 6 ]
 grep -q 'INVALID_ELF_OR_MACHINE=' "$T/corrupt.txt"
-echo 'PASS: NEEDED resolution; reject /dev/null; detect invalid ELF; strict exit 6'
+echo 'PASS: NEEDED resolution, first invalid candidate, injected bundle, invalid ELF, strict=6'
