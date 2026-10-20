@@ -7,8 +7,8 @@ VERSION=2.54.1
 SOURCE_SHA256=0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9
 mode=${1:---plan}
 case "$mode" in
-  --plan|--configure|--build|--stage) ;;
-  *) echo "Usage: $0 [--plan|--configure|--build|--stage]" >&2; exit 2 ;;
+  --plan|--preflight|--configure|--build|--stage) ;;
+  *) echo "Usage: $0 [--plan|--preflight|--configure|--build|--stage]" >&2; exit 2 ;;
 esac
 
 # Match the device rootfs, not just the CPU. The tested R36H reports glibc 2.41,
@@ -47,9 +47,21 @@ if [ "$mode" = --plan ]; then
   echo 'To configure, set FIRE4NIX_WPE_ARCHIVE to the official tarball and'
   echo 'FIRE4NIX_ROCKNIX_TOOLCHAIN to a cross toolchain CMake file built'
   echo 'from the matching ROCKNIX release source environment.'
+  echo 'Set FIRE4NIX_ROCKNIX_SYSROOT to its absolute sysroot directory.'
+  echo 'Run --preflight to validate target libc identity before compiling.'
   echo 'Then run this script with --configure, --build and --stage.'
   echo 'Stage requires a separate ROCKNIX SDK DESTDIR and the runtime audit script.'
   echo 'No build or installation is performed by --plan.'
+  exit 0
+fi
+# Fail before CMake spends hours on a host or mismatched target sysroot.
+# This is not a proof of a working toolchain or actual WPE runtime.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
+PREFLIGHT="$SCRIPT_DIR/check-rocknix-sdk.sh"
+[ -f "$PREFLIGHT" ] || { echo 'ERROR: SDK preflight script missing beside build recipe' >&2; exit 4; }
+sh "$PREFLIGHT" --check || exit 4
+if [ "$mode" = --preflight ]; then
+  echo 'status=SDK_IDENTITY_CHECKED_NO_BUILD'
   exit 0
 fi
 [ -n "$TOOLCHAIN" ] && [ -f "$TOOLCHAIN" ] || {
