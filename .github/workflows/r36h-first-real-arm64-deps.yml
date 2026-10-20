@@ -6,6 +6,8 @@ on:
       - 'scripts/build-aarch64-dependencies-smoke.sh'
       - 'scripts/configure-aarch64-wpe-2541-smoke.sh'
       - 'scripts/build-wpeplatform-aarch64-objects.sh'
+      - 'scripts/build-jsc-aarch64-smoke.sh'
+      - 'native/tests/jsc-webkit-runtime-smoke.js'
       - 'native/tests/test_wpeplatform_target_discovery.sh'
       - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
       - '.github/workflows/r36h-first-real-arm64-deps.yml'
@@ -102,6 +104,20 @@ jobs:
             echo '**No WebKit engine linked; not a ROCKNIX runnable browser.**'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Build real JavaScriptCore and run offline JavaScript on ARM64 (not ROCKNIX)
+        shell: bash
+        timeout-minutes: 39
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-jsc-aarch64-smoke.sh
+          timeout 2200s bash scripts/build-jsc-aarch64-smoke.sh --check \
+            | tee "$FIRE4NIX_BUILD_WORK/jsc-console.log"
+          grep -Fxq 'JSC_SMOKE=PASS_REAL_ENGINE_AND_JSC_EXECUTABLE' \
+            "$FIRE4NIX_BUILD_WORK/reports/JSC-AARCH64-EXECUTION.txt"
+          echo '## Real JavaScriptCore ARM64 smoke' >> "$GITHUB_STEP_SUMMARY"
+          cat "$FIRE4NIX_BUILD_WORK/reports/JSC-AARCH64-EXECUTION.txt" >> "$GITHUB_STEP_SUMMARY"
+          echo '**Not ROCKNIX native, not a full browser.**' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Save diagnostic build logs and ELF audit report only
         if: always()
         uses: actions/upload-artifact@v4
@@ -112,5 +128,6 @@ jobs:
             /tmp/fire4nix-real-arm64-deps/build-console.log
             /tmp/fire4nix-real-arm64-deps/wpe-configure-console.log
             /tmp/fire4nix-real-arm64-deps/wpeplatform-console.log
+            /tmp/fire4nix-real-arm64-deps/jsc-console.log
           retention-days: 14
           if-no-files-found: warn
