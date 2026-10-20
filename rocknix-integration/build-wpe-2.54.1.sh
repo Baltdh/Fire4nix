@@ -54,6 +54,10 @@ if [ "$mode" = --plan ]; then
   echo 'No build or installation is performed by --plan.'
   exit 0
 fi
+[ -n "$TOOLCHAIN" ] && [ -f "$TOOLCHAIN" ] || {
+  echo "ERROR: ROCKNIX cross-toolchain CMake file required; no host fallback" >&2
+  exit 4
+}
 # Fail before CMake spends hours on a host or mismatched target sysroot.
 # This is not a proof of a working toolchain or actual WPE runtime.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
@@ -64,10 +68,7 @@ if [ "$mode" = --preflight ]; then
   echo 'status=SDK_IDENTITY_CHECKED_NO_BUILD'
   exit 0
 fi
-[ -n "$TOOLCHAIN" ] && [ -f "$TOOLCHAIN" ] || {
-  echo "ERROR: ROCKNIX cross-toolchain CMake file required; no host fallback" >&2
-  exit 4
-}
+
 command -v cmake >/dev/null 2>&1 || { echo 'ERROR: cmake missing' >&2; exit 4; }
 command -v ninja >/dev/null 2>&1 || { echo 'ERROR: ninja missing' >&2; exit 4; }
 if [ "$mode" = --configure ]; then
