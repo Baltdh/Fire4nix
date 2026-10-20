@@ -12,7 +12,10 @@ trap cleanup EXIT HUP INT TERM
 mkdir -p "$T/install/bin" "$T/install/config" "$T/install/runtime/libexec/wpe-webkit-2.0" "$T/install/runtime/lib" "$T/logs"
 cp "$source_dir/installer/Fire4Nix-Iniciar.sh" "$T/install/Fire4Nix-Iniciar.sh"
 cp "$source_dir/installer/config/fire4nix.gptk" "$T/install/config/fire4nix.gptk"
-printf 'stub-wpe' > "$T/install/runtime/lib/libWPEWebKit-2.0.so.1"
+# CI runs on an ARM64 host; compile a real ELF shared-object header for
+# the launcher guard. It is a mock and cannot browse webpages.
+printf 'void mock_webkit_symbol(void) {}\n' |
+  cc -x c -shared -fPIC -o "$T/install/runtime/lib/libWPEWebKit-2.0.so.1" -
 for part in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
   printf 'stub-child' > "$T/install/runtime/libexec/wpe-webkit-2.0/$part"
 done
@@ -105,4 +108,37 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
     sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
 after=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
 test "$after" -eq "$((before + 2))"
+# Real 2026-10-20 R36H finding: exactly 174006016 bytes can still be invalid.
+# Reject invalid ELF before executing the native launcher or starting gamepad.
+GOOD_WPE="$T/good-webkit.so"
+cp "$T/install/runtime/lib/libWPEWebKit-2.0.so.1" "$GOOD_WPE"
+printf 'not-an-ELF\n' > "$T/install/runtime/lib/libWPEWebKit-2.0.so.1"
+: > "$T/actions"
+set +e
+env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --open > "$T/invalid-elf.log" 2>&1
+blocked=$?
+set -e
+test "$blocked" -eq 65
+grep -q 'runtime_elf_status=INVALID_OR_NOT_AARCH64' "$T/invalid-elf.log"
+if grep -q 'browser_start\|gamepad_started' "$T/actions"; then
+  echo 'FAIL: attempted to launch corrupted WebKit' >&2; exit 1
+fi
+cp "$GOOD_WPE" "$T/install/runtime/lib/libWPEWebKit-2.0.so.1"
+# Guard the known real GST_CAT_DEFAULT undefined reference in libgstvideo.
+printf 'extern void *GST_CAT_DEFAULT;\nvoid *gst_mock(void) { return GST_CAT_DEFAULT; }\n' |
+  cc -x c -shared -fPIC -o "$T/install/runtime/lib/libgstvideo-1.0.so.0" -
+: > "$T/actions"
+set +e
+env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
+  FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
+  FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
+  sh "$T/install/Fire4Nix-Iniciar.sh" --open > "$T/gst-block.log" 2>&1
+blocked=$?
+set -e
+test "$blocked" -eq 65
+grep -q 'runtime_gstreamer_status=BLOCKED_GST_CAT_DEFAULT' "$T/gst-block.log"
+test ! -s "$T/actions"
 echo "PASS: gamepad lifecycle, failure detection, preflights, unique diagnostics and opt-out"
