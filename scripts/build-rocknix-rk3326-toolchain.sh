@@ -22,6 +22,30 @@ report="$GITHUB_WORKSPACE/toolchain-reports"
 mkdir -p "$report"
 printf 'ROCKNIX_SOURCE=%s\nDEVICE=RK3326\nWEBKIT_BUILT=no\n' "$expected" > "$report/status.txt"
 sh "$repo/rocknix-integration/audit-rocknix-rk3326-source.sh" --check > "$report/source-audit.txt"
+# Preserve the other agent's verified source mirror; change only its URL in the
+# disposable checkout. Upstream still verifies the original package digest.
+FIRE4NIX_7ZIP_REPORT="$report/7zip-mirror.txt" \
+  bash "$repo/scripts/verify-rocknix-7zip-mirror.sh" --check
+python3 - "$root" "$report" <<'PY'
+import pathlib, sys
+root, report = map(pathlib.Path, sys.argv[1:])
+fields = dict(line.split('=', 1) for line in (report / '7zip-mirror.txt').read_text().splitlines() if '=' in line)
+assert fields.get('SOURCE_MIRROR_STATUS') == 'PASS'
+url = fields['MIRROR_VERIFIED']
+assert url in (
+    'https://downloads.sourceforge.net/project/sevenzip/7-Zip/25.00/7z2500-src.tar.xz',
+    'https://sourceforge.net/projects/sevenzip/files/7-Zip/25.00/7z2500-src.tar.xz/download',
+    'https://master.dl.sourceforge.net/project/sevenzip/7-Zip/25.00/7z2500-src.tar.xz',
+)
+recipe = root / 'packages/compress/7-zip/package.mk'
+source = recipe.read_text()
+assert 'PKG_VERSION="25.00"' in source
+assert 'PKG_SHA256="' + fields['VERIFIED_SHA256'] + '"' in source
+old = 'PKG_URL="https://www.7-zip.org/a/7z${PKG_VERSION/./}-src.tar.xz"'
+assert source.count(old) == 1
+recipe.write_text(source.replace(old, 'PKG_URL="' + url + '"'))
+PY
+git -C "$root" diff -- packages/compress/7-zip/package.mk > "$report/7zip-url-only.patch"
 cd "$root"
 # Use upstream dependency resolution and the project GCC/glibc overrides.
 # No scripts/image, install, build_distro, flashing or target execution.

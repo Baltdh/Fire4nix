@@ -4,6 +4,7 @@ on:
     branches: ['build/rocknix-rk3326-toolchain-20261020']
     paths:
       - 'scripts/build-rocknix-rk3326-toolchain.sh'
+      - 'scripts/verify-rocknix-7zip-mirror.sh'
       - '.github/workflows/rocknix-rk3326-toolchain.yml'
   workflow_dispatch:
 permissions:
