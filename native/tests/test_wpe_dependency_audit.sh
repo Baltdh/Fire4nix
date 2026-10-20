@@ -50,7 +50,7 @@ FIRE4NIX_EXPECTED_MACHINE="$MACHINE" FIRE4NIX_ABI_SYSTEM_DIRS="$T/sys" FIRE4NIX_
 rc=$?
 set -e
 [ "$rc" -eq 6 ]
-grep -q "REJECT_CANDIDATE=$T/sys/libexample.so.1" "$T/fail.txt"
+grep -q "BLOCKED_FIRST_CANDIDATE=libexample.so.1 -> $T/sys/libexample.so.1" "$T/fail.txt"
 grep -q '^status=BLOCK_INCOMPLETE_DEPENDENCIES$' "$T/fail.txt"
 rm "$T/sys/libexample.so.1"
 ln -s real-elf "$T/sys/libexample.so.1"
