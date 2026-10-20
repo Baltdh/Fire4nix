@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 65
     env:
-      FIRE4NIX_BUILD_WORK: ${{ runner.temp }}/fire4nix-real-arm64-deps
+      FIRE4NIX_BUILD_WORK: /tmp/fire4nix-real-arm64-deps
       DEBIAN_FRONTEND: noninteractive
     steps:
       - name: Checkout pinned Fire4Nix branch
@@ -73,7 +73,7 @@ jobs:
         with:
           name: Fire4Nix-real-ARM64-prerequisite-build-diagnostics
           path: |
-            ${{ runner.temp }}/fire4nix-real-arm64-deps/reports/
-            ${{ runner.temp }}/fire4nix-real-arm64-deps/build-console.log
+            /tmp/fire4nix-real-arm64-deps/reports/
+            /tmp/fire4nix-real-arm64-deps/build-console.log
           retention-days: 14
           if-no-files-found: warn
