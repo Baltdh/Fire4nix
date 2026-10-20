@@ -51,8 +51,8 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
 grep -q 'gamepad_started:-c .*fire4nix.gptk' "$T/actions"
 grep -q 'browser_exit' "$T/actions"
 grep -q 'gamepad_stopped' "$T/actions"
-grep -q 'gamepad=running pid=' "$T/logs/"*.log
-grep -q 'fire4nix_exit_code=0' "$T/logs/"*.log
+grep -q 'gamepad=running pid=' "$T/logs/Fire4Nix-*"
+grep -q 'fire4nix_exit_code=0' "$T/logs/Fire4Nix-*"
 
 : > "$T/actions"
 env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
@@ -94,10 +94,10 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
     FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=1 \
     sh "$T/install/Fire4Nix-Iniciar.sh" --open >/dev/null
 grep -q 'browser_exit' "$T/actions"
-grep -q 'gamepad=helper_exited_early exit_code=42' "$T/logs/"*.log
+grep -q 'gamepad=helper_exited_early exit_code=42' "$T/logs/Fire4Nix-*"
 
 # Two launches within the same second may not share a diagnostic filename.
-before=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
+before=$(find "$T/logs" -type f -name 'Fire4Nix-*' | wc -l)
 env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
     FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
     FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
@@ -106,7 +106,7 @@ env XDG_RUNTIME_DIR="$T" WAYLAND_DISPLAY=wayland-test \
     FIRE4NIX_GPTOKEYB="$T/gptokeyb" FIRE4NIX_TEST_LOG="$T/actions" \
     FIRE4NIX_LOG_DIR="$T/logs" FIRE4NIX_GAMEPAD=0 \
     sh "$T/install/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
-after=$(find "$T/logs" -type f -name 'Fire4Nix-*.log' | wc -l)
+after=$(find "$T/logs" -type f -name 'Fire4Nix-*' | wc -l)
 test "$after" -eq "$((before + 2))"
 # Real 2026-10-20 R36H finding: exactly 174006016 bytes can still be invalid.
 # Reject invalid ELF before executing the native launcher or starting gamepad.
