@@ -64,37 +64,45 @@ grep -Fqx 'FIRE4NIX_JSC_RUNTIME=PASS_ES6_ARRAY_MAP_JSON_AND_BIGINT' \
   exit 11
 }
 echo 'JSC_RUNTIME=PASS'
-# Independently audit executable and linked private JS engine ELF versions.
-engine=$(find "$work/wpe-cmake" -type f -name 'libJavaScriptCore*.so*' -print -quit)
-[ -n "$engine" ] || { echo 'ERROR: linked JavaScriptCore shared object not found' >&2; exit 10; }
+# WPE 2.54.1 Source/cmake/OptionsWPE.cmake sets
+# JavaScriptCore_LIBRARY_TYPE OBJECT; no libJavaScriptCore*.so is expected.
+# Verify real JSC object files and the final linked shell separately.
+mapfile -t jsc_objects < <(find "$work/wpe-cmake" -type f -name '*.o' |
+  grep -E '/(JavaScriptCore|JavaScriptCoreJIT|LowLevelInterpreterLib)\.dir/' | sort)
+if [ "${#jsc_objects[@]}" -lt 50 ]; then
+  echo "ERROR: only ${#jsc_objects[@]} JSC object files; incomplete engine" >&2
+  exit 10
+fi
+for obj in "${jsc_objects[@]}"; do
+  readelf -h "$obj" | grep -Eq 'Machine:[[:space:]]+AArch64' || {
+    echo "ERROR: non-AArch64 JavaScriptCore object: $obj" >&2
+    exit 10
+  }
+done
 max_ver() {
   readelf --version-info "$1" 2>/dev/null |
     sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -V | tail -1 || true
 }
+req=$(max_ver "$jsc")
+if [ -n "$req" ] && ! awk -v req="$req" 'BEGIN {
+    split(req,a,"."); exit !(a[1]<2 || (a[1]==2 && a[2]<=41))
+  }'; then
+  echo "ERROR: JSC shell needs GLIBC_$req, newer than R36H GLIBC_2.41" >&2
+  exit 12
+fi
 {
   echo 'JSC_SMOKE=PASS_REAL_ENGINE_AND_JSC_EXECUTABLE'
   echo 'JSC_TARGET=ELF64_AARCH64'
   echo 'JSC_SOURCE_VERSION=wpewebkit-2.54.1'
+  echo 'JSC_LIBRARY_TYPE=OBJECT_EXPECTED_UPSTREAM_WPE'
+  echo "JSC_OBJECTS=${#jsc_objects[@]}"
   echo 'CMAKE_GSTREAMER=OFF'
   echo 'WEBKIT_FULL_BROWSER_COMPILED=no'
   echo 'ROCKNIX_SYSROOT_USED=no'
   echo 'TARGET_HARDWARE_TESTED=no'
   echo 'R36H_INSTALLABLE=no'
   echo "JSC_CLI=$(basename "$jsc")"
+  echo "AUDITED_ELF=$(basename "$jsc") glibc_max=${req:-none}"
 } > "$report_dir/JSC-AARCH64-EXECUTION.txt"
-for elf in "$jsc" "$engine"; do
-  readelf -h "$elf" | grep -Eq 'Machine:[[:space:]]+AArch64' || {
-    echo "ERROR: non-AArch64 ELF: $elf" >&2; exit 10
-  }
-  req=$(max_ver "$elf")
-  if [ -n "$req" ] && ! awk -v req="$req" 'BEGIN {
-      split(req,a,"."); exit !(a[1]<2 || (a[1]==2 && a[2]<=41))
-    }'; then
-    echo "ERROR: $elf needs GLIBC_$req, newer than R36H GLIBC_2.41" >&2
-    exit 12
-  fi
-  echo "AUDITED_ELF=$(basename "$elf") glibc_max=${req:-none}" \
-    >> "$report_dir/JSC-AARCH64-EXECUTION.txt"
-done
 cat "$report_dir/JSC-AARCH64-EXECUTION.txt"
 echo 'JSC_SMOKE_END=PASS'
