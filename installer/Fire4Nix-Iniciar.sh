@@ -131,6 +131,33 @@ else
     fi
     export LD_LIBRARY_PATH="$ROOT/runtime/lib"
 fi
+# The physical ROCKNIX R36H required compat/libxml2 and gl4es/libGL
+# during --check-platform. Isolation of foreign Ports paths is still the default,
+# but verified ARM64 OS-provided compatibility providers must remain visible.
+# Optional file overrides support controlled testing without modifying /usr.
+if [ "${FIRE4NIX_ROCKNIX_COMPAT_LIBS:-auto}" != 0 ]; then
+    xml2_candidate=${FIRE4NIX_ROCKNIX_XML2_PATH:-/usr/lib/compat/libxml2.so.2}
+    gl_candidate=${FIRE4NIX_ROCKNIX_GL_PATH:-/usr/lib/gl4es/libGL.so.1}
+    if command -v readelf >/dev/null 2>&1 && [ "$(uname -m)" = aarch64 ]; then
+        for candidate in "$xml2_candidate" "$gl_candidate"; do
+            [ -f "$candidate" ] || continue
+            if readelf -h "$candidate" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
+                provider_dir=$(dirname "$candidate")
+                case ":$LD_LIBRARY_PATH:" in
+                  *":$provider_dir:"*) ;;
+                  *) LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$provider_dir"; export LD_LIBRARY_PATH ;;
+                esac
+                printf 'rocknix_compat_provider=%s\n' "$candidate" >> "$LOG"
+            else
+                printf 'rocknix_compat_rejected_non_arm64=%s\n' "$candidate" >> "$LOG"
+            fi
+        done
+    else
+        echo 'rocknix_compat=skipped_no_aarch64_readelf' >> "$LOG"
+    fi
+else
+    echo 'rocknix_compat=disabled_by_user' >> "$LOG"
+fi
 # Do not unset LD_PRELOAD: ROCKNIX may use a platform-provided Mali hook.
 for lib in libc.so.6 ld-linux-aarch64.so.1 libwayland-client.so.0 \
            libgbm.so.1 libdrm.so.2 libEGL.so.1 libGLESv2.so.2 libmali.so; do

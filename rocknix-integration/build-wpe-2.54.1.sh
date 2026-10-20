@@ -71,8 +71,9 @@ if [ "$mode" = --configure ]; then
   }
   mkdir -p "$SOURCE" "$BUILD"
   tar -xf "$ARCHIVE" -C "$SOURCE" --strip-components=1
-  # These options exist in WebKit Source/cmake/OptionsWPE.cmake on
-  # the webkitglib/2.54 branch. Conservative features for a 1GB device.
+  # Options verified against WPE 2.54 stable. Conservative defaults for an
+  # embedded 1GB target. Do not pull GI scanners or gi-docgen into the SDK:
+  # they are build-time tooling and unnecessary for a standalone browser.
   # WPE 2.54 GStreamerDependencies.cmake binds VIDEO, WEB_AUDIO,
   # SPEECH_SYNTHESIS and WEB_CODECS to USE_GSTREAMER. Minimal browsing
   # intentionally disables these rather than supplying broken GST .so files.
@@ -99,6 +100,8 @@ if [ "$mode" = --configure ]; then
     -DENABLE_WPE_PLATFORM_DRM=OFF \
     -DENABLE_WPE_LEGACY_API=OFF \
     -DENABLE_SPELLCHECK=OFF \
+    -DENABLE_INTROSPECTION=OFF \
+    -DENABLE_DOCUMENTATION=OFF \
     "$@"
   # A later --build/--stage must not silently use a different media profile.
   printf '%s\n' "$MEDIA_PROFILE" > "$BUILD/fire4nix-media-profile.txt"

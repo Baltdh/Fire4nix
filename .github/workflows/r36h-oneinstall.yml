@@ -1,4 +1,4 @@
-name: Fire4Nix 1.09 R36H ELF, GLIBC and GStreamer ABI guards
+name: Fire4Nix 1.12 R36H WPE staging and ROCKNIX compatibility
 on:
   push:
     paths:
@@ -16,6 +16,7 @@ on:
       - 'native/tests/test_isolated_loader.sh'
       - 'native/tests/test_elf_guard.sh'
       - 'native/tests/test_wpe_gstreamer_guard.sh'
+      - 'native/tests/test_wpe_dependency_audit.sh'
       - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
       - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
@@ -57,6 +58,7 @@ jobs:
           cp rocknix-integration/stage-wpe-runtime.sh out/Empacotar-WPE-ROCKNIX.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/audit-wpe-gstreamer.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/Fire4Nix-Auditar-GStreamer.sh
+          cp rocknix-integration/inspect-wpe-dependencies.sh out/Fire4Nix-Auditar-Dependencias.sh
           cp installer/Diagnosticar-Fire4Nix.sh out/Fire4Nix/Diagnosticar-Fire4Nix.sh
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
@@ -131,6 +133,10 @@ jobs:
           indefinido em seis .so recuperadas. Execute pelo terminal:
           sh Fire4Nix-Auditar-GStreamer.sh --audit
           Relatorio: /storage/Fire4Nix-GStreamer-Auditoria.txt
+          v1.12: Fire4Nix-Auditar-Dependencias.sh --audit gera a lista
+          NEEDED e a compatibilidade ELF hipotetica por caminho de busca,
+          incluindo deteccao do stub libGL, bloqueio do PRIMEIRO candidato\n          ELF invalido e auditoria do injected bundle. Nao executa WebKit.
+          Relatorio: /storage/Fire4Nix-Dependencias-ELF.txt
           A auditoria NAO resolve a ABI, NAO executa WebKit e nao modifica /usr.
           Runtime WPE real NAO esta incluido no pequeno pacote deste workflow.
           README
@@ -145,7 +151,9 @@ jobs:
           sh native/tests/test_isolated_loader.sh
           sh native/tests/test_elf_guard.sh
           sh native/tests/test_wpe_gstreamer_guard.sh
+          sh native/tests/test_wpe_dependency_audit.sh
           sh -n out/Fire4Nix-Auditar-GStreamer.sh
+          sh -n out/Fire4Nix-Auditar-Dependencias.sh
           sh -n out/Fire4Nix-Inspecionar-ELF.sh
           chmod +x out/Instalar-Fire4Nix-Uma-Vez.sh out/Diagnosticar-Fire4Nix.sh out/Fire4Nix-Teste.sh out/Habilitar-Teste-Ports.sh out/Fire4Nix/*.sh out/Fire4Nix/bin/*
           sh -n out/Instalar-Fire4Nix-Uma-Vez.sh
@@ -157,6 +165,8 @@ jobs:
           sh -n out/audit-wpe-gstreamer.sh
           sh out/Empacotar-WPE-ROCKNIX.sh --help | grep -q 'isolated ROCKNIX AArch64 DESTDIR'
           sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --plan | grep -q 'target=ROCKNIX-20260801-aarch64-cortex-a35'
+          grep -q -- '-DENABLE_INTROSPECTION=OFF' out/Preparar-WPE-ROCKNIX-2.54.1.sh
+          grep -q -- '-DENABLE_DOCUMENTATION=OFF' out/Preparar-WPE-ROCKNIX-2.54.1.sh
           set +e
           sh out/Preparar-WPE-ROCKNIX-2.54.1.sh --configure >/tmp/fire4nix-no-sdk.log 2>&1
           no_sdk_status=$?
@@ -381,15 +391,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.09-GStreamer-Diagnostico.zip .)
-          unzip -t Fire4Nix-R36H-1.09-GStreamer-Diagnostico.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.12-Dependencias-ELF.zip .)
+          unzip -t Fire4Nix-R36H-1.12-Dependencias-ELF.zip | tail -1
           # 170 MiB ZIP ceiling agreed with user. This package does NOT bundle WPE.
-          bytes=$(stat -c %s Fire4Nix-R36H-1.09-GStreamer-Diagnostico.zip)
+          bytes=$(stat -c %s Fire4Nix-R36H-1.12-Dependencias-ELF.zip)
           test "$bytes" -le $((170 * 1024 * 1024))
-          sha256sum Fire4Nix-R36H-1.09-GStreamer-Diagnostico.zip
+          sha256sum Fire4Nix-R36H-1.12-Dependencias-ELF.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.09-GStreamer-Diagnostico
-          path: Fire4Nix-R36H-1.09-GStreamer-Diagnostico.zip
+          name: Fire4Nix-R36H-1.12-Dependencias-ELF
+          path: Fire4Nix-R36H-1.12-Dependencias-ELF.zip
           if-no-files-found: error
           retention-days: 30
