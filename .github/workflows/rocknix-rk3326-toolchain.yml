@@ -1,0 +1,63 @@
+name: Genuine ROCKNIX RK3326 toolchain bootstrap (host only)
+on:
+  push:
+    branches: ['build/rocknix-rk3326-toolchain-20261020']
+    paths:
+      - 'scripts/build-rocknix-rk3326-toolchain.sh'
+      - '.github/workflows/rocknix-rk3326-toolchain.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rocknix-toolchain-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  bootstrap:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          fetch-depth: 1
+          path: rocknix-source
+          persist-credentials: false
+      - name: Fetch release identity and check scripts
+        run: |
+          git -C rocknix-source fetch origin tag 20260801 --depth=1
+          bash -n fire4nix/scripts/build-rocknix-rk3326-toolchain.sh
+          mkdir -p toolchain-reports
+          df -h . > toolchain-reports/initial-disk.txt
+      - name: Install host build tools from upstream checkdeps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            bc bzip2 curl diffutils gawk gcc-12 g++-12 gperf gzip patchutils lzop \
+            make patch perl rdfind rsync sed tar unzip xmlstarlet xz-utils zip zstd \
+            libncurses-dev libc6-dev libjson-perl libparse-yapp-perl libxml-parser-perl \
+            xfonts-utils xsltproc default-jre-headless python3 git wget file \
+            autoconf automake libtool texinfo cmake ninja-build
+      - name: Build real ROCKNIX cross compiler and test C/C++ linkage
+        env:
+          FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
+        run: bash fire4nix/scripts/build-rocknix-rk3326-toolchain.sh
+      - name: Preserve diagnostics even on build failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROCKNIX-RK3326-toolchain-build-diagnostics
+          path: toolchain-reports/
+          retention-days: 14
+      - name: Preserve successful host toolchain checkpoint (not for R36H install)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: rocknix-toolchain-host-only.tar.xz
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
