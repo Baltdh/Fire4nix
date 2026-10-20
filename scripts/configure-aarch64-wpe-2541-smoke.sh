@@ -42,6 +42,7 @@ if ! cmake -S "$source" -B "$work/wpe-cmake" -G Ninja \
   -DENABLE_GAMEPAD=OFF \
   -DUSE_ATK=OFF \
   -DUSE_LIBHYPHEN=OFF \
+  -DUSE_AVIF=OFF \
   -DENABLE_WEBDRIVER=OFF \
   -DUSE_GSTREAMER=OFF \
   -DUSE_GSTREAMER_GL=OFF \
