@@ -35,12 +35,15 @@ echo 'target_glibc_recipe=2.41'
 echo 'source_mutated=no'
 # Requirements from WebKit wpewebkit-2.54.1 Source/cmake/OptionsWPE.cmake.
 # A package may be in generic packages/ OR overridden in projects/ROCKNIX/packages/.
+# libsoup3 also needs TLS/network support (glib-networking, libpsl,
+# nghttp2, gnutls) to implement HTTPS correctly; inspect those recipes too.
 # Existence of a recipe DOES NOT confirm version/ABI or built SDK availability.
 missing=0
 found=0
 for pkg in glib harfbuzz icu libjpeg-turbo libepoxy libgcrypt libsoup3 libtasn1 \
            libxkbcommon libxml2 libpng sqlite libwebp zlib freetype libxslt \
-           wayland wayland-protocols; do
+           wayland wayland-protocols \
+           glib-networking libpsl nghttp2 gnutls; do
   path=$(find "$root/packages" "$root/projects/ROCKNIX/packages" \
          -type f -path "*/$pkg/package.mk" -print -quit 2>/dev/null || true)
   if [ -z "$path" ] && [ "$pkg" = libsoup3 ]; then
