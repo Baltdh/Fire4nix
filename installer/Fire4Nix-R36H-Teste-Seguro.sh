@@ -2,13 +2,13 @@
 # Fire4Nix 1.15 - R36H read-only physical test after exFAT corruption.
 # NEVER runs WebKit, fsck, repair, downloads, chmod or firmware writes.
 set -u
-case "\${1:---safe}" in
+case "${1:---safe}" in
   --safe) ;;
   --help) echo 'sh Fire4Nix-R36H-Teste-Seguro.sh --safe'; echo 'Only writes a small report to /tmp'; exit 0 ;;
   *) echo 'ERROR: use --safe or --help' >&2; exit 2 ;;
 esac
 umask 077
-TMPBASE=\${FIRE4NIX_SAFE_TMPDIR:-\${TMPDIR:-/tmp}}
+TMPBASE=${FIRE4NIX_SAFE_TMPDIR:-${TMPDIR:-/tmp}}
 [ -d "$TMPBASE" ] && [ -w "$TMPBASE" ] || { echo 'ERROR: no writable temporary directory (no SD fallback)' >&2; exit 73; }
 REPORT=$(mktemp "$TMPBASE/Fire4Nix-Seguro-XXXXXX.txt") || exit 73
 log() { printf '%s\n' "$*" >> "$REPORT"; }
@@ -33,7 +33,7 @@ else
   log 'external_sd_warning=NONE_IN_AVAILABLE_KERNEL_LOG'
   log 'sd_action=NO_FSCK_WAS_RUN'
 fi
-if [ -S "\${XDG_RUNTIME_DIR:-/none}/\${WAYLAND_DISPLAY:-invalid}" ]; then
+if [ -S "${XDG_RUNTIME_DIR:-/none}/${WAYLAND_DISPLAY:-invalid}" ]; then
   log 'wayland_socket=present'
 else
   log 'wayland_socket=not_in_terminal_environment'
@@ -49,7 +49,7 @@ if [ -e /dev/dri/renderD128 ]; then log 'drm_render=present'; else log 'drm_rend
 if command -v gptokeyb >/dev/null 2>&1; then log 'gamepad_mapper=present'; else log 'gamepad_mapper=not_found'; fi
 if command -v readelf >/dev/null 2>&1; then log 'readelf=present'; else log 'readelf=missing'; fi
 RUNTIME=''
-for d in "\${FIRE4NIX_SAFE_RUNTIME:-}" \
+for d in "${FIRE4NIX_SAFE_RUNTIME:-}" \
  /storage/games-internal/roms/tools/Fire4Nix/runtime \
  /storage/games-internal/roms/ports/fire4nix-completo/runtime \
  /storage/games-external/roms/tools/Fire4Nix/runtime \
