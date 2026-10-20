@@ -233,7 +233,10 @@ jobs:
           grep -q 'WPE_library=missing' "$t/diagnostic.txt"
           grep -q 'WPEPlatform_preflight_exit=127' "$t/diagnostic.txt"
           mkdir -p "$t/roms/tools/Fire4Nix/runtime/lib" "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0"
-          printf 'dummy-webkit-library' > "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+          # The installer now statically rejects garbage, even if it is >0 bytes.
+          # Build an actual ARM64 ELF fixture for this migration test only.
+          printf 'void mock_wpe(void) {}\n' |
+            cc -shared -fPIC -x c - -o "$t/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
           for bin in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
             printf 'dummy' > "$t/roms/tools/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$bin"
           done
