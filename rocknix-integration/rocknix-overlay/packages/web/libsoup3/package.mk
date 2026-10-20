@@ -8,6 +8,8 @@ PKG_SITE="https://libsoup.org/"
 PKG_URL="https://download.gnome.org/sources/libsoup/3.6/libsoup-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_TARGET="toolchain meson:host ninja:host glib nghttp2 sqlite libpsl glib-networking"
 PKG_LONGDESC="libsoup 3 HTTP(S) engine for WPE WebKit 2.54.1."
+# Archive unpacks libsoup-3.6.5 while ROCKNIX package name is libsoup3.
+PKG_SOURCE_DIR="libsoup-${PKG_VERSION}"
 PKG_TOOLCHAIN="meson"
 # Upstream Meson tls_check uses cc.run(): incompatible with a cross compiler.
 # Disabling the COMPILE-TIME check does NOT disable TLS: giognutls must be
