@@ -7,7 +7,8 @@ trap 'rm -rf "$T"' 0
 APP="$T/my Fire4Nix"
 mkdir -p "$APP/bin" "$APP/runtime/lib" "$APP/runtime/libexec/wpe-webkit-2.0" "$T/logs" "$T/reports" "$T/foreign"
 cp "$HERE/installer/Fire4Nix-Iniciar.sh" "$APP/Fire4Nix-Iniciar.sh"
-printf 'mock webkit\n' > "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
+# CI runs on real ARM64; mock the WebKit shared-object ELF header.
+printf 'int dummy_webkit(void){return 1;}\n' | cc -shared -fPIC -x c - -o "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
 printf 'mock EGL\n' > "$APP/runtime/lib/libEGL.so.1"
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
   printf 'mock process\n' > "$APP/runtime/libexec/wpe-webkit-2.0/$p"
