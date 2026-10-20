@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'scripts/build-aarch64-dependencies-smoke.sh'
+      - 'scripts/configure-aarch64-wpe-2541-smoke.sh'
       - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
       - '.github/workflows/r36h-first-real-arm64-deps.yml'
   workflow_dispatch:
@@ -48,7 +49,11 @@ jobs:
             pkg-config curl ca-certificates gettext python3 python3-packaging \
             libglib2.0-dev libgnutls28-dev libicu-dev libnghttp2-dev \
             libsqlite3-dev libbrotli-dev zlib1g-dev libssl-dev \
-            libxml2-dev libgcrypt20-dev libtasn1-6-dev
+            libxml2-dev libgcrypt20-dev libtasn1-6-dev \
+            cmake gperf bison flex libharfbuzz-dev libjpeg-dev libepoxy-dev \
+            libxkbcommon-dev libwayland-dev wayland-protocols \
+            libwebp-dev libfreetype-dev libfontconfig1-dev libpng-dev \
+            libxslt1-dev libcairo2-dev libegl-dev libgl-dev libatk1.0-dev
 
       - name: Compile real native ARM64 Soup3/TLS/PSL/ASN1 prerequisites
         shell: bash
@@ -67,6 +72,17 @@ jobs:
           echo '**Not a ROCKNIX SDK build; Ubuntu binaries must NOT be copied to R36H.**' \
             >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Attempt upstream WPE WebKit 2.54.1 media-free CMake configure (no WebKit compilation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/configure-aarch64-wpe-2541-smoke.sh
+          bash scripts/configure-aarch64-wpe-2541-smoke.sh \
+            | tee "$FIRE4NIX_BUILD_WORK/wpe-configure-console.log"
+          grep -Fqx 'MEDIA_CACHE_STATUS=PASS_WPE_WAYLAND_WITHOUT_GSTREAMER' \
+            "$FIRE4NIX_BUILD_WORK/reports/wpe-media-cache-check.txt"
+          echo 'WPE CMake configuration passed on Ubuntu native ARM64 (build not started).' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Save diagnostic build logs and ELF audit report only
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,5 +91,6 @@ jobs:
           path: |
             /tmp/fire4nix-real-arm64-deps/reports/
             /tmp/fire4nix-real-arm64-deps/build-console.log
+            /tmp/fire4nix-real-arm64-deps/wpe-configure-console.log
           retention-days: 14
           if-no-files-found: warn
