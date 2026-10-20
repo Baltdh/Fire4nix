@@ -5,6 +5,8 @@ on:
     paths:
       - 'rocknix-integration/audit-rocknix-rk3326-source.sh'
       - 'native/tests/test_rocknix_source_preparation.sh'
+      - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
+      - 'rocknix-integration/verify-wpe-prerequisite-sources.sh'
       - '.github/workflows/rocknix-wpe-source-prep.yml'
   workflow_dispatch:
 
@@ -84,6 +86,19 @@ jobs:
             echo 'Blocked until a matching ROCKNIX RK3326 toolchain, target development dependencies and an actual WebKit build are available.'
             echo ''
             echo 'Missing or existing recipes are listed in artifact: ROCKNIX-RK3326-20260801-DEPENDENCIES.txt.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify SHA-256 of missing ROCKNIX dependency source releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh fire4nix/rocknix-integration/verify-wpe-prerequisite-sources.sh --list             | tee report/ROCKNIX-WPE-PREREQUISITES.txt
+          sh fire4nix/rocknix-integration/verify-wpe-prerequisite-sources.sh --download             | tee -a report/ROCKNIX-WPE-PREREQUISITES.txt
+          grep -q 'PREREQUISITE_SOURCE_CHECK=4_ARCHIVES_SHA256_VERIFIED'             report/ROCKNIX-WPE-PREREQUISITES.txt
+          {
+            echo ''
+            echo 'Four prerequisite source archives were downloaded and SHA-256 verified.'
+            echo 'These are **sources only**; corresponding ROCKNIX packages are not built yet.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish text reports (not browser)
