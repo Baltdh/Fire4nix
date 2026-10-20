@@ -1,4 +1,4 @@
-name: Fire4Nix 1.10 R36H static ELF dependency and GStreamer guards
+name: Fire4Nix 1.11 R36H first-candidate ELF loader guard
 on:
   push:
     paths:
@@ -133,9 +133,9 @@ jobs:
           indefinido em seis .so recuperadas. Execute pelo terminal:
           sh Fire4Nix-Auditar-GStreamer.sh --audit
           Relatorio: /storage/Fire4Nix-GStreamer-Auditoria.txt
-          v1.10: novo Fire4Nix-Auditar-Dependencias.sh --audit gera a lista
+          v1.11: Fire4Nix-Auditar-Dependencias.sh --audit gera a lista
           NEEDED e a compatibilidade ELF hipotetica por caminho de busca,
-          incluindo deteccao do stub libGL. Sem executar o navegador.
+          incluindo deteccao do stub libGL, bloqueio do PRIMEIRO candidato\n          ELF invalido e auditoria do injected bundle. Nao executa WebKit.
           Relatorio: /storage/Fire4Nix-Dependencias-ELF.txt
           A auditoria NAO resolve a ABI, NAO executa WebKit e nao modifica /usr.
           Runtime WPE real NAO esta incluido no pequeno pacote deste workflow.
@@ -389,15 +389,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd out && zip -q -r ../Fire4Nix-R36H-1.10-Dependencias-ELF.zip .)
-          unzip -t Fire4Nix-R36H-1.10-Dependencias-ELF.zip | tail -1
+          (cd out && zip -q -r ../Fire4Nix-R36H-1.11-Dependencias-ELF.zip .)
+          unzip -t Fire4Nix-R36H-1.11-Dependencias-ELF.zip | tail -1
           # 170 MiB ZIP ceiling agreed with user. This package does NOT bundle WPE.
-          bytes=$(stat -c %s Fire4Nix-R36H-1.10-Dependencias-ELF.zip)
+          bytes=$(stat -c %s Fire4Nix-R36H-1.11-Dependencias-ELF.zip)
           test "$bytes" -le $((170 * 1024 * 1024))
-          sha256sum Fire4Nix-R36H-1.10-Dependencias-ELF.zip
+          sha256sum Fire4Nix-R36H-1.11-Dependencias-ELF.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-1.10-Dependencias-ELF
-          path: Fire4Nix-R36H-1.10-Dependencias-ELF.zip
+          name: Fire4Nix-R36H-1.11-Dependencias-ELF
+          path: Fire4Nix-R36H-1.11-Dependencias-ELF.zip
           if-no-files-found: error
           retention-days: 30
