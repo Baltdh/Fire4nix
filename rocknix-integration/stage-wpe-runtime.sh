@@ -32,7 +32,12 @@ esac
 case "$OUT" in
   /|/usr|/usr/*) echo 'ERROR: unsafe runtime output path' >&2; exit 2 ;;
 esac
-[ ! -e "$OUT" ] || { echo 'ERROR: output already exists; never overwrite a WPE runtime' >&2; exit 2; }
+# -e is false for a dangling symlink. Refuse it as well: stage never
+# replaces even an incomplete output path or symlink.
+{ [ ! -e "$OUT" ] && [ ! -L "$OUT" ]; } || {
+  echo 'ERROR: output already exists; never overwrite a WPE runtime' >&2
+  exit 2
+}
 LIBROOT=
 for p in "$INPUT/usr/lib" "$INPUT/usr/lib64"; do
   if [ -s "$p/libWPEWebKit-2.0.so.1" ]; then LIBROOT="$p"; break; fi
