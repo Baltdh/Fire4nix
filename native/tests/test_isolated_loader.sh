@@ -31,8 +31,8 @@ status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib" "$T/observed"
-grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs/Fire4Nix-*"
-grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs/Fire4Nix-*"
+grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs"/Fire4Nix-*
+grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs"/Fire4Nix-*
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
   echo 'FAIL: inherited foreign runtime leaked into isolated mode' >&2; exit 1
 fi
@@ -51,8 +51,8 @@ compat_rc=$?
 set -e
 test "$compat_rc" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/compat-xml:$T/compat-gl" "$T/observed"
-grep -q "rocknix_compat_provider=$T/compat-xml/libxml2.so.2" "$T/logs/Fire4Nix-*"
-grep -q "rocknix_compat_provider=$T/compat-gl/libGL.so.1" "$T/logs/Fire4Nix-*"
+grep -q "rocknix_compat_provider=$T/compat-xml/libxml2.so.2" "$T/logs"/Fire4Nix-*
+grep -q "rocknix_compat_provider=$T/compat-gl/libGL.so.1" "$T/logs"/Fire4Nix-*
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
   echo 'FAIL: unrelated LD_LIBRARY_PATH inherited' >&2; exit 1
 fi
@@ -65,7 +65,7 @@ status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/foreign" "$T/observed"
-grep -q 'library_path_mode=compat_inherited' "$T/logs/Fire4Nix-*"
+grep -q 'library_path_mode=compat_inherited' "$T/logs"/Fire4Nix-*
 : > "$T/observed"
 FIRE4NIX_ROOT="$APP" FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
   sh "$HERE/installer/Fire4Nix-Investigar-139.sh" --safe > "$T/safe.txt"
