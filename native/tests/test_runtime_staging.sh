@@ -34,6 +34,16 @@ overwrite=$?
 set -e
 test "$overwrite" -eq 2
 grep -q 'already exists' "$T/overwrite.log"
+# Broken symlinks must also count as existing outputs (never overwrite).
+ln -s does-not-exist "$T/dangling-output"
+set +e
+FIRE4NIX_WPE_DESTDIR="$T/staged" FIRE4NIX_WPE_RUNTIME_OUT="$T/dangling-output" \
+ sh "$ROOT/rocknix-integration/stage-wpe-runtime.sh" --stage > "$T/dangling.log" 2>&1
+dangling_status=$?
+set -e
+test "$dangling_status" -eq 2
+test -L "$T/dangling-output"
+grep -q 'already exists' "$T/dangling.log"
 # Missing ancillary files must be rejected even if main ELF and children exist.
 mv "$T/staged/usr/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so" "$T/bundle.saved"
 set +e
@@ -128,4 +138,4 @@ set -e
 test "$media_rc" -eq 5
 grep -q 'media-free build still links GStreamer' "$T/unsafe-media.log"
 test ! -e "$T/unsafe-media"
-echo 'PASS: ELF/glibc, injected bundle, inspector and media-free guards (mock only)'
+echo 'PASS: ELF/glibc, resources, symlink rollback and media-free guards (mock only)'
