@@ -7,6 +7,10 @@ on:
       - 'native/tests/test_rocknix_source_preparation.sh'
       - 'rocknix-integration/rocknix-wpe-prerequisites.lock'
       - 'rocknix-integration/verify-wpe-prerequisite-sources.sh'
+      - 'rocknix-integration/rocknix-overlay/**'
+      - 'rocknix-integration/verify-rocknix-wpe-overlay.sh'
+      - 'rocknix-integration/apply-rocknix-wpe-overlay.sh'
+      - 'native/tests/test_rocknix_wpe_overlay.sh'
       - '.github/workflows/rocknix-wpe-source-prep.yml'
   workflow_dispatch:
 
@@ -47,6 +51,148 @@ jobs:
             | tee report/ROCKNIX-RK3326-20260801-DEPENDENCIES.txt
           grep -q '^source_release=20260801$' report/ROCKNIX-RK3326-20260801-DEPENDENCIES.txt
           grep -q '^browser_compiled=no$' report/ROCKNIX-RK3326-20260801-DEPENDENCIES.txt
+
+      - name: Stage four pinned recipes into temporary ROCKNIX source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh fire4nix/native/tests/test_rocknix_wpe_overlay.sh
+          sh fire4nix/rocknix-integration/verify-rocknix-wpe-overlay.sh \
+            | tee report/WPE-OVERLAY-RECIPE-VALIDATION.txt
+          FIRE4NIX_ROCKNIX_SOURCE="$PWD/rocknix-20260801" \
+            sh fire4nix/rocknix-integration/apply-rocknix-wpe-overlay.sh --check \
+            | tee -a report/WPE-OVERLAY-RECIPE-VALIDATION.txt
+          FIRE4NIX_OVERLAY_ALLOW_APPLY=1 \
+            FIRE4NIX_ROCKNIX_SOURCE="$PWD/rocknix-20260801" \
+            sh fire4nix/rocknix-integration/apply-rocknix-wpe-overlay.sh --apply \
+            | tee -a report/WPE-OVERLAY-RECIPE-VALIDATION.txt
+          grep -q '^missing_required_recipes=0
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 3 \
+            https://wpewebkit.org/releases/wpewebkit-2.54.1.tar.xz \
+            --output /tmp/wpewebkit-2.54.1.tar.xz
+          echo '0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9  /tmp/wpewebkit-2.54.1.tar.xz' |
+            sha256sum --check --status
+          printf '%s\n' 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2.54.1' | tee report/WPE-SOURCE.txt
+          # Validate against the exact release tarball, not just git HEAD/docs.
+          tar -xJOf /tmp/wpewebkit-2.54.1.tar.xz \
+            wpewebkit-2.54.1/Source/cmake/GStreamerDefinitions.cmake \
+            > /tmp/GStreamerDefinitions.cmake
+          tar -xJOf /tmp/wpewebkit-2.54.1.tar.xz \
+            wpewebkit-2.54.1/Source/cmake/GStreamerDependencies.cmake \
+            > /tmp/GStreamerDependencies.cmake
+          tar -xJOf /tmp/wpewebkit-2.54.1.tar.xz \
+            wpewebkit-2.54.1/Source/cmake/OptionsWPE.cmake \
+            > /tmp/OptionsWPE.cmake
+          grep -Fq 'WEBKIT_OPTION_DEFINE(USE_GSTREAMER ' /tmp/GStreamerDefinitions.cmake
+          grep -Fq 'WEBKIT_OPTION_DEPEND(ENABLE_VIDEO USE_GSTREAMER)' /tmp/GStreamerDependencies.cmake
+          grep -Fq 'WEBKIT_OPTION_DEFINE(ENABLE_WPE_PLATFORM_WAYLAND ' /tmp/OptionsWPE.cmake
+          grep -Fq 'find_package(Soup3 3.0.0 REQUIRED)' /tmp/OptionsWPE.cmake
+          echo 'WPE_CMAKE_OPTIONS=UPSTREAM_VERIFIED' | tee -a report/WPE-SOURCE.txt
+          echo 'WPE_RUNTIME_BUILT=no' | tee -a report/WPE-SOURCE.txt
+          echo 'ROCKNIX_SDK_BUILT=no' | tee -a report/WPE-SOURCE.txt
+          rm -f /tmp/wpewebkit-2.54.1.tar.xz
+          {
+            echo '## Fire4Nix: verification of source, NOT an executable browser'
+            echo ''
+            echo 'Pinned source: ROCKNIX tag \`20260801\`, WPE WebKit 2.54.1 (official SHA-256 validated).'
+            echo ''
+            echo 'Results: upstream CMake GStreamer-free and WPE Wayland options verified.'
+            echo ''
+            echo 'Blocked until a matching ROCKNIX RK3326 toolchain, target development dependencies and an actual WebKit build are available.'
+            echo ''
+            echo 'Missing or existing recipes are listed in artifact: ROCKNIX-RK3326-20260801-DEPENDENCIES.txt.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify SHA-256 of missing ROCKNIX dependency source releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh fire4nix/rocknix-integration/verify-wpe-prerequisite-sources.sh --list             | tee report/ROCKNIX-WPE-PREREQUISITES.txt
+          sh fire4nix/rocknix-integration/verify-wpe-prerequisite-sources.sh --download             | tee -a report/ROCKNIX-WPE-PREREQUISITES.txt
+          grep -q 'PREREQUISITE_SOURCE_CHECK=4_ARCHIVES_SHA256_VERIFIED'             report/ROCKNIX-WPE-PREREQUISITES.txt
+          {
+            echo ''
+            echo 'Four prerequisite source archives were downloaded and SHA-256 verified.'
+            echo 'These are **sources only**; corresponding ROCKNIX packages are not built yet.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish text reports (not browser)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-WPE-source-preparation
+          path: report/
+          retention-days: 30
+          if-no-files-found: error
+ report/WPE-OVERLAY-RECIPE-VALIDATION.txt
+          grep -q '^OVERLAY_APPLIED=FOUR_SOURCE_RECIPES_NOT_BUILT
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 3 \
+            https://wpewebkit.org/releases/wpewebkit-2.54.1.tar.xz \
+            --output /tmp/wpewebkit-2.54.1.tar.xz
+          echo '0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9  /tmp/wpewebkit-2.54.1.tar.xz' |
+            sha256sum --check --status
+          printf '%s\n' 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2.54.1' | tee report/WPE-SOURCE.txt
+          # Validate against the exact release tarball, not just git HEAD/docs.
+          tar -xJOf /tmp/wpewebkit-2.54.1.tar.xz \
+            wpewebkit-2.54.1/Source/cmake/GStreamerDefinitions.cmake \
+            > /tmp/GStreamerDefinitions.cmake
+          tar -xJOf /tmp/wpewebkit-2.54.1.tar.xz \
+            wpewebkit-2.54.1/Source/cmake/GStreamerDependencies.cmake \
+            > /tmp/GStreamerDependencies.cmake
+          tar -xJOf /tmp/wpewebkit-2.54.1.tar.xz \
+            wpewebkit-2.54.1/Source/cmake/OptionsWPE.cmake \
+            > /tmp/OptionsWPE.cmake
+          grep -Fq 'WEBKIT_OPTION_DEFINE(USE_GSTREAMER ' /tmp/GStreamerDefinitions.cmake
+          grep -Fq 'WEBKIT_OPTION_DEPEND(ENABLE_VIDEO USE_GSTREAMER)' /tmp/GStreamerDependencies.cmake
+          grep -Fq 'WEBKIT_OPTION_DEFINE(ENABLE_WPE_PLATFORM_WAYLAND ' /tmp/OptionsWPE.cmake
+          grep -Fq 'find_package(Soup3 3.0.0 REQUIRED)' /tmp/OptionsWPE.cmake
+          echo 'WPE_CMAKE_OPTIONS=UPSTREAM_VERIFIED' | tee -a report/WPE-SOURCE.txt
+          echo 'WPE_RUNTIME_BUILT=no' | tee -a report/WPE-SOURCE.txt
+          echo 'ROCKNIX_SDK_BUILT=no' | tee -a report/WPE-SOURCE.txt
+          rm -f /tmp/wpewebkit-2.54.1.tar.xz
+          {
+            echo '## Fire4Nix: verification of source, NOT an executable browser'
+            echo ''
+            echo 'Pinned source: ROCKNIX tag \`20260801\`, WPE WebKit 2.54.1 (official SHA-256 validated).'
+            echo ''
+            echo 'Results: upstream CMake GStreamer-free and WPE Wayland options verified.'
+            echo ''
+            echo 'Blocked until a matching ROCKNIX RK3326 toolchain, target development dependencies and an actual WebKit build are available.'
+            echo ''
+            echo 'Missing or existing recipes are listed in artifact: ROCKNIX-RK3326-20260801-DEPENDENCIES.txt.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify SHA-256 of missing ROCKNIX dependency source releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh fire4nix/rocknix-integration/verify-wpe-prerequisite-sources.sh --list             | tee report/ROCKNIX-WPE-PREREQUISITES.txt
+          sh fire4nix/rocknix-integration/verify-wpe-prerequisite-sources.sh --download             | tee -a report/ROCKNIX-WPE-PREREQUISITES.txt
+          grep -q 'PREREQUISITE_SOURCE_CHECK=4_ARCHIVES_SHA256_VERIFIED'             report/ROCKNIX-WPE-PREREQUISITES.txt
+          {
+            echo ''
+            echo 'Four prerequisite source archives were downloaded and SHA-256 verified.'
+            echo 'These are **sources only**; corresponding ROCKNIX packages are not built yet.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish text reports (not browser)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-WPE-source-preparation
+          path: report/
+          retention-days: 30
+          if-no-files-found: error
+ report/WPE-OVERLAY-RECIPE-VALIDATION.txt
+          {
+            echo ''
+            echo 'Staged four reviewed ROCKNIX package recipes in an ephemeral GitHub runner checkout.'
+            echo '**No compilation, sysroot installation or hardware changes were made.**'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Retrieve official WPE WebKit 2.54.1 and verify upstream SHA-256
         shell: bash
