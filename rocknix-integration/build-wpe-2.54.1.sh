@@ -16,6 +16,8 @@ esac
 # Using the host compiler is NOT a valid R36H build.
 RELEASE=${FIRE4NIX_ROCKNIX_RELEASE:-20260801}
 case "$RELEASE" in 20260801|20261001) ;; *) echo 'ERROR: unsupported ROCKNIX release; use an audited SDK' >&2; exit 4 ;; esac
+MEDIA_PROFILE=${FIRE4NIX_MEDIA_PROFILE:-minimal}
+case "$MEDIA_PROFILE" in minimal|full) ;; *) echo 'ERROR: media profile must be minimal or full' >&2; exit 4 ;; esac
 TARGET_GLIBC=2.41
 [ "$RELEASE" != 20261001 ] || TARGET_GLIBC=2.44
 ARCHIVE=${FIRE4NIX_WPE_ARCHIVE:-}
@@ -28,6 +30,12 @@ echo "source=wpewebkit-$VERSION.tar.xz"
 echo "sha256=$SOURCE_SHA256"
 echo "target=ROCKNIX-$RELEASE-aarch64-cortex-a35"
 echo "target_glibc_recipe=$TARGET_GLIBC"
+echo "media_profile=$MEDIA_PROFILE"
+if [ "$MEDIA_PROFILE" = minimal ]; then
+  echo "media_policy=disable_GStreamer_video_audio_speech_WebCodecs_for_first_browser"
+else
+  echo "media_policy=full_requires_coherent_GStreamer_toolchain_and_ABI_check"
+fi
 echo "device_observed_glibc=2.41"
 if [ "$RELEASE" != 20260801 ]; then
   echo "WARNING: selected release differs from tested R36H glibc 2.41; do not deploy before ABI audit" >&2
@@ -65,6 +73,21 @@ if [ "$mode" = --configure ]; then
   tar -xf "$ARCHIVE" -C "$SOURCE" --strip-components=1
   # These options exist in WebKit Source/cmake/OptionsWPE.cmake on
   # the webkitglib/2.54 branch. Conservative features for a 1GB device.
+  # WPE 2.54 GStreamerDependencies.cmake binds VIDEO, WEB_AUDIO,
+  # SPEECH_SYNTHESIS and WEB_CODECS to USE_GSTREAMER. Minimal browsing
+  # intentionally disables these rather than supplying broken GST .so files.
+  # Full profile is opt-in after rebuilding *all* GStreamer modules coherently.
+  if [ "$MEDIA_PROFILE" = minimal ]; then
+    set -- -DUSE_GSTREAMER=OFF -DUSE_GSTREAMER_GL=OFF \
+      -DENABLE_VIDEO=OFF -DENABLE_WEB_AUDIO=OFF \
+      -DENABLE_SPEECH_SYNTHESIS=OFF -DENABLE_WEB_CODECS=OFF \
+      -DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF \
+      -DENABLE_MEDIA_RECORDER=OFF
+  else
+    set -- -DUSE_GSTREAMER=ON \
+      -DENABLE_VIDEO=ON -DENABLE_WEB_AUDIO=ON \
+      -DENABLE_WEB_CODECS=ON -DENABLE_MEDIA_STREAM=ON
+  fi
   cmake -S "$SOURCE" -B "$BUILD" -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
     -DPORT=WPE \
@@ -76,8 +99,7 @@ if [ "$mode" = --configure ]; then
     -DENABLE_WPE_PLATFORM_DRM=OFF \
     -DENABLE_WPE_LEGACY_API=OFF \
     -DENABLE_SPELLCHECK=OFF \
-    -DENABLE_WEB_AUDIO=OFF \
-    -DENABLE_VIDEO=OFF
+    "$@"
 else
   [ -f "$BUILD/build.ninja" ] || {
     echo 'ERROR: run --configure with the ROCKNIX SDK first' >&2
@@ -99,6 +121,7 @@ else
     DESTDIR="$WORK/destdir"
     mkdir -p "$DESTDIR"
     DESTDIR="$DESTDIR" cmake --install "$BUILD"
+    FIRE4NIX_REQUIRE_MEDIA_FREE=$([ "$MEDIA_PROFILE" = minimal ] && echo 1 || echo 0) \
     FIRE4NIX_TARGET_GLIBC_MAX="$TARGET_GLIBC" \
     FIRE4NIX_WPE_DESTDIR="$DESTDIR" \
       FIRE4NIX_WPE_RUNTIME_OUT="${FIRE4NIX_WPE_RUNTIME_OUT:-$WORK/fire4nix-runtime}" \
