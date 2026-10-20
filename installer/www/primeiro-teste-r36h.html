@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Fire4Nix | Primeiro teste offline R36H</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#121827;color:#eff6ff}
+main{max-width:640px;min-height:480px;padding:14px 16px;margin:0 auto}
+h1{font-size:22px;margin:0 0 6px}
+p,.small{font-size:13px;color:#c8d6e9;margin:5px 0}
+.test{border:1px solid #465a78;border-radius:8px;padding:9px;margin:9px 0}
+.status{font-weight:700;color:#ffd185;font-size:14px}
+.colors{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:7px}
+.colors b{display:block;height:34px;border-radius:5px}
+.colors b:nth-child(1){background:#ee5555}
+.colors b:nth-child(2){background:#4fd68b}
+.colors b:nth-child(3){background:#508dff}
+.colors b:nth-child(4){background:#f9ca4a}
+button{width:100%;padding:10px;background:#59b3f3;border:0;border-radius:8px;color:#081728;font-weight:bold;font-size:16px}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+@media(max-width:400px){main{padding:10px}h1{font-size:20px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Fire4Nix — TESTE 01</h1>
+<p>HTML + CSS + JavaScript | 640 × 480 | totalmente offline</p>
+<section class="test">
+  <div>1. Renderização e CSS</div>
+  <div class="colors" aria-label="Quatro faixas coloridas"><b></b><b></b><b></b><b></b></div>
+</section>
+<section class="test">
+  <div>2. JavaScript</div>
+  <div id="js" class="status">AGUARDANDO JS</div>
+  <div id="frame" class="small">Quadro: aguardando primeiro frame</div>
+</section>
+<section class="test">
+  <div>3. Controles / clique / Enter</div>
+  <button id="action" type="button">PRESSIONE A / ENTER</button>
+  <div id="click" class="status">Pressionamentos: 0</div>
+</section>
+<p id="key" class="small">Ultima tecla: nenhuma</p>
+<p class="small">Sem scripts externos, rede, cookies ou armazenamento local.</p>
+</main>
+<script>
+(function () {
+  'use strict';
+  var n=0;
+  var button=document.getElementById('action');
+  document.getElementById('js').textContent='JS_OK';
+  button.addEventListener('click',function(){
+    n++;
+    document.getElementById('click').textContent='Pressionamentos: '+n;
+  });
+  document.addEventListener('keydown',function(e){
+    document.getElementById('key').textContent='Ultima tecla: '+e.key;
+  });
+  if(typeof window.requestAnimationFrame==='function'){
+    window.requestAnimationFrame(function(){
+      document.getElementById('frame').textContent='FRAME_OK';
+    });
+  } else {
+    document.getElementById('frame').textContent='FRAME_API_INDISPONIVEL';
+  }
+}());
+</script>
+</body>
+</html>
