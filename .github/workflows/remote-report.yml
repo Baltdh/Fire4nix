@@ -1,0 +1,22 @@
+name: Temporary read-only report bridge
+on:
+  push:
+    paths:
+      - 'tools/remote/**'
+      - 'native/tests/test_remote_report.py'
+      - '.github/workflows/remote-report.yml'
+  pull_request:
+    paths:
+      - 'tools/remote/**'
+      - 'native/tests/test_remote_report.py'
+      - '.github/workflows/remote-report.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 native/tests/test_remote_report.py
+      - run: sh -n tools/remote/preflight.sh
