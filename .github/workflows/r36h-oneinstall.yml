@@ -18,6 +18,7 @@ on:
       - 'native/tests/test_wpe_gstreamer_guard.sh'
       - 'native/tests/test_wpe_dependency_audit.sh'
       - 'native/tests/test_r36h_safe_probe.sh'
+      - 'native/tests/test_wpe_cmake_cache_gate.sh'
       - 'source_r36h/Fire4Nix/scripts/run_browser.sh'
       - 'source_r36h/Fire4Nix/scripts/wpe_platform_launch.sh'
       - 'rocknix-integration/**'
@@ -59,6 +60,7 @@ jobs:
           cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
           cp rocknix-integration/check-rocknix-sdk.sh out/check-rocknix-sdk.sh
           cp rocknix-integration/check-rocknix-compiler.sh out/check-rocknix-compiler.sh
+          cp rocknix-integration/verify-wpe-media-cache.sh out/verify-wpe-media-cache.sh
           cp rocknix-integration/stage-wpe-runtime.sh out/Empacotar-WPE-ROCKNIX.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/audit-wpe-gstreamer.sh
           cp rocknix-integration/audit-wpe-gstreamer.sh out/Fire4Nix-Auditar-GStreamer.sh
@@ -156,6 +158,7 @@ jobs:
           sh native/tests/test_isolated_loader.sh
           sh native/tests/test_elf_guard.sh
           sh native/tests/test_wpe_gstreamer_guard.sh
+          sh native/tests/test_wpe_cmake_cache_gate.sh
           sh native/tests/test_wpe_dependency_audit.sh
           sh native/tests/test_r36h_safe_probe.sh
           sh -n out/Fire4Nix-Auditar-GStreamer.sh
