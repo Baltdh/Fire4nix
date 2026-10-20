@@ -49,7 +49,7 @@ jobs:
           bash rocknix-integration/stage-7zip-source-mirror.sh --apply
           git -C "$FIRE4NIX_ROCKNIX_SOURCE" diff --check
           test "$(git -C "$FIRE4NIX_ROCKNIX_SOURCE" diff --name-only)" = 'packages/compress/7-zip/package.mk'
-          grep -Fxq 'PKG_SHA256="bff9e69b6ca73a5b8715d7623870a39dc90ad6ce1f4d1070685843987af1af9b' "$FIRE4NIX_ROCKNIX_SOURCE/packages/compress/7-zip/package.mk"
+          grep -Fxq 'PKG_SHA256="bff9e69b6ca73a5b8715d7623870a39dc90ad6ce1f4d1070685843987af1af9b"' "$FIRE4NIX_ROCKNIX_SOURCE/packages/compress/7-zip/package.mk"
           echo 'Only 7-Zip source URL changed in disposable ROCKNIX tree; version and SHA256 preserved.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve mirror verification report, including failure
