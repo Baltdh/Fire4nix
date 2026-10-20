@@ -52,6 +52,7 @@ jobs:
           cp installer/Fire4Nix-Inspecionar-ELF.sh out/Fire4Nix/Fire4Nix-Inspecionar-ELF.sh
           cp installer/Fire4Nix-Investigar-139.sh out/Fire4Nix/Fire4Nix-Investigar-139.sh
           cp installer/Fire4Nix-Direto.sh out/Fire4Nix-Direto.sh
+          cp installer/Fire4Nix-R36H-Teste-Seguro.sh out/Fire4Nix-R36H-Teste-Seguro.sh
           cp installer/Fire4Nix-Teste.sh out/Fire4Nix/Fire4Nix-Teste.sh
           cp installer/Habilitar-Teste-Ports.sh out/Habilitar-Teste-Ports.sh
           cp rocknix-integration/build-wpe-2.54.1.sh out/Preparar-WPE-ROCKNIX-2.54.1.sh
@@ -148,12 +149,14 @@ jobs:
           sh -n out/Fire4Nix/Fire4Nix-Investigar-139.sh
           chmod +x out/Fire4Nix-Direto.sh
           sh -n out/Fire4Nix-Direto.sh
+          sh -n out/Fire4Nix-R36H-Teste-Seguro.sh
           sh native/tests/test_ports_direct.sh
           sh native/tests/test_runtime_prereqs.sh
           sh native/tests/test_isolated_loader.sh
           sh native/tests/test_elf_guard.sh
           sh native/tests/test_wpe_gstreamer_guard.sh
           sh native/tests/test_wpe_dependency_audit.sh
+          sh native/tests/test_r36h_safe_probe.sh
           sh -n out/Fire4Nix-Auditar-GStreamer.sh
           sh -n out/Fire4Nix-Auditar-Dependencias.sh
           sh -n out/Fire4Nix-Inspecionar-ELF.sh
