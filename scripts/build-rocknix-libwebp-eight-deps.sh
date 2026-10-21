@@ -139,7 +139,7 @@ cat > "$report/consumer.c" <<'C'
 #include <glib.h>
 #include <png.h>
 int fire4nix_webp_probe(void) {
-  return WebPGetDecoderVersion()>0 && WebPDemuxGetVersion()>0 &&
+  return WebPGetDecoderVersion()>0 && WebPGetDemuxVersion()>0 &&
          WebPGetMuxVersion()>0 && g_get_prgname()!=0 &&
          png_access_version_number()>0;
 }
