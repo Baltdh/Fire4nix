@@ -1,0 +1,39 @@
+name: Fire4Nix verify ROCKNIX 7-Zip 25.00 source mirror (no build)
+
+on:
+  push:
+    paths:
+      - 'scripts/verify-rocknix-7zip-mirror.sh'
+      - '.github/workflows/verify-rocknix-7zip-mirror.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-mirror:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Strict source mirror and archive integrity preflight
+        shell: bash
+        env:
+          FIRE4NIX_7ZIP_REPORT: /tmp/fire4nix-7zip-report/rocknix-7zip-source.txt
+        run: |
+          set -euo pipefail
+          bash -n scripts/verify-rocknix-7zip-mirror.sh
+          bash scripts/verify-rocknix-7zip-mirror.sh --check
+          grep -Fxq 'SOURCE_MIRROR_STATUS=PASS' "$FIRE4NIX_7ZIP_REPORT"
+          echo '7-Zip 25.00 SourceForge mirror: SHA-256 verified against the ROCKNIX 20260801 source recipe.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This is **source-only verification**, not compiler, sysroot or WebKit build.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve mirror verification report, including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-7zip-2500-mirror-sha256-report
+          path: /tmp/fire4nix-7zip-report/
+          retention-days: 7
+          if-no-files-found: warn
