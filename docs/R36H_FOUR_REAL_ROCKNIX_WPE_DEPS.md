@@ -48,3 +48,22 @@ ainda não estão resolvidos por esta etapa.
 
 O artefato tem retenção limitada pelo GitHub; compilações posteriores precisam
 revalidar a integridade, não assumir que os artefatos sempre existirão.
+
+## Resultado experimental validado em 21/10/2026
+
+[GitHub Actions 39677972305 — SUCCESS](https://github.com/Baltdh/Fire4nix/actions/runs/39677972305)
+executou com êxito a workflow completa com o GCC original ROCKNIX e os
+artefatos de três dependências da PR #57.
+
+- `EXPAT_SHARED_LIBRARY=PASS_REAL_ROCKNIX_AARCH64`
+- `EXPAT_GLIBC_REQUIRED=2.38`
+- `FOUR_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64`
+- `FOUR_DEPENDENCY_CONSUMER_LINK=PASS_ALL_FOUR_REAL_SONAMES`
+- Tarball `expat-2.7.1.tar.xz`: SHA256 verificado contra a receita ROCKNIX.
+- Artefato GitHub: [Fire4Nix-ROCKNIX-FOUR-REAL-WPE-DEPS-PRIVATE-STAGE](https://github.com/Baltdh/Fire4nix/actions/runs/39677972305/artifacts/12382269884),
+  2.709.047 bytes. Contém as bibliotecas/cabeçalhos, executável ELF de
+  integração e relatórios. Retenção limitada.
+
+O workflow restaura o estágio anterior e recompila apenas Expat 2.7.1;
+não deve ser apresentado como compilação de todos os componentes WPE ou
+SDK redistribuível. Nenhum ELF target foi executado no console.
