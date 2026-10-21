@@ -1,0 +1,77 @@
+name: Fire4Nix compile real ROCKNIX AArch64 GLib 2.85.1
+on:
+  push:
+    branches: ['feat/r36h-glib-target-build-20261021']
+    paths:
+      - 'scripts/build-rocknix-glib-target.sh'
+      - '.github/workflows/r36h-rocknix-glib-target.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  glib-target:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Install Meson and host-only code generators
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc g++ pkg-config ninja-build libglib2.0-dev gettext python3-pip python3-setuptools python3-packaging python3-pyelftools
+          python3 -m pip install --user 'meson==1.8.3'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39679782372
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-SIX-REAL-DEPS-PRIVATE-STAGE
+          path: six-artifact
+      - name: Restore genuine ROCKNIX compiler at original isolated path
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          test -s six-artifact/stage/usr/lib/libffi.a
+          test -s six-artifact/stage/usr/lib/libpcre2-8.a
+          test -s six-artifact/stage/usr/lib/libpcre2-16.a
+      - name: Cross-compile GLib target and audit ELF/GLIBC
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/build-rocknix-glib-target.sh
+          bash fire4nix/scripts/build-rocknix-glib-target.sh | tee glib-build-console.txt
+          grep -Fxq 'GLIB_BUILD=PASS_REAL_ROCKNIX_AARCH64' glib-target/reports/result.txt
+      - name: Save GLib target stage and error logs (not an installable browser)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-GLib-2.85.1-TARGET-STAGE
+          path: |
+            glib-target/stage/
+            glib-target/reports/
+            glib-build-console.txt
+          retention-days: 14
+          if-no-files-found: warn
