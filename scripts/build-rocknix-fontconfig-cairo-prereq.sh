@@ -109,9 +109,11 @@ echo 'EXPAT_TARGET=PASS_PREVIOUSLY_VERIFIED_CI_AARCH64' | tee "$report/expat-res
 fc_arc="$work/fontconfig-2.17.1.tar.xz"
 found=0
 for url in \
- 'https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.17.1/fontconfig-2.17.1.tar.xz' \
- 'https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.17.1.tar.xz' \
- 'https://sources.libreelec.tv/mirror/fontconfig/fontconfig-2.17.1.tar.xz'; do
+ 'https://ftp2.osuosl.org/pub/blfs/conglomeration/fontconfig/fontconfig-2.17.1.tar.xz' \
+ 'https://mirror.freedif.org/pub/blfs/conglomeration/fontconfig/fontconfig-2.17.1.tar.xz' \
+ 'https://mse.uk.distfiles.macports.org/fontconfig/fontconfig-2.17.1.tar.xz' \
+ 'https://whiteoak.umd.edu/xbmc/build-deps/sources/fontconfig-2.17.1.tar.xz' \
+ 'https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.17.1/fontconfig-2.17.1.tar.xz'; do
   rm -f "$fc_arc"
   if curl --proto '=https' --proto-redir '=https' --fail --silent --show-error \
       --retry 1 --connect-timeout 12 --max-time 95 "$url" -o "$fc_arc" &&
