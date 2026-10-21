@@ -21,8 +21,9 @@ python3 "$base/fire4nix/scripts/assemble-wpe-post-harfbuzz-stage.py" \
   "$base/harfbuzz-artifact/harfbuzz-icu-target/stage" \
   "$base/glvnd-artifact/glvnd-target/stage" \
   "$base/epoxy-artifact/libepoxy-target/stage" \
+  "$base/gcrypt-artifact/gcrypt-target/stage" \
   | tee "$work/report/merge.txt"
-grep -Fxq 'WPE_HARFBUZZ_ICU_EPOXY_EGL_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE' "$work/report/merge.txt"
+grep -Fxq 'WPE_HARFBUZZ_ICU_EPOXY_EGL_GCRYPT_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE' "$work/report/merge.txt"
 [[ "$(git -C "$base/rocknix-source" rev-parse HEAD)" == 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb ]] || exit 4
 [[ "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" == aarch64-rocknix-linux-gnu ]] || exit 4
 readelf -h "$sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
@@ -35,7 +36,7 @@ grep -Fq "$sdk" "$sdk/fire4nix-toolchain.cmake" || exit 4
   echo 'ERROR: actual staged HarfBuzz target library/header absent' >&2; exit 5;
 }
 readelf -h "$stage/usr/lib/libharfbuzz.so.0" | grep -Eq 'Machine:.*AArch64' || exit 5
-for pc in harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
+for pc in libgcrypt gpg-error harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   [[ -s "$stage/usr/lib/pkgconfig/$pc.pc" ]] ||
      { echo "ERROR: real target pkg-config stage missing $pc" >&2; exit 4; }
 done
@@ -43,7 +44,7 @@ cat > "$work/report/status.txt" <<EOF
 ROCKNIX_REAL_SDK_AARCH64=PASS
 ROCKNIX_SOURCE_SHA=3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
 ROCKNIX_TARGET_GLIBC=2.41
-TARGET_STAGE_RUN_IDS=39683307528,39687860420,39688962028,39688837904,39692709765,39692039643,39692741218
+TARGET_STAGE_RUN_IDS=39683307528,39687860420,39688962028,39688837904,39692709765,39692039643,39692741218,39694338119
 WPE_SOURCE_VERSION=2.54.1
 WPE_MEDIA_PROFILE=GSTREAMER_OFF
 WPE_WEBKIT_BUILT=no
@@ -53,7 +54,7 @@ EOF
 export PKG_CONFIG_PATH=''
 export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
 export PKG_CONFIG_SYSROOT_DIR="$stage"
-for pc in harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
+for pc in libgcrypt gpg-error harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   pkg-config --modversion "$pc" | awk -v name="$pc" '{print "TARGET_PC_" name "=" $0}'
 done | tee "$work/report/target-package-versions.txt"
 # Extend rather than replace the immutable SDK toolchain: this makes CMake
@@ -94,6 +95,10 @@ cmake -S "$work/source" -B "$work/configure" -G Ninja \
  -DICU_DATA_LIBRARY:FILEPATH="$stage/usr/lib/libicudata.so.74" \
  -DEpoxy_LIBRARY:FILEPATH="$stage/usr/lib/libepoxy.so.0" \
  -DEpoxy_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DLibGcrypt_LIBRARY:FILEPATH="$stage/usr/lib/libgcrypt.so.20" \
+ -DLibGcrypt_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DLibGcrypt_GpgError_LIBRARY:FILEPATH="$stage/usr/lib/libgpg-error.so.0" \
+ -DLibGcrypt_GpgError_INCLUDE_DIR:PATH="$stage/usr/include" \
  -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
  -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
@@ -145,6 +150,12 @@ if grep -Eq 'CMake Error at .*FindHarfBuzz.cmake|Could NOT find HarfBuzz|_HarfBu
   exit 18
 fi
 echo 'HARFBUZZ_ICU_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if grep -Eq 'Could NOT find LibGcrypt|LibGcrypt_(GpgError_)?(LIBRARY|INCLUDE_DIR)' "$work/report/cmake.log"; then
+  echo 'LIBGCRYPT_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: LibGcrypt/GpgError are not resolved for WPE yet' >&2
+  exit 19
+fi
+echo 'LIBGCRYPT_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
 echo 'NO_FIRMWARE_WRITES=YES' >> "$work/report/status.txt"
-echo 'WPE_CONFIGURE_PROBE=RECORDED_HARFBUZZ_ICU_EPOXY_EGL_TARGET_SDK' >> "$work/report/status.txt"
+echo 'WPE_CONFIGURE_PROBE=RECORDED_GCRYPT_GPGERROR_HARFBUZZ_ICU_EPOXY_EGL_TARGET_SDK' >> "$work/report/status.txt"
 cat "$work/report/status.txt"
