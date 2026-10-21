@@ -9,6 +9,7 @@ sdk="$root/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
 sysroot="$sdk/aarch64-rocknix-linux-gnu/sysroot"
 cc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
 work="$root/libepoxy-target"
+glvnd="$root/glvnd-artifact/glvnd-target/stage"
 [[ ! -e "$work" && ! -L "$work" ]] || { echo 'ERROR: output already exists' >&2; exit 4; }
 mkdir -p "$work"/{source,reports,stage}
 [[ "$(git -C "$root/rocknix-source" rev-parse HEAD)" == 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb ]] || exit 4
@@ -20,6 +21,18 @@ hash=a7ced37f4102b745ac86d6a70a9da399cc139ff168ba6b8002b4d8d43c900c15
 grep -Fxq 'PKG_VERSION="1.5.10"' "$recipe"
 grep -Fxq "PKG_SHA256=\"$hash\"" "$recipe"
 grep -Fxq 'PKG_VERSION="1.5.10"' "$override"
+grep -Fxq 'GLVND_EGL_GLES_HEADERS=PASS_REAL_TARGET_STAGE'   "$root/glvnd-artifact/glvnd-target/reports/result.txt" || {
+  echo 'ERROR: libglvnd stage has not passed real ROCKNIX target checks' >&2; exit 5;
+}
+for header in EGL/egl.h EGL/eglext.h EGL/eglplatform.h GLES2/gl2.h KHR/khrplatform.h; do
+  [[ -s "$glvnd/usr/include/$header" ]] || { echo "ERROR: true target GLVND header missing: $header" >&2; exit 5; }
+done
+for lib in libEGL.so.1 libGLESv2.so.2; do
+  [[ -s "$glvnd/usr/lib/$lib" ]] && readelf -h "$glvnd/usr/lib/$lib" | grep -Eq 'Machine:.*AArch64' || {
+    echo "ERROR: genuine libglvnd AArch64 $lib absent" >&2; exit 5;
+  }
+done
+echo 'EGL_SOURCE_STAGE=GLVND_1_7_0_ROCKNIX_AARCH64_VERIFIED' >> "$work/reports/egl-sysroot-census.txt"
 cat > "$work/reports/egl-sysroot-census.txt" <<EOF
 SDK_CHECKOUT=ROCKNIX_20260801
 SDK_GCC_TARGET=aarch64-rocknix-linux-gnu
@@ -64,14 +77,16 @@ cpu_family = 'aarch64'
 cpu = 'cortex-a35'
 endian = 'little'
 [properties]
-sys_root = '$sysroot'
-pkg_config_libdir = ['$sysroot/usr/lib/pkgconfig', '$sysroot/usr/share/pkgconfig']
+sys_root = '$glvnd'
+pkg_config_libdir = ['$glvnd/usr/lib/pkgconfig', '$sysroot/usr/lib/pkgconfig', '$sysroot/usr/share/pkgconfig']
 [built-in options]
-c_args = ['-mcpu=cortex-a35']
-cpp_args = ['-mcpu=cortex-a35']
+c_args = ['-mcpu=cortex-a35', '-I$glvnd/usr/include']
+c_link_args = ['-L$glvnd/usr/lib', '-Wl,-rpath-link,$glvnd/usr/lib']
+cpp_args = ['-mcpu=cortex-a35', '-I$glvnd/usr/include']
+cpp_link_args = ['-L$glvnd/usr/lib', '-Wl,-rpath-link,$glvnd/usr/lib']
 EOF
-export PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
-export PKG_CONFIG_SYSROOT_DIR="$sysroot"
+export PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$glvnd/usr/lib/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="$glvnd"
 # First WPE minimal profile: EGL on (Wayland GPU path), no X11/GLX and no
 # Ubuntu dev libraries. Do not claim equivalence with ROCKNIX full wl option.
 if ! meson setup "$work/build" "$work/source" --cross-file "$work/cross.ini" \
@@ -126,7 +141,7 @@ int fire4nix_epoxy_probe(void) {
 }
 C
 "$cc" -O2 -mcpu=cortex-a35 -shared -fPIC -Wl,-z,defs \
-  -I"$work/stage/usr/include" "$work/consumer.c" \
+  -I"$work/stage/usr/include" -I"$glvnd/usr/include" "$work/consumer.c" \
   -L"$work/stage/usr/lib" -Wl,-rpath-link,"$work/stage/usr/lib" \
   -lepoxy -o "$work/libepoxy-consumer-aarch64.so"
 readelf -h "$work/libepoxy-consumer-aarch64.so" > "$work/reports/consumer-header.txt"
@@ -135,6 +150,7 @@ grep -Eq 'Machine:.*AArch64' "$work/reports/consumer-header.txt"
 grep -Fq 'Shared library: [libepoxy.so.0]' "$work/reports/consumer-dynamic.txt"
 {
  echo 'LIBEPOXY_VERSION=1.5.10_ROCKNIX_EFFECTIVE'
+ echo 'LIBEPOXY_EGL_HEADERS=FROM_VERIFIED_LIBGLVND_1.7.0_TARGET'
  echo 'LIBEPOXY_EGL_BUILD=PASS_REAL_ROCKNIX_AARCH64'
  echo 'LIBEPOXY_GLX_X11_PROFILE=OFF_WPE_MINIMAL'
  echo 'LIBEPOXY_CONSUMER_LINK=PASS_ELF64_AARCH64'
