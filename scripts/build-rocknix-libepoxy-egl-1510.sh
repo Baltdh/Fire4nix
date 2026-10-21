@@ -131,8 +131,14 @@ v=[tuple(map(int,x.split('.'))) for x in re.findall(r'Name: GLIBC_([0-9]+\.[0-9]
 assert all(x<=(2,41) for x in v),v
 print('LIBEPOXY_GLIBC=PASS_MAX_2_41')
 PY
-export PKG_CONFIG_LIBDIR="$work/stage/usr/lib/pkgconfig" PKG_CONFIG_SYSROOT_DIR="$work/stage"
-pkg-config --exists 'epoxy >= 1.5.4'
+export PKG_CONFIG_LIBDIR="$work/stage/usr/lib/pkgconfig:$glvnd/usr/lib/pkgconfig" PKG_CONFIG_SYSROOT_DIR="$work/stage"
+echo "EPOXY_TARGET_PKGCONFIG_LIBDIR=$PKG_CONFIG_LIBDIR" >> "$work/reports/egl-sysroot-census.txt"
+if ! pkg-config --exists 'epoxy >= 1.5.4'; then
+  echo 'EPOXY_PKGCONFIG=BLOCKED' >&2
+  pkg-config --print-errors --exists 'epoxy >= 1.5.4' || true
+  pkg-config --variable=pcfiledir epoxy || true
+  exit 15
+fi
 pkg-config --modversion epoxy > "$work/reports/epoxy-version.txt"
 cat > "$work/consumer.c" <<'C'
 #include <epoxy/egl.h>
