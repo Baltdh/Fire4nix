@@ -46,6 +46,20 @@ assert source.count(old) == 1
 recipe.write_text(source.replace(old, 'PKG_URL="' + url + '"'))
 PY
 git -C "$root" diff -- packages/compress/7-zip/package.mk > "$report/7zip-url-only.patch"
+# The original Savannah configtools archive URL and upstream distribution-sources
+# mirror are both unavailable (HTTP 404 in run 39512765216). This independent
+# source guard verifies the original SHA256 before changing ONLY the URL in
+# the disposable checkout. Fail closed; never relax hash or use a new commit.
+FIRE4NIX_CONFIGTOOLS_REPORT="$report/configtools-mirror.txt" \
+  bash "$repo/scripts/verify-rocknix-configtools-source.sh" --check
+FIRE4NIX_CONFIGTOOLS_REPORT="$report/configtools-mirror.txt" \
+FIRE4NIX_ROCKNIX_SOURCE="$root" \
+  bash "$repo/rocknix-integration/stage-configtools-source-mirror.sh" --check
+FIRE4NIX_CONFIGTOOLS_REPORT="$report/configtools-mirror.txt" \
+FIRE4NIX_ROCKNIX_SOURCE="$root" \
+  bash "$repo/rocknix-integration/stage-configtools-source-mirror.sh" --apply
+git -C "$root" diff --check
+git -C "$root" diff -- packages/devel/configtools/package.mk > "$report/configtools-url-only.patch"
 cd "$root"
 # Use upstream dependency resolution and the project GCC/glibc overrides.
 # No scripts/image, install, build_distro, flashing or target execution.
