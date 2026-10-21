@@ -97,7 +97,7 @@ meson install -C "$work/host-build" --no-rebuild > "$reports/host-install.log" 2
   tail -n 90 "$reports/host-install.log"; exit 9;
 }
 test -x "$host_prefix/bin/wayland-scanner"
-[[ "$("$host_prefix/bin/wayland-scanner" --version)" == wayland-scanner\ 1.23.1 ]] || {
+[[ "$("$host_prefix/bin/wayland-scanner" --version 2>&1)" == wayland-scanner\ 1.23.1 ]] || {
   echo 'ERROR: native scanner version does not match source' >&2; exit 9;
 }
 test -s "$host_prefix/lib/pkgconfig/wayland-scanner.pc"
