@@ -22,7 +22,20 @@ for p in usr/lib/pkgconfig usr/lib64/pkgconfig usr/share/pkgconfig \
   usr/lib/aarch64-linux-gnu/pkgconfig lib/pkgconfig lib64/pkgconfig \
   lib/aarch64-linux-gnu/pkgconfig; do
   if [ -d "$root/$p" ]; then
-    if [ -z "$libdirs" ]; then libdirs="$root/$p"; else libdirs="$libdirs:$root/$p"; fi
+    # A pathname beginning with the SDK prefix can still be a symlink to
+    # host /usr/lib. Canonicalize every search directory before pkg-config.
+    realdir=$(CDPATH= cd "$root/$p" && pwd -P) || {
+      echo "SYSROOT_PC_AUDIT=BLOCKED_UNRESOLVABLE_TARGET_PKGCONFIG_DIR"
+      exit 6
+    }
+    case "$realdir" in
+      "$root"/*) ;;
+      *)
+        echo "TARGET_PC_DIRECTORY_OUTSIDE_SYSROOT=$p"
+        echo 'SYSROOT_PC_AUDIT=BLOCKED_HOST_PKGCONFIG_SYMLINK'
+        exit 6 ;;
+    esac
+    if [ -z "$libdirs" ]; then libdirs="$realdir"; else libdirs="$libdirs:$realdir"; fi
   fi
 done
 [ -n "$libdirs" ] || {
