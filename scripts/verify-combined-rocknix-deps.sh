@@ -53,7 +53,7 @@ with tarfile.open(p, 'r:xz') as tar:
             link = pathlib.PurePosixPath(item.linkname)
             if link.is_absolute() or '..' in link.parts:
                 raise SystemExit(f'ERROR: unsafe tar symlink {item.name}')
-    tar.extractall(out, filter='data')
+    tar.extractall(out)  # members/symlinks were prevalidated above
 PY
 [[ -s "$work/libtasn1-unpack/usr/lib/pkgconfig/libtasn1.pc" ]] || {
   echo 'ERROR: missing real libtasn1.pc'; exit 5;
