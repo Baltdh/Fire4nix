@@ -53,5 +53,21 @@ rc=$?
 set -e
 test "$rc" -eq 6
 grep -Fq 'TARGET_PC_MISSING_OR_OLD=libtasn1' "$t/host-path"
+# Reject a directory symlink whose *textual* path is under the sysroot but
+# whose resolved target is outside it. This is distinct from PKG_CONFIG_PATH.
+outside="$t/host-pc-files"
+mkdir -p "$outside"
+cp "$root/usr/lib/pkgconfig/glib-2.0.pc" "$outside/glib-2.0.pc"
+mv "$root/usr/lib/pkgconfig" "$root/usr/lib/pkgconfig-backup"
+ln -s "$outside" "$root/usr/lib/pkgconfig"
+set +e
+FIRE4NIX_ROCKNIX_SYSROOT="$root" sh "$audit" --pc-ready > "$t/host-symlink"
+rc=$?
+set -e
+test "$rc" -eq 6
+grep -Fxq 'SYSROOT_PC_AUDIT=BLOCKED_HOST_PKGCONFIG_DIRECTORY' "$t/host-symlink"
+grep -Fq 'TARGET_PC_UNSAFE_SEARCH_DIRECTORY=usr/lib/pkgconfig' "$t/host-symlink"
+rm "$root/usr/lib/pkgconfig"
+mv "$root/usr/lib/pkgconfig-backup" "$root/usr/lib/pkgconfig"
 echo 'PASS: 22 target .pc gates, minimum version, missing recipes, host pkg-config isolation'
 echo 'WARNING: tests use fake .pc files; no ROCKNIX SDK or native WebKit compiled'
