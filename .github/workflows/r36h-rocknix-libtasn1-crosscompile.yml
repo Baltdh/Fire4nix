@@ -60,6 +60,8 @@ jobs:
              libtasn1-rocknix-work/reports/status.txt
           grep -Fxq 'LIBTASN1_TARGET=ELF64_AARCH64' \
              libtasn1-rocknix-work/reports/status.txt
+          grep -Fxq 'LIBTASN1_CONSUMER_LINK=PASS_AARCH64_TARGET_AND_SONAME' \
+             libtasn1-rocknix-work/reports/status.txt
           echo '## First real library cross-compiled against ROCKNIX 20260801 (glibc 2.41)' >> "$GITHUB_STEP_SUMMARY"
           cat libtasn1-rocknix-work/reports/status.txt >> "$GITHUB_STEP_SUMMARY"
           echo 'Not a functional WPE runtime or console installation.' >> "$GITHUB_STEP_SUMMARY"
