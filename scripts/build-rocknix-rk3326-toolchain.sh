@@ -60,6 +60,27 @@ FIRE4NIX_ROCKNIX_SOURCE="$root" \
   bash "$repo/rocknix-integration/stage-configtools-source-mirror.sh" --apply
 git -C "$root" diff --check
 git -C "$root" diff -- packages/devel/configtools/package.mk > "$report/configtools-url-only.patch"
+# Validate original XMLStarlet 1.6.1 before replacing the dead upstream URL in temporary source checkout.
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+  bash "$repo/scripts/verify-rocknix-xmlstarlet-source.sh"
+python3 - "$root" "$report" <<'PY'
+import pathlib, sys
+root, report = map(pathlib.Path, sys.argv[1:])
+fields = dict(line.split('=', 1) for line in (report / 'xmlstarlet-mirror.txt').read_text().splitlines() if '=' in line)
+assert fields.get('SOURCE_STATUS') == 'PASS'
+assert fields.get('VERIFIED_SHA256') == '15d838c4f3375332fd95554619179b69e4ec91418a3a5296e7c631b7ed19e7ca'
+url = fields['MIRROR_VERIFIED']
+assert url in ('https://downloads.sourceforge.net/project/xmlstar/xmlstarlet/1.6.1/xmlstarlet-1.6.1.tar.gz', 'https://sourceforge.net/projects/xmlstar/files/xmlstarlet/1.6.1/xmlstarlet-1.6.1.tar.gz/download')
+recipe = root / 'packages/textproc/xmlstarlet/package.mk'
+source = recipe.read_text()
+assert 'PKG_VERSION="1.6.1"' in source
+assert 'PKG_SHA256="' + fields['VERIFIED_SHA256'] + '"' in source
+old = 'PKG_URL="http://netcologne.dl.sourceforge.net/project/xmlstar/${PKG_NAME}/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tar.gz"'
+assert source.count(old) == 1
+recipe.write_text(source.replace(old, 'PKG_URL="' + url + '"', 1))
+PY
+git -C "$root" diff --check
+git -C "$root" diff -- packages/textproc/xmlstarlet/package.mk > "$report/xmlstarlet-url-only.patch"
 cd "$root"
 # Use upstream dependency resolution and the project GCC/glibc overrides.
 # No scripts/image, install, build_distro, flashing or target execution.
