@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/r36h-audit-real-sdk-snapshot.yml'
       - 'rocknix-integration/audit-wpe-sysroot-pkgconfig.sh'
+      - 'native/tests/test_wpe_sysroot_pkgconfig_audit.sh'
   workflow_dispatch:
 
 permissions:
@@ -19,6 +20,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Prove fake target pkg-config metadata cannot escape SDK
+        run: |
+          set -eu
+          sh -n rocknix-integration/audit-wpe-sysroot-pkgconfig.sh
+          sh -n native/tests/test_wpe_sysroot_pkgconfig_audit.sh
+          sh native/tests/test_wpe_sysroot_pkgconfig_audit.sh
       - name: Obtain cross toolchain from successful ROCKNIX bootstrap
         uses: actions/download-artifact@v4
         with:
