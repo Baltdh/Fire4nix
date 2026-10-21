@@ -1,0 +1,34 @@
+name: Fire4Nix verify ROCKNIX XMLStarlet 1.6.1 source
+on:
+  push:
+    paths:
+      - 'scripts/verify-rocknix-xmlstarlet-source.sh'
+      - 'scripts/build-rocknix-rk3326-toolchain.sh'
+      - '.github/workflows/verify-rocknix-xmlstarlet-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify unchanged SHA256 of upstream XMLStarlet 1.6.1
+        env:
+          FIRE4NIX_XMLSTARLET_REPORT: /tmp/fire4nix-xmlstarlet/source.txt
+        run: |
+          set -euo pipefail
+          bash -n scripts/verify-rocknix-xmlstarlet-source.sh
+          bash -n scripts/build-rocknix-rk3326-toolchain.sh
+          bash scripts/verify-rocknix-xmlstarlet-source.sh
+          grep -Fxq 'SOURCE_STATUS=PASS' "$FIRE4NIX_XMLSTARLET_REPORT"
+      - name: Attach source verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-XMLStarlet-source-verification
+          path: /tmp/fire4nix-xmlstarlet/
+          if-no-files-found: warn
