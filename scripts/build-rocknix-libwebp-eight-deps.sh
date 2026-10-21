@@ -61,7 +61,10 @@ for f in sorted(directory.glob('lib*.so*')):
     so=re.findall(r'\(SONAME\).*\[([^\]]+)\]',dyn.stdout)
     if len(so)!=1: continue
     name=so[0]
-    if not name.startswith('lib') or '/' in name or '..' in name or not f.name.startswith(name): raise SystemExit(f'unsafe SONAME {f}')
+    if not name.startswith('lib') or '/' in name or '..' in name: raise SystemExit(f'unsafe SONAME {f}')
+    # GitHub upload-artifact can store development .so links as regular files.
+    # Only a SONAME-bearing filename is authoritative for reconstruction.
+    if not f.name.startswith(name): continue
     for link in (name,name.split('.so',1)[0]+'.so'):
         target=directory/link
         if target==f: continue
