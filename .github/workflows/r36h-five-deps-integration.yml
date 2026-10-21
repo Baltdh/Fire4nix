@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/verify-four-rocknix-deps.sh'
       - 'scripts/verify-five-rocknix-deps.sh'
+      - 'native/tests/test_five_stage_merge.py'
       - '.github/workflows/r36h-five-deps-integration.yml'
   workflow_dispatch:
 
@@ -28,6 +29,8 @@ jobs:
           ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
           path: rocknix-source
           persist-credentials: false
+      - name: Test private stage merge before downloading compiler
+        run: python3 fire4nix/native/tests/test_five_stage_merge.py
       - name: Download pinned genuine ROCKNIX compiler checkpoint (host only)
         uses: actions/download-artifact@v4
         with:
