@@ -21,7 +21,7 @@ for url in "${urls[@]}"; do
   echo "VERIFYING_SOURCE_URL=$url"
   if curl -L -f -sS --proto "=https" --max-time 35 --connect-timeout 10 --retry 0 -o "$WORK/config.tar.gz" "$url"; then
     digest=$(sha256sum "$WORK/config.tar.gz" | cut -d " " -f1)
-    if [[ "$digest" == "$EXPECTED_SHA" ]] && tar -tzf "$WORK/config.tar.gz" | grep -Eq "(^|/)config\.guess$"; then
+    if [[ "$digest" == "$EXPECTED_SHA" ]] && tar -tzf "$WORK/config.tar.gz" > "$WORK/archive-list.txt" && grep -Eq "(^|/)config\.guess$" "$WORK/archive-list.txt"; then
       echo "CONFIGTOOLS_SOURCE_STATUS=PASS_ORIGINAL_ROCKNIX_SHA256" >> "$REPORT"
       echo "VERIFIED_URL=$url" >> "$REPORT"
       cat "$REPORT"
@@ -41,8 +41,9 @@ if timeout 120s git -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=20 clone -q 
     [[ "$actual" == "$COMMIT" ]] || { echo "ERROR: upstream commit identity mismatch" >&2; exit 6; }
     git -C "$WORK/config-git" archive --format=tar.gz --prefix="config-$COMMIT/" "$COMMIT" > "$WORK/reconstructed.tar.gz"
     digest=$(sha256sum "$WORK/reconstructed.tar.gz" | cut -d " " -f1)
-    tar -tzf "$WORK/reconstructed.tar.gz" | grep -Fxq "config-$COMMIT/config.guess" || exit 6
-    tar -tzf "$WORK/reconstructed.tar.gz" | grep -Fxq "config-$COMMIT/config.sub" || exit 6
+    tar -tzf "$WORK/reconstructed.tar.gz" > "$WORK/reconstructed-list.txt" || exit 6
+    grep -Fxq "config-$COMMIT/config.guess" "$WORK/reconstructed-list.txt" || exit 6
+    grep -Fxq "config-$COMMIT/config.sub" "$WORK/reconstructed-list.txt" || exit 6
     echo "UPSTREAM_COMMIT_VERIFIED=$actual" >> "$REPORT"
     echo "RECONSTRUCTED_ARCHIVE_SHA256=$digest" >> "$REPORT"
     if [[ "$digest" == "$EXPECTED_SHA" ]]; then
