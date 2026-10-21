@@ -67,3 +67,27 @@ teste AArch64 e não verifica renderização gráfica no R36H. Os artefatos
 não são pacotes instaláveis. Para entregar o navegador ainda faltam
 bibliotecas de desenvolvimento não resolvidas, a construção do motor,
 closure `DT_NEEDED`/GLIBC completa, HTTPS/GIO TLS e testes físicos.
+
+## Validação concluída — 21/10/2026
+
+O teste mais recente,
+[GitHub Actions 39683707451](https://github.com/Baltdh/Fire4nix/actions/runs/39683707451),
+terminou em **SUCCESS** no commit `d581ed625ee3cf8497052a588d974b513854ac28`.
+
+- `LIBWEBP_SOURCE=OFFICIAL_RELEASE_SHA256_MATCH`
+- `SHA256=e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564`
+- `EIGHT_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64`
+- `WEBP_GLIB_PNG_CONSUMER_LINK=PASS_REAL_AARCH64`
+- Cinco bibliotecas compartilhadas WebP verificadas em ELF64 AArch64,
+  com limite GLIBC 2.41: `libsharpyuv`, `libwebpdecoder`, `libwebp`,
+  `libwebpdemux` e `libwebpmux`.
+- O **RPATH/RUNPATH `$ORIGIN`** foi auditado em todas as cinco.
+  Isso permite buscar dependências no mesmo diretório de execução privado,
+  sem forçar prioridade a `/usr/lib`.
+- Arquivo de saída: [artifact 12383894588](https://github.com/Baltdh/Fire4nix/actions/runs/39683707451/artifacts/12383894588)
+  (`Fire4Nix-ROCKNIX-EIGHT-DEPS-WEBP-TEST-ONLY`; 13.171.606 bytes).
+  Artefato de teste, **não instalável no R36H**, com retenção limitada.
+
+A contagem de oito refere-se aos **grupos de dependência do estágio**
+(zlib, SQLite, libtasn1, libpng, libffi, PCRE2, GLib e libwebp), não ao número
+total de arquivos compartilhados `.so` gerados.
