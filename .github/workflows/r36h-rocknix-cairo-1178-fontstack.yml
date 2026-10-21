@@ -1,0 +1,96 @@
+name: Fire4Nix cross-build ROCKNIX Cairo 1.17.8 real AArch64 font stack
+
+on:
+  push:
+    branches: ['feat/r36h-cairo-1178-rocknix-fontstack-20261021']
+    paths:
+      - '.github/workflows/r36h-rocknix-cairo-1178-fontstack.yml'
+      - 'scripts/build-rocknix-cairo-1178-target.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  target-cairo:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Install host-only Meson tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc g++ cmake ninja-build pkg-config python3-pip python3-setuptools \
+            python3-packaging python3-pyelftools gettext gperf
+          python3 -m pip install --user 'meson==1.8.3'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          bash -n fire4nix/scripts/build-rocknix-cairo-1178-target.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39687860420
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Fontconfig-2.17.1-CAIRO-PREREQ-TEST-ONLY
+          path: fontconfig-artifact
+      - name: Restore pinned GCC AArch64 toolchain only in temporary runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          test -s "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf \
+            "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = 'aarch64-rocknix-linux-gnu'
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'FONTCONFIG_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
+            fontconfig-artifact/fontconfig-target/reports/acceptance.txt
+      - name: Compile Cairo 1.17.8 genuine target font/png/pixman and link ARM64 consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-rocknix-cairo-1178-target.sh 2>&1 | tee cairo-console.txt
+          grep -Fxq 'CAIRO_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' cairo-target/reports/acceptance.txt
+          grep -Fxq 'CAIRO_TARGET_CONSUMER_LINK=PASS_ELF64_AARCH64' cairo-target/reports/acceptance.txt
+          {
+            echo '## Genuine ROCKNIX target Cairo 1.17.8 cross-build'
+            cat cairo-target/reports/acceptance.txt
+            echo ''
+            echo 'Minimal WPE image/font variant disables Xlib/XCB, unlike ROCKNIX wl firmware recipe.'
+            echo 'This is a target-only SDK stage and is not an installable browser.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve Cairo target artifact and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-Cairo-1.17.8-TARGET-PREREQ-ONLY
+          path: |
+            cairo-target/reports/
+            cairo-target/stage/usr/lib/
+            cairo-target/stage/usr/include/
+            cairo-target/libfire4nix-cairo-consumer.so
+            cairo-console.txt
+          retention-days: 14
+          if-no-files-found: warn
