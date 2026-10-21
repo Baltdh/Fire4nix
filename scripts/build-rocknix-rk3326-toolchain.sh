@@ -60,6 +60,20 @@ FIRE4NIX_ROCKNIX_SOURCE="$root" \
   bash "$repo/rocknix-integration/stage-configtools-source-mirror.sh" --apply
 git -C "$root" diff --check
 git -C "$root" diff -- packages/devel/configtools/package.mk > "$report/configtools-url-only.patch"
+# The long compiler bootstrap reached XMLStarlet after compiling earlier host
+# packages, but upstream HTTP mirror failed and distribution-sources gave 404.
+# Repair only its URL after verifying the original archive checksum. Do not
+# change version, SHA, platform, host dependencies or target dependencies.
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+  bash "$repo/scripts/verify-rocknix-xmlstarlet-source.sh" --check
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+FIRE4NIX_ROCKNIX_SOURCE="$root" \
+  bash "$repo/rocknix-integration/stage-xmlstarlet-source-mirror.sh" --check
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+FIRE4NIX_ROCKNIX_SOURCE="$root" \
+  bash "$repo/rocknix-integration/stage-xmlstarlet-source-mirror.sh" --apply
+git -C "$root" diff --check
+git -C "$root" diff -- packages/textproc/xmlstarlet/package.mk > "$report/xmlstarlet-url-only.patch"
 cd "$root"
 # Use upstream dependency resolution and the project GCC/glibc overrides.
 # No scripts/image, install, build_distro, flashing or target execution.
