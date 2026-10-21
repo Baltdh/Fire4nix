@@ -82,9 +82,9 @@ jobs:
                   raise SystemExit(f'ERROR: unexpected file type: {rel}')
           PY
           stage="$GITHUB_WORKSPACE/four-stage"
-          for lib in z sqlite3 tasn1; do
-            test -s "$stage/usr/lib/pkgconfig/$([[ "$lib" == z ]] && echo zlib || echo "$lib").pc" || {
-              echo "ERROR: missing .pc from real $lib stage" >&2; exit 5;
+          for pc in zlib sqlite3 libtasn1; do
+            test -s "$stage/usr/lib/pkgconfig/$pc.pc" || {
+              echo "ERROR: missing $pc.pc from real three-library stage" >&2; exit 5;
             }
           done
           test -s "$stage/usr/include/zlib.h"
@@ -99,10 +99,8 @@ jobs:
           expected=354552544b8f99012e5062f7d570ec77f14b412a3ff5c7d8d0dae62c0d217c30
           grep -Fxq 'PKG_VERSION="2.7.1"' rocknix-source/packages/textproc/expat/package.mk
           grep -Fxq "PKG_SHA256=\"$expected\"" rocknix-source/packages/textproc/expat/package.mk
-          grep -Fq '. $'\{ROOT\}'/packages/textproc/expat/package.mk' \
-            rocknix-source/projects/ROCKNIX/packages/textproc/expat/package.mk || {
-              grep -Fq 'packages/textproc/expat/package.mk' rocknix-source/projects/ROCKNIX/packages/textproc/expat/package.mk
-            }
+          grep -Fq 'packages/textproc/expat/package.mk' \
+            rocknix-source/projects/ROCKNIX/packages/textproc/expat/package.mk
           src="$RUNNER_TEMP/expat-2.7.1.tar.xz"
           curl -fLsS --proto '=https' --proto-redir '=https' \
             --connect-timeout 15 --max-time 90 \
