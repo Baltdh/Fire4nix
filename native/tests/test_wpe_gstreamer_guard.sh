@@ -45,11 +45,19 @@ grep -Fq 'UNRESOLVED_GST_CAT_DEFAULT=libWPEWebKit-2.0.so.1' "$T/renamed.txt"
 # WPE executable helpers are also covered by the static scanner.
 rm -f "$T/rt/lib/libWPEWebKit-2.0.so.1"
 mkdir -p "$T/rt/libexec/wpe-webkit-2.0"
-printf 'extern void *GST_CAT_DEFAULT; int main(void){return GST_CAT_DEFAULT != 0;}\n' | cc -x c - -o "$T/rt/libexec/wpe-webkit-2.0/WPEWebProcess"
+# Shared-object fixture with a subprocess filename: audit uses ELF metadata only.
+printf 'extern void *GST_CAT_DEFAULT; int main(void){return GST_CAT_DEFAULT != 0;}\n' | cc -shared -fPIC -x c - -o "$T/rt/libexec/wpe-webkit-2.0/WPEWebProcess"
 set +e
 FIRE4NIX_GST_REPORT="$T/helper.txt" sh "$AUDITOR" --strict "$T/rt" > /dev/null
 rc=$?
 set -e
 test "$rc" -eq 6
 grep -Fq 'UNRESOLVED_GST_CAT_DEFAULT=WPEWebProcess' "$T/helper.txt"
+# Both supported runtime inputs (root and root/lib) locate the same helper.
+set +e
+FIRE4NIX_GST_REPORT="$T/helper-from-lib.txt" sh "$AUDITOR" --strict "$T/rt/lib" > /dev/null
+rc=$?
+set -e
+test "$rc" -eq 6
+grep -Fq 'UNRESOLVED_GST_CAT_DEFAULT=WPEWebProcess' "$T/helper-from-lib.txt"
 echo 'PASS: GStreamer ABI audit includes renamed WPE libraries and helpers'
