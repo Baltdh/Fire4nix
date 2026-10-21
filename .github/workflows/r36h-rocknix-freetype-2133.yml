@@ -1,0 +1,83 @@
+name: Fire4Nix genuine ROCKNIX AArch64 FreeType 2.13.3 with PNG and zlib
+
+on:
+  push:
+    branches: ['feat/r36h-rocknix-freetype-2133-target-20261021']
+    paths:
+      - '.github/workflows/r36h-rocknix-freetype-2133.yml'
+      - 'scripts/build-rocknix-freetype-2133.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  freetype-target:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683307528
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-EIGHT-REAL-DEPS-JPEG-3.0.1-TARGET-ONLY
+          path: eight-artifact
+      - name: Restore real ROCKNIX cross-compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          test -s "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf \
+            "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          test -s eight-artifact/eight-deps/stage/usr/lib/libpng16.so
+          test -s eight-artifact/eight-deps/stage/usr/lib/libz.so
+      - name: Compile FreeType against real ROCKNIX PNG and zlib, then link target consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/build-rocknix-freetype-2133.sh
+          bash fire4nix/scripts/build-rocknix-freetype-2133.sh
+          grep -Fxq 'FREETYPE_BUILD=PASS_REAL_ROCKNIX_AARCH64' freetype-target/reports/result.txt
+          grep -Fxq 'FREETYPE_CONSUMER_LINK=PASS_ELF64_AARCH64' freetype-target/reports/result.txt
+          {
+            echo '## First true font prerequisite for ROCKNIX HarfBuzz'
+            cat freetype-target/reports/result.txt
+            echo 'Target-only cross-build; no WebKit, no firmware writes.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve FreeType target libraries and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-FREETYPE-2.13.3-AARCH64-STAGE-ONLY
+          path: |
+            freetype-target/reports/
+            freetype-target/stage/usr/lib/
+            freetype-target/stage/usr/include/
+            freetype-target/build/libfreetype-consumer-aarch64.so
+          retention-days: 14
+          if-no-files-found: warn
