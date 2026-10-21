@@ -1,5 +1,10 @@
 name: Fire4Nix target HarfBuzz 11.2.1 with REAL ROCKNIX ICU
 on:
+  push:
+    branches: ['feat/r36h-harfbuzz-icu-target-20261021']
+    paths:
+      - 'scripts/build-rocknix-harfbuzz-icu-target.sh'
+      - '.github/workflows/r36h-rocknix-harfbuzz-icu-target.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -52,9 +57,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 39689390988
+          run-id: 39688837904
           github-token: ${{ github.token }}
-          name: Fire4Nix-ROCKNIX-ICU74.1-REAL-TARGET-STAGE
+          name: Fire4Nix-ROCKNIX-ICU-74.1-REAL-TARGET-STAGE
           path: icu-artifact
       - name: Restore pinned ROCKNIX toolchain in disposable checkout
         shell: bash
@@ -65,7 +70,7 @@ jobs:
           tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C rocknix-source/build.ROCKNIX-RK3326.aarch64
           sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
           test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
-          grep -Fxq 'ICU74_BUILD=PASS_REAL_ROCKNIX_AARCH64' icu-artifact/icu74-target/reports/result.txt
+          grep -Fxq 'ICU_TARGET=PASS_REAL_ROCKNIX_AARCH64' icu-artifact/icu74-target/reports/acceptance.txt
           grep -Fxq 'CAIRO_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' cairo-artifact/cairo-target/reports/acceptance.txt
       - name: Compile genuine HarfBuzz 11.2.1 with ICU ON, link target probe
         shell: bash
