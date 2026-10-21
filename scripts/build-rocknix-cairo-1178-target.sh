@@ -108,7 +108,7 @@ if ! meson setup "$build" "$source" --cross-file "$root/cairo-target/cross.ini" 
  -Ddwrite=disabled -Dfontconfig=enabled -Dfreetype=enabled -Dpng=enabled \
  -Dquartz=disabled -Dtee=disabled -Dxcb=disabled -Dxlib=disabled \
  -Dxlib-xcb=disabled -Dzlib=enabled -Dtests=disabled -Dxml=disabled \
- -Dgtk2-utils=disabled -Dglib=enabled -Dspectre=disabled \
+ -Dgtk2-utils=disabled -Dglib=disabled -Dspectre=disabled \
  -Dsymbol-lookup=disabled -Dgtk_doc=false \
  > "$reports/configure.log" 2>&1; then
     echo 'CAIRO_CONFIGURE=BLOCKED'
