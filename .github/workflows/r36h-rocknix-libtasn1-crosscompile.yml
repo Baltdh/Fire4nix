@@ -1,0 +1,83 @@
+name: Fire4Nix first real ROCKNIX-target libtasn1 cross-compile
+on:
+  push:
+    branches: ['feat/rocknix-libtasn1-crosscompile-20261021']
+    paths:
+      - 'scripts/build-rocknix-libtasn1.sh'
+      - '.github/workflows/r36h-rocknix-libtasn1-crosscompile.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: rocknix-libtasn1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-libtasn1:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Fire4Nix project at expected workspace path
+        uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - name: Restore verified pinned ROCKNIX RK3326 toolchain checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          repository: Baltdh/Fire4nix
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          path: host-checkpoint
+      - name: Validate and unpack host-only cross-toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh host-checkpoint/
+          test -s host-checkpoint/rocknix-toolchain-host-only.tar.xz
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar -tJf host-checkpoint/rocknix-toolchain-host-only.tar.xz > host-checkpoint/tar-list.txt
+          grep -Eq '^toolchain/bin/aarch64-rocknix-linux-gnu-gcc$' host-checkpoint/tar-list.txt
+          grep -Eq '^toolchain/fire4nix-toolchain.cmake$' host-checkpoint/tar-list.txt
+          tar -xJf host-checkpoint/rocknix-toolchain-host-only.tar.xz \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$PWD/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test -x "$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
+          test -f "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6"
+          grep -Fq "$sdk" "$sdk/fire4nix-toolchain.cmake"
+      - name: Cross-compile actual pinned libtasn1 for ROCKNIX AArch64
+        shell: bash
+        timeout-minutes: 15
+        env:
+          FIRE4NIX_ROCKNIX_TOOLCHAIN_ROOT: ${{ github.workspace }}/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain
+          FIRE4NIX_LIBTASN1_WORK: ${{ github.workspace }}/libtasn1-rocknix-work
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/build-rocknix-libtasn1.sh
+          bash fire4nix/scripts/build-rocknix-libtasn1.sh --build
+          grep -Fxq 'LIBTASN1_BUILD=PASS_REAL_ROCKNIX_CROSS_COMPILE' \
+             libtasn1-rocknix-work/reports/status.txt
+          grep -Fxq 'LIBTASN1_TARGET=ELF64_AARCH64' \
+             libtasn1-rocknix-work/reports/status.txt
+          echo '## First real library cross-compiled against ROCKNIX 20260801 (glibc 2.41)' >> "$GITHUB_STEP_SUMMARY"
+          cat libtasn1-rocknix-work/reports/status.txt >> "$GITHUB_STEP_SUMMARY"
+          echo 'Not a functional WPE runtime or console installation.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve configure, build, source, ELF diagnostics on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-libtasn1-crossbuild-diagnostics
+          path: |
+            libtasn1-rocknix-work/reports/
+            host-checkpoint/tar-list.txt
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Preserve actual AArch64 libtasn1 stage (not device installation)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-libtasn1-4.21.0-ROCKNIX-RK3326-STAGE-ONLY
+          path: libtasn1-4.21.0-ROCKNIX-RK3326-CROSS-STAGE-ONLY.tar.xz
+          if-no-files-found: error
+          retention-days: 14
