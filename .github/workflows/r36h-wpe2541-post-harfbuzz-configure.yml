@@ -98,6 +98,13 @@ jobs:
           github-token: ${{ github.token }}
           name: Fire4Nix-ROCKNIX-libsoup3-3.6.5-TARGET-ONLY-NO-TLS-SMOKE
           path: soup3-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39695182915
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-nghttp2-1.66.0-libpsl-0.21.5-TARGET
+          path: soup-prereqs-artifact
       - name: Restore genuine pinned ROCKNIX AArch64 compiler, not Ubuntu
         shell: bash
         run: |
@@ -127,6 +134,10 @@ jobs:
             soup3-artifact/soup3-target/reports/acceptance.txt
           grep -Fxq 'SOUP3_TLS_RUNTIME=NOT_VERIFIED_REQUIRES_GIO_GNUTLS' \
             soup3-artifact/soup3-target/reports/acceptance.txt
+          grep -Fxq 'NGHTTP2_TARGET=PASS_REAL_ROCKNIX_AARCH64' \
+            soup-prereqs-artifact/soup-prereqs-target/reports/acceptance.txt
+          grep -Fxq 'LIBPSL_TARGET=PASS_REAL_ROCKNIX_AARCH64' \
+            soup-prereqs-artifact/soup-prereqs-target/reports/acceptance.txt
       - name: Install CMake diagnostic host programs (not target libraries)
         shell: bash
         run: |
