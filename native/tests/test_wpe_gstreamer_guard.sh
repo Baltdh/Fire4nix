@@ -82,4 +82,11 @@ rc=$?
 set -e
 test "$rc" -eq 6
 grep -Fq 'UNRESOLVED_GST_CAT_DEFAULT=WPEWebProcess' "$T/helper-from-lib.txt"
+# A WPE helper with the wrong ELF machine must also block packaging.
+set +e
+FIRE4NIX_GST_EXPECTED_MACHINE="$other_machine" FIRE4NIX_GST_REPORT="$T/helper-wrong-arch.txt" sh "$AUDITOR" --strict "$T/rt" > /dev/null
+rc=$?
+set -e
+test "$rc" -eq 6
+grep -Fq 'WRONG_ELF_MACHINE=WPEWebProcess' "$T/helper-wrong-arch.txt"
 echo 'PASS: GStreamer ABI audit includes renamed WPE libraries and helpers'
