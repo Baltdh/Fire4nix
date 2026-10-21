@@ -147,7 +147,7 @@ jobs:
           "$sdk/bin/aarch64-rocknix-linux-gnu-gcc" \
             -I"$stage/usr/include" "$RUNNER_TEMP/wpe-png-link-test.c" \
             -L"$stage/usr/lib" -Wl,-rpath-link,"$stage/usr/lib" \
-            -Wl,-Bstatic -lpng16 -Wl,-Bdynamic -lz \
+            -Wl,-Bstatic -lpng16 -Wl,-Bdynamic -lz -lm \
             -o "$RUNNER_TEMP/wpe-png-static-link-test"
           readelf -h "$RUNNER_TEMP/wpe-png-static-link-test" | grep -Eq 'Machine:.*AArch64'
           readelf -d "$RUNNER_TEMP/wpe-png-static-link-test" > png-reports/static-consumer-needed.txt
