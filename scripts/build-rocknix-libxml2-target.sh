@@ -65,7 +65,11 @@ assert all(x <= (2,41) for x in v),v
 print('LIBXML2_ELF_GLIBC=PASS_MAX_2_41')
 PY
 export PKG_CONFIG_LIBDIR="$work/stage/usr/lib/pkgconfig" PKG_CONFIG_PATH='' PKG_CONFIG_SYSROOT_DIR="$work/stage"
-[[ $(pkg-config --modversion libxml-2.0) == 2.14.4 ]]
+echo 'LIBXML2_PKGCONFIG_INSPECT=START'
+find "$work/stage/usr" -type f -name 'libxml-2.0.pc' -print
+version=$(pkg-config --modversion libxml-2.0 2>&1) || { echo "ERROR: target libxml-2.0.pc missing: $version"; exit 14; }
+echo "LIBXML2_PKGCONFIG_VERSION=$version"
+[[ "$version" == 2.14.4 ]] || { echo "ERROR: unexpected target pkg-config version $version"; exit 14; }
 cat > "$work/consumer.c" <<'C'
 #include <libxml/parser.h>
 int fire4nix_libxml2_probe(void) {
