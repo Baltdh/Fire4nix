@@ -1,10 +1,12 @@
 name: Genuine ROCKNIX RK3326 toolchain bootstrap (host only)
 on:
   push:
-    branches: ['build/rocknix-rk3326-toolchain-20261020']
+    branches: ['build/rocknix-rk3326-toolchain-20261020', 'fix/rocknix-xmlstarlet-source-verified-20261020']
     paths:
       - 'scripts/build-rocknix-rk3326-toolchain.sh'
       - 'scripts/verify-rocknix-7zip-mirror.sh'
+      - 'scripts/verify-rocknix-xmlstarlet-source.sh'
+      - 'rocknix-integration/stage-xmlstarlet-source-mirror.sh'
       - '.github/workflows/rocknix-rk3326-toolchain.yml'
   workflow_dispatch:
 permissions:
