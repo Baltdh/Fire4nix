@@ -10,6 +10,12 @@ case "$ROOT" in
   *) LIB=$ROOT/lib; RUNTIME_ROOT=$ROOT ;;
 esac
 [ -d "$LIB" ] || { echo "ERROR: no lib directory: $LIB" >&2; exit 2; }
+# Production/staging always targets the R36H AArch64 ABI. A narrow override
+# enables compiling host-architecture ELF fixtures in the offline unit test.
+EXPECTED_MACHINE=${FIRE4NIX_GST_EXPECTED_MACHINE:-AArch64}
+case "$EXPECTED_MACHINE" in AArch64|'Advanced Micro Devices X86-64') ;; *)
+  echo 'ERROR: unsupported ELF machine override' >&2; exit 2 ;;
+esac
 command -v readelf >/dev/null 2>&1 || { echo 'ERROR: readelf required' >&2; exit 2; }
 REPORT=${FIRE4NIX_GST_REPORT:-}
 if [ -z "$REPORT" ]; then
@@ -50,6 +56,11 @@ fi
       broken=$((broken+1))
       continue
     fi
+    if ! readelf -h "$f" 2>/dev/null | grep 'Machine:' | grep -Fq "$EXPECTED_MACHINE"; then
+      echo "WRONG_ELF_MACHINE=$name"
+      broken=$((broken+1))
+      continue
+    fi
     echo "NEEDED_BEGIN=$name"
     readelf -d "$f" 2>/dev/null | grep NEEDED | sed -n '1,30p' || true
     echo "NEEDED_END=$name"
@@ -66,8 +77,18 @@ fi
     [ -f "$f" ] || continue
     [ -L "$f" ] && continue
     case "${f##*/}" in libgst*) continue ;; esac
-    if readelf -h "$f" >/dev/null 2>&1 && \
-       readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
+    name=${f##*/}
+    if ! readelf -h "$f" >/dev/null 2>&1; then
+      echo "BROKEN_ELF=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if ! readelf -h "$f" 2>/dev/null | grep 'Machine:' | grep -Fq "$EXPECTED_MACHINE"; then
+      echo "WRONG_ELF_MACHINE=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
       echo "UNRESOLVED_GST_CAT_DEFAULT=${f##*/}"
       broken=$((broken+1))
     fi
