@@ -41,8 +41,8 @@ sysroot="$sdk/aarch64-rocknix-linux-gnu/sysroot"
 if ! (cd "$work/target-build" && \
   CC="$cc" CXX="$cxx" AR="$sdk/bin/aarch64-rocknix-linux-gnu-ar" \
   RANLIB="$sdk/bin/aarch64-rocknix-linux-gnu-ranlib" \
-  CFLAGS="-O2 -mcpu=cortex-a35 --sysroot=$sysroot" \
-  CXXFLAGS="-O2 -mcpu=cortex-a35 --sysroot=$sysroot" \
+  CFLAGS="-O2 -mcpu=cortex-a35 -mno-outline-atomics --sysroot=$sysroot" \
+  CXXFLAGS="-O2 -mcpu=cortex-a35 -mno-outline-atomics --sysroot=$sysroot" \
   LDFLAGS="--sysroot=$sysroot" \
   "$work/source/icu/source/configure" \
   --host=aarch64-rocknix-linux-gnu --build="$(gcc -dumpmachine)" \
