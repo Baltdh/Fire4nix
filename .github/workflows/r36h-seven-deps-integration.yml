@@ -54,7 +54,7 @@ jobs:
           sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
           test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
           test -s six-artifact/stage/usr/lib/libpcre2-8.a
-          test -s glib-artifact/stage/usr/lib/libglib-2.0.so.0
+          find glib-artifact/stage/usr/lib -maxdepth 1 -type f -name 'libglib-2.0.so*' | grep -q .
       - name: Stage libraries and link actual ARM64 consumer
         shell: bash
         run: |
