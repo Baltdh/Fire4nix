@@ -55,38 +55,56 @@ grep -Fxq 'PKG_VERSION="2.17.1"' \
 fc_hash=9f5cae93f4fffc1fbc05ae99cdfc708cd60dfd6612ffc0512827025c026fa541
 grep -Fxq "PKG_SHA256=\"$fc_hash\"" \
   "$base/rocknix-source/packages/x11/other/fontconfig/package.mk"
-# Expat 2.7.1: same exact pinned source and options as the approved four-deps
-# stage, but built here to prevent collisions with older copies of PNG/zlib.
+# Expat 2.7.1: import ONLY the matching AArch64 Expat files from the
+# successful four-dependency cross-build. The upstream GitHub source URL
+# now serves bytes with a different checksum: never waive the pinned hash.
 expat_hash=354552544b8f99012e5062f7d570ec77f14b412a3ff5c7d8d0dae62c0d217c30
 grep -Fxq 'PKG_VERSION="2.7.1"' "$base/rocknix-source/packages/textproc/expat/package.mk"
 grep -Fxq "PKG_SHA256=\"$expat_hash\"" "$base/rocknix-source/packages/textproc/expat/package.mk"
-expat_arc="$work/expat-2.7.1.tar.xz"
-curl --proto '=https' --proto-redir '=https' --fail --silent --show-error \
-  --retry 2 --connect-timeout 15 --max-time 130 \
-  'https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz' \
-  -o "$expat_arc"
-echo "$expat_hash  $expat_arc" | sha256sum -c -
-mkdir -p "$work/expat-source"
-tar -xJf "$expat_arc" -C "$work/expat-source" --strip-components=1
-cmake -S "$work/expat-source" -B "$work/expat-build" -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-  -DCMAKE_INSTALL_LIBDIR=lib \
-  -DEXPAT_BUILD_DOCS=OFF -DEXPAT_BUILD_TOOLS=OFF \
-  -DEXPAT_BUILD_EXAMPLES=OFF -DEXPAT_BUILD_TESTS=OFF \
-  -DEXPAT_SHARED_LIBS=ON -DEXPAT_BUILD_PKGCONFIG=ON \
-  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 > "$report/expat-configure.log" 2>&1 || {
-    echo 'EXPAT_CONFIGURE=BLOCKED'; tail -n 70 "$report/expat-configure.log"; exit 7;
-  }
-cmake --build "$work/expat-build" --parallel 2 > "$report/expat-build.log" 2>&1 || {
-  echo 'EXPAT_BUILD=BLOCKED'; tail -n 90 "$report/expat-build.log"; exit 8;
+expat_root="$base/expat-artifact"
+[[ -s "$expat_root/four-reports/source-validation.txt" &&
+   -s "$expat_root/four-reports/expat-abi.txt" ]] || {
+  echo 'ERROR: pinned, previously verified Expat artifact reports missing' >&2; exit 7;
 }
-DESTDIR="$stage" cmake --install "$work/expat-build" > "$report/expat-install.log" 2>&1 || {
-  echo 'EXPAT_INSTALL=BLOCKED'; tail -n 90 "$report/expat-install.log"; exit 9;
-}
+grep -Fxq 'EXPAT_ORIGINAL_SOURCE_SHA256=PASS_ROCKNIX_2_7_1' "$expat_root/four-reports/source-validation.txt"
+grep -Fxq 'EXPAT_SHARED_LIBRARY=PASS_REAL_ROCKNIX_AARCH64' "$expat_root/four-reports/expat-abi.txt"
+expat_stage="$expat_root/four-stage"
+if [[ ! -d "$expat_stage/usr/lib" && -d "$expat_root/stage/usr/lib" ]]; then
+  expat_stage="$expat_root/stage"
+fi
+python3 - "$expat_stage" "$stage" <<'PY'
+from pathlib import Path
+import hashlib, re, shutil, subprocess, sys
+src,dst=map(Path,sys.argv[1:])
+lib=src/'usr/lib'
+if not lib.is_dir(): raise SystemExit('ERROR: Expat stage absent')
+wanted=sorted(lib.glob('libexpat.so*'))
+if not wanted: raise SystemExit('ERROR: Expat ELF files absent')
+targets=[*wanted,lib/'pkgconfig/expat.pc',src/'usr/include/expat.h',src/'usr/include/expat_external.h']
+for f in targets:
+    if not f.exists() or not f.is_file(): raise SystemExit(f'ERROR: Expat file missing: {f}')
+    relative=f.relative_to(src)
+    out=dst/relative
+    if f.is_symlink():
+        link=f.readlink()
+        if link.is_absolute() or '..' in link.parts: raise SystemExit(f'ERROR: unsafe Expat link {f}')
+        if out.exists() or out.is_symlink(): raise SystemExit(f'ERROR: Expat destination collision {out}')
+        out.parent.mkdir(parents=True,exist_ok=True)
+        out.symlink_to(link)
+    else:
+        if out.exists() or out.is_symlink(): raise SystemExit(f'ERROR: Expat destination collision {out}')
+        out.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(f,out)
+for so in sorted((dst/'usr/lib').glob('libexpat.so*')):
+    if so.is_symlink() or not so.is_file(): continue
+    head=subprocess.run(['readelf','-h',str(so)],capture_output=True,text=True)
+    if head.returncode or not re.search(r'Machine:\s+AArch64',head.stdout):
+        raise SystemExit(f'ERROR: Expat is not AArch64: {so}')
+print('EXPAT_ARTIFACT_IMPORT=PASS_PINNED_SHA256_AARCH64')
+PY
 pkg-config --exists 'expat >= 2.7.1'
 readelf -h "$stage/usr/lib/libexpat.so.1" | grep -Eq 'Machine:.*AArch64'
-echo 'EXPAT_TARGET=PASS_VERIFIED_SOURCE_AARCH64' | tee "$report/expat-result.txt"
+echo 'EXPAT_TARGET=PASS_PREVIOUSLY_VERIFIED_CI_AARCH64' | tee "$report/expat-result.txt"
 
 fc_arc="$work/fontconfig-2.17.1.tar.xz"
 found=0
