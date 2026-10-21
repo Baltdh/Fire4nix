@@ -15,7 +15,8 @@ python3 - "$ffi" "$stage" <<'PY'
 from pathlib import Path
 import hashlib, shutil, sys
 src, dst=map(Path,sys.argv[1:])
-for f in sorted((src/'usr').rglob('*')):
+# Documentation indexes are generated per package and are not SDK inputs.
+for f in sorted(f for root in ('usr/lib', 'usr/include') for f in (src/root).rglob('*')):
     d=dst/f.relative_to(src)
     if f.is_symlink():
         link=f.readlink()
