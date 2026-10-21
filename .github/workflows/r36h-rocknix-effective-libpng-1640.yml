@@ -142,10 +142,25 @@ jobs:
           readelf -h "$RUNNER_TEMP/wpe-png-link-test" | grep -Eq 'Machine:.*AArch64'
           readelf -d "$RUNNER_TEMP/wpe-png-link-test" | grep -Fq 'libpng16.so'
           readelf -d "$RUNNER_TEMP/wpe-png-link-test" | grep -Fq 'libz.so'
+          # Prove the project-only static variant can be linked with the
+          # same authentic ROCKNIX target zlib, without libpng.so in NEEDED.
+          "$sdk/bin/aarch64-rocknix-linux-gnu-gcc" \
+            -I"$stage/usr/include" "$RUNNER_TEMP/wpe-png-link-test.c" \
+            -L"$stage/usr/lib" -Wl,-rpath-link,"$stage/usr/lib" \
+            -Wl,-Bstatic -lpng16 -Wl,-Bdynamic -lz \
+            -o "$RUNNER_TEMP/wpe-png-static-link-test"
+          readelf -h "$RUNNER_TEMP/wpe-png-static-link-test" | grep -Eq 'Machine:.*AArch64'
+          readelf -d "$RUNNER_TEMP/wpe-png-static-link-test" > png-reports/static-consumer-needed.txt
+          grep -Fq 'Shared library: [libz.so.1]' png-reports/static-consumer-needed.txt
+          if grep -Fq 'Shared library: [libpng16.so.' png-reports/static-consumer-needed.txt; then
+            echo 'ERROR: static consumer unexpectedly linked dynamic libpng' >&2; exit 9
+          fi
+          echo 'LIBPNG_STATIC_CONSUMER_LINK=PASS_ROCKNIX_TARGET_AARCH64' >> png-reports/static-consumer-status.txt
           {
             echo 'LIBPNG_ZLIB_CHAIN=PASS_REAL_ROCKNIX_AARCH64_TARGET_LINK'
             echo 'LIBPNG_VERSION=1.6.40_ROCKNIX_PROJECT_EFFECTIVE'
             echo 'TARGET_ZLIB_VERSION=1.3.1'
+            echo 'LIBPNG_STATIC_CONSUMER_LINK=PASS_ROCKNIX_TARGET_AARCH64'
             echo 'SOURCE_HASH=OFFICIAL_LIBPNG_RELEASE_SHA256'
             echo 'LIBPNG_LINKED_WITH=libz.so.1'
             echo "LIBPNG_GLIBC_MAX_REQUIRED=${req:-none}"
