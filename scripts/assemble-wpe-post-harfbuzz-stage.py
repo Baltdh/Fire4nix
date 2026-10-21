@@ -68,8 +68,8 @@ def readelf(path: Path) -> str:
     return out.stdout
 
 def main() -> None:
-    check(len(sys.argv)==6,
-          "usage: assemble-wpe-post-harfbuzz-stage.py DEST EIGHT FONT CAIRO HARFBUZZ")
+    check(len(sys.argv)==9,
+          "usage: assemble-wpe-post-harfbuzz-stage.py DEST EIGHT FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY")
     dest,*sources=map(Path,sys.argv[1:])
     check(not dest.exists() and not dest.is_symlink(), f"output exists: {dest}")
     dest.mkdir(parents=True)
@@ -78,6 +78,13 @@ def main() -> None:
         print(f"MERGED_FILES={copy_source(src,dest)}")
     required={
       'libharfbuzz.so.0':'HarfBuzz',
+      'libharfbuzz-icu.so.0':'HarfBuzz ICU',
+      'libicuuc.so.74':'ICU Unicode',
+      'libicui18n.so.74':'ICU I18N',
+      'libicudata.so.74':'ICU data',
+      'libepoxy.so.0':'libepoxy EGL',
+      'libEGL.so.1':'libglvnd EGL dispatcher',
+      'libGLESv2.so.2':'libglvnd GLES2 dispatcher',
       'libcairo.so.2':'Cairo',
       'libfontconfig.so.1':'Fontconfig',
       'libfreetype.so.6':'FreeType',
@@ -92,11 +99,15 @@ def main() -> None:
         path=dest/'usr/lib'/filename
         check(path.is_file(),f"missing target {name}: {path}")
         readelf(path)
-    for pc in ('harfbuzz','cairo','fontconfig','freetype2','pixman-1',
+    for pc in ('harfbuzz','harfbuzz-icu','icu-uc','icu-i18n',
+               'epoxy','egl','glesv2','cairo','fontconfig','freetype2','pixman-1',
                'glib-2.0','gio-2.0','libpng16','libjpeg','zlib'):
         check((dest/'usr/lib/pkgconfig'/f'{pc}.pc').is_file(),
               f"missing target metadata {pc}.pc")
-    print("POST_HARFBUZZ_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE")
+    for hdr in ('harfbuzz/hb.h', 'harfbuzz/hb-icu.h', 'unicode/utypes.h',
+                'epoxy/egl.h', 'EGL/eglplatform.h', 'GLES2/gl2.h'):
+        check((dest/'usr/include'/hdr).is_file(),f'missing target SDK header {hdr}')
+    print("WPE_HARFBUZZ_ICU_EPOXY_EGL_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE")
     print("STAGE_INSTALLABLE=no")
 
 if __name__=='__main__':
