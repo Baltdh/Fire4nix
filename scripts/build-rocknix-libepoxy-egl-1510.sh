@@ -139,7 +139,13 @@ if ! pkg-config --exists 'epoxy >= 1.5.4'; then
   pkg-config --variable=pcfiledir epoxy || true
   exit 15
 fi
-pkg-config --modversion epoxy > "$work/reports/epoxy-version.txt"
+if ! pkg-config --modversion epoxy > "$work/reports/epoxy-version.txt"; then
+ echo 'ERROR: epoxy.pc found but unable to read target version' >&2
+ pkg-config --debug --modversion epoxy 2>&1 | tail -n 35 || true
+ exit 15
+fi
+echo "LIBEPOXY_PKGCONFIG_VERSION=$(cat "$work/reports/epoxy-version.txt")"
+echo 'LIBEPOXY_CONSUMER_LINK=START'
 cat > "$work/consumer.c" <<'C'
 #include <epoxy/egl.h>
 int fire4nix_epoxy_probe(void) {
@@ -149,7 +155,10 @@ C
 "$cc" -O2 -mcpu=cortex-a35 -shared -fPIC -Wl,-z,defs \
   -I"$work/stage/usr/include" -I"$glvnd/usr/include" "$work/consumer.c" \
   -L"$work/stage/usr/lib" -Wl,-rpath-link,"$work/stage/usr/lib" \
-  -lepoxy -o "$work/libepoxy-consumer-aarch64.so"
+  -lepoxy -o "$work/libepoxy-consumer-aarch64.so" || {
+ echo 'LIBEPOXY_CONSUMER_LINK=BLOCKED'
+ exit 16
+}
 readelf -h "$work/libepoxy-consumer-aarch64.so" > "$work/reports/consumer-header.txt"
 readelf -d "$work/libepoxy-consumer-aarch64.so" > "$work/reports/consumer-dynamic.txt"
 grep -Eq 'Machine:.*AArch64' "$work/reports/consumer-header.txt"
