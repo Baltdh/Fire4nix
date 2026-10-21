@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'scripts/verify-rocknix-configtools-source.sh'
+      - 'rocknix-integration/stage-configtools-source-mirror.sh'
       - '.github/workflows/verify-rocknix-configtools-source.yml'
   workflow_dispatch:
 permissions:
@@ -15,6 +16,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Checkout pinned ROCKNIX 20260801 into disposable CI source tree
+        uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
       - name: Verify pinned upstream revision and tarball checksum without building toolchain
         shell: bash
         env:
@@ -25,6 +33,20 @@ jobs:
           bash scripts/verify-rocknix-configtools-source.sh --check
           grep -q "^CONFIGTOOLS_SOURCE_STATUS=PASS_" "$FIRE4NIX_CONFIGTOOLS_REPORT"
           cat "$FIRE4NIX_CONFIGTOOLS_REPORT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Stage only verified configtools source URL in disposable ROCKNIX tree
+        shell: bash
+        env:
+          FIRE4NIX_CONFIGTOOLS_REPORT: /tmp/fire4nix-configtools-report/status.txt
+          FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
+        run: |
+          set -euo pipefail
+          bash -n rocknix-integration/stage-configtools-source-mirror.sh
+          bash rocknix-integration/stage-configtools-source-mirror.sh --check
+          bash rocknix-integration/stage-configtools-source-mirror.sh --apply
+          git -C "$FIRE4NIX_ROCKNIX_SOURCE" diff --check
+          test "$(git -C "$FIRE4NIX_ROCKNIX_SOURCE" diff --name-only)" = "packages/devel/configtools/package.mk"
+          grep -Fxq 'PKG_SHA256="6e4ebaa2a60114cf8b72d478b30e559f0c8e025d290ae3303773095104bf7bcc"' "$FIRE4NIX_ROCKNIX_SOURCE/packages/devel/configtools/package.mk"
+          echo "Verified source URL staged without changing release, hash or firmware." >> "$GITHUB_STEP_SUMMARY"
       - name: Save diagnostic evidence even if source is unavailable
         if: always()
         uses: actions/upload-artifact@v4
