@@ -1,0 +1,92 @@
+name: Fire4Nix audit actual ROCKNIX RK3326 SDK snapshot
+on:
+  push:
+    branches: ['feat/r36h-real-sdk-readiness-20261021']
+    paths:
+      - '.github/workflows/r36h-audit-real-sdk-snapshot.yml'
+      - 'rocknix-integration/audit-wpe-sysroot-pkgconfig.sh'
+      - 'native/tests/test_wpe_sysroot_pkgconfig_audit.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-real-target-sysroot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prove fake target pkg-config metadata cannot escape SDK
+        run: |
+          set -eu
+          sh -n rocknix-integration/audit-wpe-sysroot-pkgconfig.sh
+          sh -n native/tests/test_wpe_sysroot_pkgconfig_audit.sh
+          sh native/tests/test_wpe_sysroot_pkgconfig_audit.sh
+      - name: Obtain cross toolchain from successful ROCKNIX bootstrap
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/fire4nix-sdk-download
+      - name: Inspect target sysroot without running any target program
+        shell: bash
+        env:
+          SDK_ARCHIVE: ${{ runner.temp }}/fire4nix-sdk-download/rocknix-toolchain-host-only.tar.xz
+          SDK_EXTRACT_ROOT: ${{ runner.temp }}/fire4nix-sdk-extract
+        run: |
+          set -euo pipefail
+          command -v pkg-config
+          command -v readelf
+          mkdir -p sdk-reports "$SDK_EXTRACT_ROOT"
+          test -s "$SDK_ARCHIVE"
+          sha256sum "$SDK_ARCHIVE" > sdk-reports/snapshot-sha256.txt
+          python3 - "$SDK_ARCHIVE" <<'PY'
+          from pathlib import Path, PurePosixPath
+          import sys, tarfile
+          archive = Path(sys.argv[1])
+          with tarfile.open(archive, "r:xz") as tar:
+              count = 0
+              for item in tar:
+                  parts = PurePosixPath(item.name).parts
+                  if not parts or parts[0] != "toolchain" or ".." in parts or item.name.startswith("/"):
+                      raise SystemExit("UNSAFE_ARCHIVE_MEMBER=" + item.name)
+                  if item.isdev() or item.isfifo():
+                      raise SystemExit("UNSUPPORTED_ARCHIVE_MEMBER=" + item.name)
+                  count += 1
+          print("ARCHIVE_INSPECTION=PASS")
+          print("ARCHIVE_ENTRIES=", count)
+          PY
+          tar --no-same-owner --no-same-permissions -xJf "$SDK_ARCHIVE" -C "$SDK_EXTRACT_ROOT"
+          export FIRE4NIX_ROCKNIX_SYSROOT="$SDK_EXTRACT_ROOT/toolchain/aarch64-rocknix-linux-gnu/sysroot"
+          export FIRE4NIX_ROCKNIX_TOOLCHAIN="$SDK_EXTRACT_ROOT/toolchain/fire4nix-toolchain.cmake"
+          test -d "$FIRE4NIX_ROCKNIX_SYSROOT"
+          test -f "$FIRE4NIX_ROCKNIX_TOOLCHAIN"
+          sh rocknix-integration/check-rocknix-sdk.sh --check | tee sdk-reports/sdk-static-abi.txt
+          sh rocknix-integration/audit-wpe-sysroot-pkgconfig.sh --inspect | tee sdk-reports/wpe-target-dependencies.txt
+          find "$FIRE4NIX_ROCKNIX_SYSROOT" -type f -name '*.pc' | sort > sdk-reports/pkgconfig-file-list.txt
+          {
+            echo '## ROCKNIX RK3326 actual toolchain sysroot (artifact from run 39525819979)'
+            echo 'This is a static inspection of real compiler-built target files, **not** a WPE build or graphics test.'
+            echo 'Original build work paths embedded in the archive are not relocated or validated for reuse.'
+            echo '### Target ABI'
+            cat sdk-reports/sdk-static-abi.txt
+            echo '### WPE development package metadata'
+            cat sdk-reports/wpe-target-dependencies.txt
+            echo "Discovered pkg-config files: $(wc -l < sdk-reports/pkgconfig-file-list.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'TARGET_ELF_EXECUTED=no'
+          echo 'R36H_CHANGED=no'
+      - name: Preserve real SDK readiness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-actual-ROCKNIX-sysroot-readiness
+          path: sdk-reports/
+          retention-days: 14
+          if-no-files-found: warn

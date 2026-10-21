@@ -53,5 +53,21 @@ rc=$?
 set -e
 test "$rc" -eq 6
 grep -Fq 'TARGET_PC_MISSING_OR_OLD=libtasn1' "$t/host-path"
-echo 'PASS: 22 target .pc gates, minimum version, missing recipes, host pkg-config isolation'
+# A symlink in the sysroot path MUST NOT let the audit read a host .pc dir,
+# even when PKG_CONFIG_PATH has been cleared.
+mkdir -p "$t/external-pkgconfig" "$root/usr/lib64"
+cat > "$t/external-pkgconfig/libtasn1.pc" <<'PC'
+Name: libtasn1
+Description: external metadata that must not be trusted
+Version: 99.99
+PC
+ln -s "$t/external-pkgconfig" "$root/usr/lib64/pkgconfig"
+set +e
+FIRE4NIX_ROCKNIX_SYSROOT="$root" sh "$audit" --inspect > "$t/escaped"
+rc=$?
+set -e
+test "$rc" -eq 6
+grep -Fxq 'SYSROOT_PC_AUDIT=BLOCKED_HOST_PKGCONFIG_SYMLINK' "$t/escaped"
+grep -Fxq 'TARGET_PC_DIRECTORY_OUTSIDE_SYSROOT=usr/lib64/pkgconfig' "$t/escaped"
+echo 'PASS: 22 target .pc gates, minimum version, missing recipes, host pkg-config paths/symlinks rejected'
 echo 'WARNING: tests use fake .pc files; no ROCKNIX SDK or native WebKit compiled'
