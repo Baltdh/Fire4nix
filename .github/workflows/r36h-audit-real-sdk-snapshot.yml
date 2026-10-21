@@ -49,7 +49,7 @@ jobs:
                   parts = PurePosixPath(item.name).parts
                   if not parts or parts[0] != "toolchain" or ".." in parts or item.name.startswith("/"):
                       raise SystemExit("UNSAFE_ARCHIVE_MEMBER=" + item.name)
-                  if item.isdev() or item.isfifo() or item.issock():
+                  if item.isdev() or item.isfifo():
                       raise SystemExit("UNSUPPORTED_ARCHIVE_MEMBER=" + item.name)
                   count += 1
           print("ARCHIVE_INSPECTION=PASS")
