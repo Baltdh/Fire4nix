@@ -70,6 +70,17 @@ printf 'WAYLAND_SOURCE=PASS_ORIGINAL_RELEASE_SHA256\nSHA256=%s\n' "$hash" | tee 
 # The original Wayland Meson project explicitly needs a *native* scanner
 # even with -Dscanner=false, because protocol headers must be generated.
 # Build scanner from the SAME verified source as a host-only code generator.
+# The earlier cross-stage PKG_CONFIG_LIBDIR/PKG_CONFIG_SYSROOT_DIR MUST NOT
+# leak into native scanner configure: it would link the host binary against
+# target libexpat.so and fail with "file in wrong format".
+export PKG_CONFIG_PATH=''
+export PKG_CONFIG_LIBDIR='/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig'
+export PKG_CONFIG_SYSROOT_DIR=''
+test "$(pkg-config --modversion expat)" != ''
+host_expat=$(pkg-config --variable=libdir expat)
+[[ "$host_expat" == /usr/lib/* ]] || {
+  echo "ERROR: native scanner Expat resolved to non-host path: $host_expat" >&2; exit 7;
+}
 meson setup "$work/host-build" "$work/source" --prefix="$host_prefix" --libdir=lib \
   --buildtype=release --wrap-mode=nodownload \
   -Dlibraries=false -Dscanner=true -Dtests=false -Ddocumentation=false \
