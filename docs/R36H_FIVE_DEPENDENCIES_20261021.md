@@ -16,7 +16,7 @@ O workflow fixa os IDs das execuções produtoras e recompõe um DESTDIR privado
 
 Verifica quatro SONAMEs dinâmicos, definições de `ffi_call` e `ffi_prep_cif` no consumidor, e referências à libffi.a privada no mapa do linker. Impede TEXTREL, libffi dinâmica e dependências diretas GStreamer no consumidor. Confere requisitos GLIBC <= 2.41. Grava hashes atualizados do stage com cinco bibliotecas e preserva o código C/consumidor para auditoria.
 
-Execução: https://github.com/Baltdh/Fire4nix/actions/runs/39678639462 . O resultado deve ser confirmado pelo Actions e por `five-acceptance.txt`.
+Execução inicial 39678639462 recusou corretamente uma colisão em `usr/share/info/dir`, índice de documentação gerado separadamente por pacote. A importação de libffi agora se limita a `usr/lib` e `usr/include`; continua recusando bibliotecas/cabeçalhos conflitantes. Teste local com fixtures confirmou ambos os comportamentos. Nova execução: https://github.com/Baltdh/Fire4nix/actions/runs/39678877231 . Confirmar o resultado em Actions e em `five-acceptance.txt`.
 
 ## Próxima etapa concreta para GLib
 
