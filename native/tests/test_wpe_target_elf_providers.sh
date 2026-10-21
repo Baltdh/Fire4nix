@@ -15,11 +15,11 @@ cp "$root/usr/lib/libfixture.so" "$root/usr/lib/gio/modules/libgiognutls.so"
 for pc in glib-2.0 gio-2.0 libsoup-3.0 libtasn1 harfbuzz epoxy wayland-client; do
   cat > "$root/usr/lib/pkgconfig/$pc.pc" <<PC
 prefix=/usr
-libdir=${prefix}/lib
+libdir=\${prefix}/lib
 Name: $pc
 Description: test-only AArch64 provider
 Version: 99.0
-Libs: -L${libdir} -lfixture
+Libs: -L\${libdir} -lfixture
 PC
 done
 FIRE4NIX_ROCKNIX_SYSROOT="$root" sh "$script" --strict > "$work/pass"
