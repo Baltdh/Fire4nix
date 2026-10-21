@@ -1,0 +1,97 @@
+name: Fire4Nix real ROCKNIX AArch64 WPE 2.54.1 CMake dependency probe
+
+on:
+  push:
+    branches: ['test/r36h-real-rocknix-wpe2541-configure-20261021']
+    paths:
+      - '.github/workflows/r36h-real-rocknix-wpe-cmake-probe.yml'
+      - 'scripts/probe-wpe-rocknix-target-configure.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  target-wpe-configure-probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683307528
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-EIGHT-REAL-DEPS-JPEG-3.0.1-TARGET-ONLY
+          path: eight-artifact
+      - name: Restore pinned AArch64 SDK and verify it is not host compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = '3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb'
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = 'aarch64-rocknix-linux-gnu'
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          test -s eight-artifact/eight-deps/stage/usr/lib/pkgconfig/gio-2.0.pc
+          test -s eight-artifact/eight-deps/stage/usr/lib/pkgconfig/libjpeg.pc
+      - name: Install host CMake analysis tools (not target libraries)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake ninja-build pkg-config python3 perl ruby gperf bison flex
+      - name: Download authentic WPE 2.54.1 and run media-free CMake configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/probe-wpe-rocknix-target-configure.sh
+          bash fire4nix/scripts/probe-wpe-rocknix-target-configure.sh
+          grep -Eq '^WPE_TARGET_CONFIGURE=(BLOCKED_WITH_REAL_SDK|CONFIGURED_REQUIRES_ABI_REVIEW)$' wpe-cmake-probe/report/status.txt
+          grep -Fxq 'ROCKNIX_REAL_SDK_AARCH64=PASS' wpe-cmake-probe/report/status.txt
+          grep -Fxq 'WPE_WEBKIT_BUILT=no' wpe-cmake-probe/report/status.txt
+          grep -Fxq 'TARGET_EXECUTED=no' wpe-cmake-probe/report/status.txt
+          {
+            echo '## Genuine ROCKNIX-target WPE 2.54.1 configure probe'
+            cat wpe-cmake-probe/report/status.txt
+            echo ''
+            echo 'CMake blocked is a meaningful measured blocker, not proof of a working browser.'
+            echo ''
+            echo '### First CMake errors'
+            grep -E -A 7 'CMake Error|Could NOT find|Could not find|required package' \
+              wpe-cmake-probe/report/cmake.log | head -n 100 || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve actual WPE configure/SDK diagnostics on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE2541-REAL-ROCKNIX-CMAKE-BLOCKERS-ONLY
+          path: |
+            wpe-cmake-probe/report/
+            wpe-cmake-probe/configure/CMakeCache.txt
+            wpe-cmake-probe/configure/CMakeFiles/CMakeConfigureLog.yaml
+            wpe-cmake-probe/configure/CMakeFiles/CMakeError.log
+            wpe-cmake-probe/configure/CMakeFiles/CMakeOutput.log
+          retention-days: 14
+          if-no-files-found: warn
