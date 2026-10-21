@@ -33,4 +33,14 @@ rc=$?
 set -e
 test "$rc" -eq 6
 grep -q '^BROKEN_ELF=libgstvideo-1.0.so.0$' "$T/invalid.txt"
+# A renamed non-libgst library must not bypass the ABI guard.
+rm -f "$T/rt/lib/libgstvideo-1.0.so" "$LIB"
+printf 'extern void *GST_CAT_DEFAULT; void *webkit_test(void){ return GST_CAT_DEFAULT; }\n' | cc -shared -fPIC -x c - -o "$T/rt/lib/libWPEWebKit-2.0.so.1"
+set +e
+FIRE4NIX_GST_REPORT="$T/renamed.txt" sh "$AUDITOR" --strict "$T/rt" > /dev/null
+rc=$?
+set -e
+test "$rc" -eq 6
+grep -q '^UNRESOLVED_GST_CAT_DEFAULT=libWPEWebKit-2.0.so.1
+ "$T/renamed.txt"
 echo 'PASS: reject unresolved GST_CAT_DEFAULT and corrupt ELF; accept clean ELF; ignore SONAME symlink duplicate'
