@@ -41,6 +41,20 @@ set -e
 [ "$rc" -eq 6 ]
 grep -Fq 'FAIL_BAD_ELF_OR_ARCH=target_sysroot:libfoo.so.1' "$T/invalid"
 cc -shared -Wl,-soname,libfoo.so.1 "$T/foo.c" -o "$S/usr/lib/libfoo.so.1"
+# Directory symlinks must not silently make host .so files look like SDK libs.
+mkdir -p "$T/host-library"
+mv "$S/usr/lib/libfoo.so.1" "$T/host-library/libfoo.so.1"
+rmdir "$S/usr/lib"
+ln -s "$T/host-library" "$S/usr/lib"
+set +e
+run --strict > "$T/host-symlink"
+rc=$?
+set -e
+[ "$rc" -eq 6 ]
+grep -Fq 'FAIL_BAD_PROVIDER_LINK=libfoo.so.1:PARENT_ESCAPES_ROOT' "$T/host-symlink"
+rm "$S/usr/lib"
+mkdir -p "$S/usr/lib"
+mv "$T/host-library/libfoo.so.1" "$S/usr/lib/libfoo.so.1"
 # Legitimate WPE subprocess runpath can climb to private lib *within* runtime.
 cc -Wl,-e,_start -Wl,-rpath,'$ORIGIN/../../lib' "$T/child.c" \
   -o "$R/libexec/wpe-webkit-2.0/WPEWebProcess"
