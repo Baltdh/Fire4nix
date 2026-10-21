@@ -167,7 +167,7 @@ int fire4nix_cairo_consumer(void) {
 }
 C
 "$cc" -O2 -mcpu=cortex-a35 -fPIC -shared -Wl,-z,defs \
-  -I"$stage/usr/include/cairo" -I"$input/usr/include/freetype2" \
+  -I"$stage/usr/include/cairo" -I"$input/usr/include" -I"$input/usr/include/freetype2" \
   "$root/cairo-target/cairo-consumer.c" -L"$stage/usr/lib" \
   -Wl,-rpath-link,"$input/usr/lib" -Wl,-rpath-link,"$stage/usr/lib" \
   -lcairo -o "$root/cairo-target/libfire4nix-cairo-consumer.so"
