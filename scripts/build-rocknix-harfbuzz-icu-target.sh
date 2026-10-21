@@ -19,7 +19,7 @@ hash=093714c8548a285094685f0bdc999e202d666b59eeb3df2ff921ab68b8336a49
 grep -Fxq 'PKG_VERSION="11.2.1"' "$recipe"
 grep -Fxq "PKG_SHA256=\"$hash\"" "$recipe"
 grep -q -- '-Dicu=disabled' "$recipe" || { echo 'ERROR: upstream ICU default changed'; exit 4; }
-grep -Fxq 'ICU74_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/icu-artifact/icu74-target/reports/result.txt"
+grep -Fxq 'ICU_TARGET=PASS_REAL_ROCKNIX_AARCH64' "$root/icu-artifact/icu74-target/reports/acceptance.txt"
 grep -Fxq 'CAIRO_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/cairo-artifact/cairo-target/reports/acceptance.txt"
 grep -Fxq 'FONTCONFIG_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/fontconfig-artifact/fontconfig-target/reports/acceptance.txt"
 for f in "$icu/usr/lib/libicuuc.so.74" "$icu/usr/lib/libicui18n.so.74" \
