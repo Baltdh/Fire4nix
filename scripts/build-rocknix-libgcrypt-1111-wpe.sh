@@ -81,6 +81,7 @@ export CC_FOR_BUILD=gcc
     --host=aarch64-rocknix-linux-gnu --build="$(gcc -dumpmachine)" \
     --prefix=/usr --libdir=/usr/lib \
     --disable-static --enable-shared --disable-nls --disable-rpath \
+    --enable-install-gpg-error-config \
     --with-gnu-ld --with-pic \
     > "$reports/gpg-configure.log" 2>&1
 ) || {
@@ -102,10 +103,11 @@ readelf -h "$stage/usr/lib/libgpg-error.so.0" | grep -Eq 'Machine:.*AArch64'
 readelf -d "$stage/usr/lib/libgpg-error.so.0" > "$reports/libgpg-error-dynamic.txt"
 grep -Fq 'Shared library: [libc.so.6]' "$reports/libgpg-error-dynamic.txt"
 # Confirm gpg-error-config and .pc refer to the stage, not host libraries.
-if [[ -s "$stage/usr/bin/gpg-error-config" ]]; then
-  sed -i -e "s:\(['= ]\)/usr:\1$stage/usr:g" "$stage/usr/bin/gpg-error-config"
-  export PATH="$stage/usr/bin:$PATH"
-fi
+test -s "$stage/usr/bin/gpg-error-config" || {
+  echo 'ERROR: gpg-error-config needed by libgcrypt configure is missing' >&2; exit 9;
+}
+sed -i -e "s:\(['= ]\)/usr:\1$stage/usr:g" "$stage/usr/bin/gpg-error-config"
+export PATH="$stage/usr/bin:$PATH"
 # ROCKNIX package's sysroot override prepares lock-obj headers for its ABI.
 # Never copy an Ubuntu lock-obj-pub.h into the cross build.
 if [[ -s "$work/libgpg-error-source/src/syscfg/lock-obj-pub.aarch64-unknown-linux-gnu.h" ]]; then
