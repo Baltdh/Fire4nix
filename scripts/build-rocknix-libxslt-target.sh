@@ -66,7 +66,7 @@ v=[tuple(map(int,x.split('.'))) for x in re.findall(r'Name: GLIBC_([0-9.]+)',ope
 assert all(x<=(2,41) for x in v),v
 print('LIBXSLT_ELF_GLIBC=PASS_MAX_2_41')
 PY
-export PKG_CONFIG_LIBDIR="$work/stage/usr/lib/pkgconfig" PKG_CONFIG_PATH='' PKG_CONFIG_SYSROOT_DIR="$work/stage"
+export PKG_CONFIG_LIBDIR="$work/stage/usr/lib/pkgconfig:$xml/usr/lib/pkgconfig" PKG_CONFIG_PATH='' PKG_CONFIG_SYSROOT_DIR="$work/stage"
 v=$(pkg-config --modversion libxslt 2>&1) || { echo "ERROR: libxslt.pc unavailable: $v"; exit 14; }
 echo "LIBXSLT_PKGCONFIG_VERSION=$v"
 [[ "$v" == 1.1.43 ]] || { echo "ERROR: unexpected libxslt version $v"; exit 14; }
