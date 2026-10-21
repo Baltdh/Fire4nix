@@ -1,0 +1,88 @@
+name: Fire4Nix real ROCKNIX nghttp2 and libpsl for libsoup3
+
+on:
+  push:
+    branches: ['feat/r36h-soup3-nghttp2-libpsl-target-20261021']
+    paths:
+      - 'scripts/build-rocknix-soup-nghttp2-libpsl-target.sh'
+      - '.github/workflows/r36h-rocknix-soup-nghttp2-psl.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  soup-http2-psl-aarch64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Install host CMake Meson and Ninja only
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc g++ cmake ninja-build pkg-config python3 python3-pip python3-packaging \
+            python3-setuptools python3-pyelftools gettext
+          python3 -m pip install --user 'meson==1.8.3'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          bash -n fire4nix/scripts/build-rocknix-soup-nghttp2-libpsl-target.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39688837904
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-ICU-74.1-REAL-TARGET-STAGE
+          path: icu-artifact
+      - name: Restore exact ROCKNIX AArch64 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'ICU_TARGET=PASS_REAL_ROCKNIX_AARCH64' icu-artifact/icu74-target/reports/acceptance.txt
+      - name: Build and audit ROCKNIX-target nghttp2 and ICU-backed libpsl
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-rocknix-soup-nghttp2-libpsl-target.sh 2>&1 | tee soup-prereq-console.txt
+          grep -Fxq 'NGHTTP2_TARGET=PASS_REAL_ROCKNIX_AARCH64' soup-prereqs-target/reports/acceptance.txt
+          grep -Fxq 'LIBPSL_TARGET=PASS_REAL_ROCKNIX_AARCH64' soup-prereqs-target/reports/acceptance.txt
+          cat soup-prereqs-target/reports/acceptance.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve target ELF libraries and source verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-nghttp2-1.66.0-libpsl-0.21.5-TARGET
+          path: |
+            soup-prereqs-target/reports/
+            soup-prereqs-target/stage/usr/lib/
+            soup-prereqs-target/stage/usr/include/
+            soup-prereq-console.txt
+          retention-days: 14
+          if-no-files-found: warn
