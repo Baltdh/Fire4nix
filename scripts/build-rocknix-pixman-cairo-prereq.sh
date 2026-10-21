@@ -117,7 +117,7 @@ meson setup "$work/build" "$work/source" \
   --buildtype=release --wrap-mode=nodownload -Ddefault_library=shared \
   -Dopenmp=disabled -Dloongson-mmi=disabled \
   -Dmmx=disabled -Dsse2=disabled -Dvmx=disabled \
-  -Darm-simd=disabled -Dneon=disabled -Diwmmxt=disabled \
+  -Darm-simd=disabled -Dneon=disabled \
   -Dmips-dspr2=disabled -Dgnu-inline-asm=enabled \
   -Dtimers=false -Dgtk=disabled -Dlibpng=disabled \
   -Dtests=disabled -Ddemos=disabled \
