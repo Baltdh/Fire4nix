@@ -1,0 +1,37 @@
+name: Fire4Nix target ELF providers and HTTPS dependency gate
+
+on:
+  push:
+    paths:
+      - 'rocknix-integration/audit-wpe-target-elf-providers.sh'
+      - 'native/tests/test_wpe_target_elf_providers.sh'
+      - '.github/workflows/audit-r36h-wpe-target-elf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-arm64-link-providers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install ARM64 fixture build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang lld binutils pkg-config
+      - name: Test real AArch64 shared libraries and fail-closed target resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n rocknix-integration/audit-wpe-target-elf-providers.sh
+          sh -n native/tests/test_wpe_target_elf_providers.sh
+          sh native/tests/test_wpe_target_elf_providers.sh
+          {
+            echo '## Target ELF provider preflight'
+            echo 'Built real ARM64 ELF mock DSOs and rejected x86_64 ELF, unsafe symlink, missing GIO GnuTLS, and host pkg-config injection.'
+            echo 'This checks *fixture* link providers, not a real ROCKNIX sysroot or WPE browser.'
+          } >> "$GITHUB_STEP_SUMMARY"
