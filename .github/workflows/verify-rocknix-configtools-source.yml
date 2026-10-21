@@ -1,0 +1,35 @@
+name: Fire4Nix verify exact GNU configtools source for ROCKNIX 20260801
+on:
+  push:
+    paths:
+      - 'scripts/verify-rocknix-configtools-source.sh'
+      - '.github/workflows/verify-rocknix-configtools-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify pinned upstream revision and tarball checksum without building toolchain
+        shell: bash
+        env:
+          FIRE4NIX_CONFIGTOOLS_REPORT: /tmp/fire4nix-configtools-report/status.txt
+        run: |
+          set -euo pipefail
+          bash -n scripts/verify-rocknix-configtools-source.sh
+          bash scripts/verify-rocknix-configtools-source.sh --check
+          grep -q "^CONFIGTOOLS_SOURCE_STATUS=PASS_" "$FIRE4NIX_CONFIGTOOLS_REPORT"
+          cat "$FIRE4NIX_CONFIGTOOLS_REPORT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Save diagnostic evidence even if source is unavailable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-configtools-source-provenance
+          path: /tmp/fire4nix-configtools-report/
+          retention-days: 14
+          if-no-files-found: warn
