@@ -30,6 +30,10 @@ def source_file(path: Path, root: Path, sdk: bool):
     for _ in range(20):
         if not within(current, root):
             return None, 'LINK_ESCAPES_ROOT'
+        # A lexical prefix is insufficient: a parent directory such as
+        # sysroot/usr/lib may itself be a symlink to the build host's /usr/lib.
+        if not within(current.parent.resolve(), root):
+            return None, 'PARENT_ESCAPES_ROOT'
         if not current.is_symlink():
             return (current, None) if current.is_file() else (None, 'MISSING_TARGET')
         link = Path(os.readlink(current))
