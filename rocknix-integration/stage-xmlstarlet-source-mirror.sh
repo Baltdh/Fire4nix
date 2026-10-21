@@ -30,9 +30,7 @@ grep -Fxq "REQUIRED_ROCKNIX_SHA256=$expected" "$report" || { echo 'ERROR: verifi
 grep -Fxq "VERIFIED_SHA256=$expected" "$report" || { echo 'ERROR: source digest mismatch' >&2; exit 6; }
 verified=$(sed -n 's/^VERIFIED_URL=//p' "$report")
 case "$verified" in
-  'https://sources.libreelec.tv/mirror/xmlstarlet/xmlstarlet-1.6.1.tar.gz'|
-  'https://deb.debian.org/debian/pool/main/x/xmlstarlet/xmlstarlet_1.6.1.orig.tar.gz'|
-  'https://downloads.sourceforge.net/project/xmlstar/xmlstarlet/1.6.1/xmlstarlet-1.6.1.tar.gz') ;;
+  'https://sources.libreelec.tv/mirror/xmlstarlet/xmlstarlet-1.6.1.tar.gz' | 'https://deb.debian.org/debian/pool/main/x/xmlstarlet/xmlstarlet_1.6.1.orig.tar.gz' | 'https://downloads.sourceforge.net/project/xmlstar/xmlstarlet/1.6.1/xmlstarlet-1.6.1.tar.gz') ;;
   *) echo "ERROR: unapproved verified source: $verified" >&2; exit 6;;
 esac
 replacement="PKG_URL=\"$verified\""
