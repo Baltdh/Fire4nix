@@ -150,11 +150,20 @@ DESTDIR="$stage" meson install -C "$work/target-build" --no-rebuild > "$reports/
   tail -n 95 "$reports/target-install.log"; exit 12;
 }
 export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" PKG_CONFIG_PATH='' PKG_CONFIG_SYSROOT_DIR="$stage"
-for pc in wayland-client wayland-server wayland-cursor wayland-egl; do
+for pc in wayland-client wayland-server wayland-cursor; do
   [[ "$(pkg-config --modversion "$pc")" == 1.23.1 ]] || {
     echo "ERROR: $pc package missing or wrong version" >&2; exit 13;
   }
 done
+# Upstream egl/meson.build intentionally publishes two independent ABI
+# versions: wayland-egl.pc=18.1.0 and wayland-egl-backend.pc=3.
+# The underlying Wayland source and client/server packages stay at 1.23.1.
+[[ "$(pkg-config --modversion wayland-egl)" == 18.1.0 ]] || {
+  echo 'ERROR: Wayland EGL frontend pkg-config ABI version is not 18.1.0' >&2; exit 13;
+}
+[[ "$(pkg-config --modversion wayland-egl-backend)" == 3 ]] || {
+  echo 'ERROR: Wayland EGL backend pkg-config ABI version is not 3' >&2; exit 13;
+}
 for name in wayland-client wayland-server wayland-cursor wayland-egl; do
   so=$(find "$stage/usr/lib" -maxdepth 1 -type f -name "lib$name.so.*" -print -quit)
   [[ -n "$so" && -s "$so" ]] || { echo "ERROR: missing target lib$name DSO" >&2; exit 13; }
