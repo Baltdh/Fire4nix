@@ -1,8 +1,8 @@
-name: Fire4Nix actual ROCKNIX WPE 2.54.1 CMake after HarfBuzz 11.2.1
+name: Fire4Nix WPE 2.54.1 real CMake HarfBuzz ICU and Epoxy EGL
 
 on:
   push:
-    branches: ['test/r36h-wpe2541-post-harfbuzz-configure-20261021']
+    branches: ['test/r36h-wpe2541-harfbuzz-icu-epoxy-egl-20261021']
     paths:
       - '.github/workflows/r36h-wpe2541-post-harfbuzz-configure.yml'
       - 'scripts/probe-wpe-post-harfbuzz-target-configure.sh'
@@ -59,10 +59,31 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 39689665850
+          run-id: 39688837904
           github-token: ${{ github.token }}
-          name: Fire4Nix-ROCKNIX-HarfBuzz-11.2.1-TARGET-STAGE-ONLY
+          name: Fire4Nix-ROCKNIX-ICU-74.1-REAL-TARGET-STAGE
+          path: icu-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692709765
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-HarfBuzz-11.2.1-ICU-ON-TARGET
           path: harfbuzz-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692039643
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libglvnd-1.7.0-EGL-GLES2-TARGET-STAGE
+          path: glvnd-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692741218
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libepoxy-1.5.10-EGL-TARGET-ONLY
+          path: epoxy-artifact
       - name: Restore genuine pinned ROCKNIX AArch64 compiler, not Ubuntu
         shell: bash
         run: |
@@ -76,8 +97,14 @@ jobs:
           sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
           test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
           readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
-          grep -Fxq 'HARFBUZZ_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
-            harfbuzz-artifact/harfbuzz-target/reports/acceptance.txt
+          grep -Fxq 'HARFBUZZ_ICU=PASS_REAL_ROCKNIX_AARCH64' \
+            harfbuzz-artifact/harfbuzz-icu-target/reports/result.txt
+          grep -Fxq 'LIBEPOXY_EGL_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
+            epoxy-artifact/libepoxy-target/reports/result.txt
+          grep -Fxq 'ICU_TARGET=PASS_REAL_ROCKNIX_AARCH64' \
+            icu-artifact/icu74-target/reports/acceptance.txt
+          grep -Fxq 'GLVND_EGL_GLES_HEADERS=PASS_REAL_TARGET_STAGE' \
+            glvnd-artifact/glvnd-target/reports/result.txt
       - name: Install CMake diagnostic host programs (not target libraries)
         shell: bash
         run: |
@@ -94,11 +121,11 @@ jobs:
           bash fire4nix/scripts/probe-wpe-post-harfbuzz-target-configure.sh
           report=wpe-post-harfbuzz-probe/report/status.txt
           grep -Fxq 'ROCKNIX_REAL_SDK_AARCH64=PASS' "$report"
-          grep -Fxq 'HARFBUZZ_FIRST_BLOCKER_CLEARED=YES' "$report"
+          grep -Fxq 'HARFBUZZ_ICU_FIRST_BLOCKER_CLEARED=YES' "$report"
           grep -Fxq 'WPE_WEBKIT_BUILT=no' "$report"
           grep -Fxq 'TARGET_EXECUTED=no' "$report"
           {
-            echo '## Genuine ROCKNIX WPE CMake after HarfBuzz'
+            echo '## Genuine ROCKNIX WPE CMake with HarfBuzz ICU and Epoxy EGL'
             cat "$report"
             echo ''
             echo 'Successful diagnostic does NOT mean a complete WPE compile.'
