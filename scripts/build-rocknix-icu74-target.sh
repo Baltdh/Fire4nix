@@ -80,13 +80,15 @@ cat > "$work/icu-consumer.cpp" <<'CPP'
 #include <unicode/unistr.h>
 #include <unicode/numfmt.h>
 #include <unicode/ucnv.h>
-#include <unicode/udata.h>
+#include <unicode/uversion.h>
 extern "C" int fire4nix_icu74_probe() {
  UErrorCode status=U_ZERO_ERROR;
  icu::UnicodeString s=icu::UnicodeString::fromUTF8("R36H Fire4Nix");
  icu::NumberFormat *fmt=icu::NumberFormat::createInstance(status);
  if (fmt) delete fmt;
- return s.length() > 0 && U_SUCCESS(status) && ucnv_countAvailable() > 0 && u_getDataVersion != nullptr;
+ UVersionInfo version = {0, 0, 0, 0};
+ u_getVersion(version);
+ return s.length() > 0 && U_SUCCESS(status) && ucnv_countAvailable() > 0 && version[0] == 74;
 }
 CPP
 "$cxx" -O2 -mcpu=cortex-a35 -fPIC -shared -Wl,-z,defs \
