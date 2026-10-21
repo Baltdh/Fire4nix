@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'scripts/verify-rocknix-xmlstarlet-source.sh'
+      - 'scripts/build-rocknix-rk3326-toolchain.sh'
       - '.github/workflows/verify-rocknix-xmlstarlet-source.yml'
   workflow_dispatch:
 permissions:
@@ -21,6 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/verify-rocknix-xmlstarlet-source.sh
+          bash -n scripts/build-rocknix-rk3326-toolchain.sh
           bash scripts/verify-rocknix-xmlstarlet-source.sh
           grep -Fxq 'SOURCE_STATUS=PASS' "$FIRE4NIX_XMLSTARLET_REPORT"
       - name: Attach source verification report
