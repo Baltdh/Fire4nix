@@ -117,7 +117,8 @@ if ! meson setup "$build" "$source" --cross-file "$root/cairo-target/cross.ini" 
 fi
 if ! meson compile -C "$build" -j 2 > "$reports/build.log" 2>&1; then
     echo 'CAIRO_BUILD=BLOCKED'
-    tail -n 115 "$reports/build.log"
+    grep -nE -B 5 -A 12 'FAILED:|error:|undefined reference|fatal error:|not found' "$reports/build.log" | head -n 180 || true
+    tail -n 45 "$reports/build.log"
     exit 11
 fi
 if ! DESTDIR="$stage" meson install -C "$build" --no-rebuild > "$reports/install.log" 2>&1; then
