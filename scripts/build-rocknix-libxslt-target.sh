@@ -31,6 +31,7 @@ if ! cmake -S "$work/source" -B "$work/build" -G Ninja \
  -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
  -DCMAKE_PREFIX_PATH="$xml/usr" \
+ -DLibXml2_DIR="$xml/usr/lib/cmake/libxml2-2.14.4" \
  -DCMAKE_SHARED_LINKER_FLAGS="-L$xml/usr/lib -Wl,-rpath-link,$xml/usr/lib" \
  -DLIBXML2_INCLUDE_DIR="$xml/usr/include/libxml2" \
  -DLIBXML2_LIBRARY="$xml/usr/lib/libxml2.so.16" \
