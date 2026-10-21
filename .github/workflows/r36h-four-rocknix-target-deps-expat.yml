@@ -58,13 +58,13 @@ jobs:
           readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
           grep -Fq "$sdk" "$sdk/fire4nix-toolchain.cmake"
           grep -Fxq 'THREE_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64' \
-            three-stage-artifact/combined-rocknix/report/acceptance.txt
+            three-stage-artifact/report/acceptance.txt
           grep -Fxq 'THREE_DEPENDENCY_CONSUMER_LINK=PASS_ALL_THREE_REAL_SONAMES' \
-            three-stage-artifact/combined-rocknix/report/acceptance.txt
+            three-stage-artifact/report/acceptance.txt
           python3 - <<'PY'
           from pathlib import Path
           import shutil
-          src=Path('three-stage-artifact/combined-rocknix/stage')
+          src=Path('three-stage-artifact/stage')
           dst=Path('four-stage')
           if not (src/'usr/lib').is_dir():
               raise SystemExit('ERROR: real three-dependency artifact lacks target library stage')
