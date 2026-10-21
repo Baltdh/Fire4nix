@@ -25,12 +25,12 @@ for pc in glib-2.0 gio-2.0 harfbuzz harfbuzz-icu icu-uc icu-i18n \
   wayland-client wayland-protocols; do
   cat > "$root/usr/lib/pkgconfig/$pc.pc" <<PC
 prefix=/usr
-libdir=${prefix}/lib
+libdir=\${prefix}/lib
 Name: $pc
 Description: mock file for CI dependency-metadata audit ONLY
 Version: 99.99
-Libs: -L${libdir} -lmock
-Cflags: -I${prefix}/include
+Libs: -L\${libdir} -lmock
+Cflags: -I\${prefix}/include
 PC
 done
 FIRE4NIX_ROCKNIX_SYSROOT="$root" sh "$audit" --pc-ready > "$t/all"
