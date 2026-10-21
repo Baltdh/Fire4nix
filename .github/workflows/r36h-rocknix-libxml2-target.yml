@@ -1,0 +1,59 @@
+name: Fire4Nix genuine ROCKNIX AArch64 libxml2 2.14.4
+on:
+  push:
+    branches: ['feat/r36h-rocknix-libxml2-target-20261021']
+    paths:
+      - 'scripts/build-rocknix-libxml2-target.sh'
+      - '.github/workflows/r36h-rocknix-libxml2-target.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  libxml2-target:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 32
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore exact ROCKNIX SDK for RK3326
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+      - name: Cross-compile original libxml2 and static ELF audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/build-rocknix-libxml2-target.sh
+          bash fire4nix/scripts/build-rocknix-libxml2-target.sh | tee libxml2-build-console.txt
+          grep -Fxq 'LIBXML2_BUILD=PASS_REAL_ROCKNIX_AARCH64' libxml2-target/reports/result.txt
+      - name: Save all diagnostics and target stage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-libxml2-2.14.4-TARGET-STAGE
+          path: |
+            libxml2-target/stage/
+            libxml2-target/reports/
+            libxml2-build-console.txt
+          retention-days: 14
+          if-no-files-found: warn
