@@ -92,12 +92,12 @@ cpu_family = 'aarch64'
 cpu = 'cortex-a35'
 endian = 'little'
 [properties]
-sys_root = '$sysroot'
+sys_root = '$input'
 pkg_config_libdir = ['$input/usr/lib/pkgconfig', '$sysroot/usr/lib/pkgconfig', '$sysroot/usr/share/pkgconfig']
 [built-in options]
-c_args = ['-mcpu=cortex-a35', '-I$input/usr/include', '-I$input/usr/include/freetype2', '-I$input/usr/include/pixman-1']
+c_args = ['-mcpu=cortex-a35', '-I$input/usr/include', '-I$input/usr/include/freetype2', '-I$input/usr/include/pixman-1', '-I$input/usr/include/glib-2.0', '-I$input/usr/lib/glib-2.0/include']
 c_link_args = ['-L$input/usr/lib', '-Wl,-rpath-link,$input/usr/lib']
-cpp_args = ['-mcpu=cortex-a35', '-I$input/usr/include']
+cpp_args = ['-mcpu=cortex-a35', '-I$input/usr/include', '-I$input/usr/include/glib-2.0', '-I$input/usr/lib/glib-2.0/include']
 cpp_link_args = ['-L$input/usr/lib', '-Wl,-rpath-link,$input/usr/lib']
 EOF
 # Compatible with the ROCKNIX Cairo 1.17.8 recipe. Disable Xlib/XCB while
