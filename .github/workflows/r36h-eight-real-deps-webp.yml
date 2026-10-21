@@ -1,0 +1,81 @@
+name: Fire4Nix build real ROCKNIX libwebp 1.6.0 on seven dependency stage
+on:
+  push:
+    branches: ['feat/r36h-eight-deps-webp-20261021']
+    paths:
+      - 'scripts/build-rocknix-libwebp-eight-deps.sh'
+      - '.github/workflows/r36h-eight-real-deps-webp.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  libwebp-real-target:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Host compiler and build utilities
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake ninja-build pkg-config python3 file binutils
+          bash -n fire4nix/scripts/build-rocknix-libwebp-eight-deps.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39682062894
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-SEVEN-REAL-DEPS-PRIVATE-STAGE
+          path: seven-artifact
+      - name: Restore real AArch64 cross compiler to original private path
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          arc="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$arc"
+          tar -tJf "$arc" > "$RUNNER_TEMP/sdk-archive-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/sdk-archive-members.txt"; then
+            echo 'ERROR: unsafe toolchain archive path' >&2; exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$arc" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          cc="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain/bin/aarch64-rocknix-linux-gnu-gcc"
+          test "$("$cc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          echo 'ROCKNIX_COMPILER_RESTORED=PASS_AARCH64' >> "$GITHUB_STEP_SUMMARY"
+      - name: Cross-build libwebp and validate genuine ROCKNIX target chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-rocknix-libwebp-eight-deps.sh 2>&1 | tee webp-console.txt
+          grep -Fxq 'EIGHT_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64' webp-reports/acceptance.txt
+          grep -Fxq 'WEBP_GLIB_PNG_CONSUMER_LINK=PASS_REAL_AARCH64' webp-reports/acceptance.txt
+      - name: Preserve target libraries, source hash and linker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-EIGHT-DEPS-WEBP-TEST-ONLY
+          path: |
+            webp-reports/
+            eight-rocknix-stage/usr/lib/
+            eight-rocknix-stage/usr/include/
+            webp-console.txt
+          retention-days: 14
+          if-no-files-found: warn
