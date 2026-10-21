@@ -67,9 +67,12 @@ O workflow deve terminar **SUCCESS** e produzir os registros:
 
 `WAYLAND_LINK_CONSUMER=PASS_FOUR_REAL_AARCH64_SONAMES`
 
-A versão 1.23.1 no `wayland-client.pc`, `wayland-server.pc`,
-`wayland-cursor.pc` e `wayland-egl.pc` deve ser comprovada com
-`pkg-config` restrito ao stage real.
+A versão **1.23.1** deve ser comprovada em `wayland-client.pc`,
+`wayland-server.pc` e `wayland-cursor.pc`, usando `pkg-config`
+restrito ao estágio real. O `egl/meson.build` upstream define
+**`wayland-egl.pc=18.1.0` e `wayland-egl-backend.pc=3`** por
+versionamento de ABI independente: exigir 1.23.1 nesses dois
+metadados seria incorreto.
 
 ### O que isto ainda não prova
 
