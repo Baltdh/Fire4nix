@@ -81,3 +81,32 @@ Wayland-protocols do compositor. Também não valida Mali/GLES, HTTPS,
 controle do gamepad, renderização 640×480 ou uso real de memória no console.
 O artefato não é instalável no R36H. Não executar binários target num runner
 x86_64 e não instalar arquivos na raiz do sistema do aparelho.
+
+## Resultado validado em 21/10/2026
+
+[GitHub Actions 39693569119 — SUCCESS](https://github.com/Baltdh/Fire4nix/actions/runs/39693569119),
+commit `4b95b7fadb923a91ffd26dd02e1c9dbb4c5c7906`, registrou:
+
+- `WAYLAND_SOURCE=PASS_ORIGINAL_RELEASE_SHA256`
+- `WAYLAND_NATIVE_SCANNER=PASS_HOST_ONLY_1_23_1`
+- `WAYLAND_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64`
+- `WAYLAND_HOST_SCANNER=PASS_SEPARATE_NATIVE_GENERATOR`
+- `WAYLAND_CLIENT_SERVER_CURSOR_EGL=PASS_TARGET_ELF64_GLIBC_2_41`
+- `WAYLAND_LINK_CONSUMER=PASS_FOUR_REAL_AARCH64_SONAMES`
+
+O artefato [12389702398](https://github.com/Baltdh/Fire4nix/actions/runs/39693569119/artifacts/12389702398)
+tem 18.178.084 bytes e contém a árvore de bibliotecas/cabeçalhos ARM64
+e relatórios de compilação. Possui prazo de retenção no GitHub Actions.
+
+Três problemas foram identificados e corrigidos sem relaxar as verificações:
+
+1. Tentativa de vincular Expat AArch64 no scanner Ubuntu: isolamento
+   explícito das variáveis `PKG_CONFIG_*` do compilador host.
+2. `wayland-scanner --version` escreve em stderr: a checagem do
+   gerador nativo agora captura ambos os fluxos.
+3. Versão `wayland-egl.pc` é **18.1.0**, e
+   `wayland-egl-backend.pc` é **3**, ambos independentes do
+   Wayland principal **1.23.1**. Conferidas as três versões no alvo.
+
+O resultado valida *compilação e vínculo*, não o compositor rodando
+no R36H, tampouco renderização, entrada de controles ou HTTPS.
