@@ -1,0 +1,75 @@
+name: Fire4Nix verify exact xmlstarlet source for ROCKNIX 20260801
+on:
+  push:
+    branches: ['fix/rocknix-xmlstarlet-source-preflight-20261020']
+    paths:
+      - 'scripts/verify-rocknix-xmlstarlet-source.sh'
+      - 'rocknix-integration/stage-xmlstarlet-source-mirror.sh'
+      - '.github/workflows/verify-rocknix-xmlstarlet-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Read pinned ROCKNIX source and validate scripts
+        run: |
+          set -eu
+          mkdir -p source-reports
+          bash -n fire4nix/scripts/verify-rocknix-xmlstarlet-source.sh
+          bash -n fire4nix/rocknix-integration/stage-xmlstarlet-source-mirror.sh
+          bash -n fire4nix/scripts/build-rocknix-rk3326-toolchain.sh
+          grep -Fxq 'PKG_VERSION="1.6.1"' rocknix-source/packages/textproc/xmlstarlet/package.mk
+          grep -Fxq 'PKG_SHA256="15d838c4f3375332fd95554619179b69e4ec91418a3a5296e7c631b7ed19e7ca"' rocknix-source/packages/textproc/xmlstarlet/package.mk
+      - name: Download archive and validate original upstream SHA256
+        env:
+          FIRE4NIX_XMLSTARLET_REPORT: ${{ github.workspace }}/source-reports/xmlstarlet-source.txt
+        run: bash fire4nix/scripts/verify-rocknix-xmlstarlet-source.sh --check
+      - name: Reject forged verification report before changing recipe
+        env:
+          FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
+        run: |
+          set -eu
+          cp source-reports/xmlstarlet-source.txt source-reports/forged-source.txt
+          sed -i 's/^VERIFIED_SHA256=.*/VERIFIED_SHA256=0000000000000000000000000000000000000000000000000000000000000000/' source-reports/forged-source.txt
+          if FIRE4NIX_XMLSTARLET_REPORT="$GITHUB_WORKSPACE/source-reports/forged-source.txt" bash fire4nix/rocknix-integration/stage-xmlstarlet-source-mirror.sh --apply; then
+            echo 'ERROR: tampered xmlstarlet report was accepted' >&2
+            exit 1
+          fi
+          git -C rocknix-source diff --quiet -- packages/textproc/xmlstarlet/package.mk
+          echo 'FORGED_REPORT_REJECTED=PASS' >> "$GITHUB_STEP_SUMMARY"
+      - name: Stage URL-only patch in isolated upstream checkout
+        env:
+          FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
+          FIRE4NIX_XMLSTARLET_REPORT: ${{ github.workspace }}/source-reports/xmlstarlet-source.txt
+        run: |
+          set -eu
+          bash fire4nix/rocknix-integration/stage-xmlstarlet-source-mirror.sh --check
+          bash fire4nix/rocknix-integration/stage-xmlstarlet-source-mirror.sh --apply
+          git -C rocknix-source diff --check
+          git -C rocknix-source diff --name-only > source-reports/changed-files.txt
+          test "$(cat source-reports/changed-files.txt)" = 'packages/textproc/xmlstarlet/package.mk'
+          git -C rocknix-source diff -- packages/textproc/xmlstarlet/package.mk > source-reports/xmlstarlet-url-only.patch
+          grep -Fxq 'PKG_SHA256="15d838c4f3375332fd95554619179b69e4ec91418a3a5296e7c631b7ed19e7ca"' rocknix-source/packages/textproc/xmlstarlet/package.mk
+          echo 'XMLSTARLET_SOURCE=PASS_VERIFIED_ROCKNIX_SHA256_URL_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'NO_TOOLCHAIN_BUILT_OR_BROWSER_TESTED' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve verification report on failure or success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-xmlstarlet-source-provenance
+          path: source-reports/
+          retention-days: 14
+          if-no-files-found: warn

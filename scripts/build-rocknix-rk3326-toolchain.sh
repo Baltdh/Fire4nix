@@ -60,6 +60,19 @@ FIRE4NIX_ROCKNIX_SOURCE="$root" \
   bash "$repo/rocknix-integration/stage-configtools-source-mirror.sh" --apply
 git -C "$root" diff --check
 git -C "$root" diff -- packages/devel/configtools/package.mk > "$report/configtools-url-only.patch"
+# Run #39520551993 reached xmlstarlet 1.6.1, then failed because netcologne
+# SourceForge DNS did not resolve and ROCKNIX distribution-sources returned 404.
+# Replace only the source URL after verifying the unchanged ROCKNIX SHA256.
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+  bash "$repo/scripts/verify-rocknix-xmlstarlet-source.sh" --check
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+FIRE4NIX_ROCKNIX_SOURCE="$root" \
+  bash "$repo/rocknix-integration/stage-xmlstarlet-source-mirror.sh" --check
+FIRE4NIX_XMLSTARLET_REPORT="$report/xmlstarlet-mirror.txt" \
+FIRE4NIX_ROCKNIX_SOURCE="$root" \
+  bash "$repo/rocknix-integration/stage-xmlstarlet-source-mirror.sh" --apply
+git -C "$root" diff --check
+git -C "$root" diff -- packages/textproc/xmlstarlet/package.mk > "$report/xmlstarlet-url-only.patch"
 cd "$root"
 # Use upstream dependency resolution and the project GCC/glibc overrides.
 # No scripts/image, install, build_distro, flashing or target execution.
