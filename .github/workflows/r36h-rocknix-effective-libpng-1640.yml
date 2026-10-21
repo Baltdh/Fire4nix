@@ -103,7 +103,8 @@ jobs:
           # The project overlay intentionally pins 1.6.40 and enables both .a and .so.
           grep -Fxq 'PKG_VERSION="1.6.40"' \
             rocknix-source/projects/ROCKNIX/packages/graphics/libpng/package.mk
-          tar -tJf "$arc" | grep -Fxq 'libpng-1.6.40/configure'
+          tar -tJf "$arc" > png-reports/png-archive-members.txt
+          grep -Fxq 'libpng-1.6.40/configure' png-reports/png-archive-members.txt
           tar -xJf "$arc" -C "$RUNNER_TEMP"
           cmake -S "$RUNNER_TEMP/libpng-1.6.40" -B "$RUNNER_TEMP/build-libpng" -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
