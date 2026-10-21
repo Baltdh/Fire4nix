@@ -1,0 +1,208 @@
+name: Fire4Nix four real ROCKNIX AArch64 WPE dependencies with Expat
+on:
+  push:
+    branches: ['feat/r36h-rocknix-four-deps-expat-20261021']
+    paths:
+      - '.github/workflows/r36h-four-rocknix-target-deps-expat.yml'
+      - 'docs/R36H_FOUR_REAL_ROCKNIX_WPE_DEPS.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  four-target-deps:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39657259468
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-THREE-REAL-DEPS-PRIVATE-STAGE
+          path: ${{ github.workspace }}/three-stage-artifact
+      - name: Restore pinned ROCKNIX GCC and verify original three-library stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p four-reports rocknix-source/build.ROCKNIX-RK3326.aarch64 four-stage
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          arc="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$arc"
+          tar -tJf "$arc" > four-reports/compiler-archive-list.txt
+          if grep -E '(^/|(^|/)\.\.(/|$))' four-reports/compiler-archive-list.txt; then
+            echo 'ERROR: unexpected unsafe SDK member name' >&2; exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$arc" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          test -s "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6"
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fq "$sdk" "$sdk/fire4nix-toolchain.cmake"
+          grep -Fxq 'THREE_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64' \
+            three-stage-artifact/combined-rocknix/report/acceptance.txt
+          grep -Fxq 'THREE_DEPENDENCY_CONSUMER_LINK=PASS_ALL_THREE_REAL_SONAMES' \
+            three-stage-artifact/combined-rocknix/report/acceptance.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          src=Path('three-stage-artifact/combined-rocknix/stage')
+          dst=Path('four-stage')
+          if not (src/'usr/lib').is_dir():
+              raise SystemExit('ERROR: real three-dependency artifact lacks target library stage')
+          for p in src.rglob('*'):
+              rel=p.relative_to(src)
+              out=dst/rel
+              if p.is_symlink():
+                  raise SystemExit(f'ERROR: unexpected symlink in transferred artifact: {rel}')
+              if p.is_dir():
+                  out.mkdir(parents=True,exist_ok=True)
+              elif p.is_file():
+                  out.parent.mkdir(parents=True,exist_ok=True)
+                  shutil.copyfile(p,out)
+              else:
+                  raise SystemExit(f'ERROR: unexpected file type: {rel}')
+          PY
+          stage="$GITHUB_WORKSPACE/four-stage"
+          for lib in z sqlite3 tasn1; do
+            test -s "$stage/usr/lib/pkgconfig/$([[ "$lib" == z ]] && echo zlib || echo "$lib").pc" || {
+              echo "ERROR: missing .pc from real $lib stage" >&2; exit 5;
+            }
+          done
+          test -s "$stage/usr/include/zlib.h"
+          test -s "$stage/usr/include/sqlite3.h"
+          test -s "$stage/usr/include/libtasn1.h"
+          find "$stage/usr/lib" -maxdepth 1 -name 'lib*.so*' -type f -print | tee four-reports/input-libraries.txt
+          echo 'INPUT_THREE_GENUINE_ROCKNIX_LIBRARIES=PASS' | tee four-reports/input-validation.txt
+      - name: Download official ROCKNIX-pinned Expat 2.7.1 source with SHA256 validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=354552544b8f99012e5062f7d570ec77f14b412a3ff5c7d8d0dae62c0d217c30
+          grep -Fxq 'PKG_VERSION="2.7.1"' rocknix-source/packages/textproc/expat/package.mk
+          grep -Fxq "PKG_SHA256=\"$expected\"" rocknix-source/packages/textproc/expat/package.mk
+          grep -Fq '. $'\{ROOT\}'/packages/textproc/expat/package.mk' \
+            rocknix-source/projects/ROCKNIX/packages/textproc/expat/package.mk || {
+              grep -Fq 'packages/textproc/expat/package.mk' rocknix-source/projects/ROCKNIX/packages/textproc/expat/package.mk
+            }
+          src="$RUNNER_TEMP/expat-2.7.1.tar.xz"
+          curl -fLsS --proto '=https' --proto-redir '=https' \
+            --connect-timeout 15 --max-time 90 \
+            'https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz' -o "$src"
+          echo "$expected  $src" | sha256sum -c -
+          tar -tJf "$src" > four-reports/expat-archive-list.txt
+          grep -Fxq 'expat-2.7.1/CMakeLists.txt' four-reports/expat-archive-list.txt
+          tar -xJf "$src" -C "$RUNNER_TEMP"
+          echo 'EXPAT_ORIGINAL_SOURCE_SHA256=PASS_ROCKNIX_2_7_1' | tee four-reports/source-validation.txt
+      - name: Cross-build Expat in same private four-library DESTDIR
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          stage="$GITHUB_WORKSPACE/four-stage"
+          cmake -S "$RUNNER_TEMP/expat-2.7.1" -B "$RUNNER_TEMP/expat-target-build" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
+            -DEXPAT_BUILD_DOCS=OFF -DEXPAT_BUILD_TOOLS=OFF \
+            -DEXPAT_BUILD_EXAMPLES=OFF -DEXPAT_BUILD_TESTS=OFF \
+            -DEXPAT_SHARED_LIBS=ON -DEXPAT_BUILD_PKGCONFIG=ON \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            2>&1 | tee four-reports/expat-cmake-configure.log
+          cmake --build "$RUNNER_TEMP/expat-target-build" --parallel 2 \
+            2>&1 | tee four-reports/expat-cmake-build.log
+          DESTDIR="$stage" cmake --install "$RUNNER_TEMP/expat-target-build" \
+            2>&1 | tee four-reports/expat-cmake-install.log
+          test -s "$stage/usr/include/expat.h"
+          test -s "$stage/usr/lib/pkgconfig/expat.pc"
+          so=$(find "$stage/usr/lib" -maxdepth 1 -type f -name 'libexpat.so*' -print -quit)
+          test -s "$so"
+          readelf -h "$so" | grep -Eq 'Class:.*ELF64'
+          readelf -h "$so" | grep -Eq 'Machine:.*AArch64'
+          PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" PKG_CONFIG_PATH='' PKG_CONFIG_SYSROOT_DIR="$stage" \
+            pkg-config --exists 'expat >= 2.7.1'
+          req=$(readelf --version-info "$so" | sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -1 || true)
+          if [ -n "$req" ]; then
+            awk -v r="$req" 'BEGIN {split(r,v,"."); exit !(v[1]<2 || (v[1]==2 && v[2]<=41))}'
+          fi
+          printf 'EXPAT_SHARED_LIBRARY=PASS_REAL_ROCKNIX_AARCH64\nEXPAT_GLIBC_REQUIRED=%s\n' "${req:-none}" \
+            | tee four-reports/expat-abi.txt
+      - name: Link one genuine ARM64 consumer against all four real libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$GITHUB_WORKSPACE/four-stage"
+          cc="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain/bin/aarch64-rocknix-linux-gnu-gcc"
+          for pc in zlib sqlite3 libtasn1 expat; do
+            PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" \
+            PKG_CONFIG_SYSROOT_DIR="$stage" pkg-config --exists "$pc"
+            PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" \
+            PKG_CONFIG_SYSROOT_DIR="$stage" pkg-config --modversion "$pc"
+          done | tee four-reports/four-target-pkgconfig-versions.txt
+          cat > four-reports/four-consumer.c <<'C'
+          #include <zlib.h>
+          #include <sqlite3.h>
+          #include <libtasn1.h>
+          #include <expat.h>
+          int main(void) {
+              return zlibVersion()[0] && sqlite3_libversion()[0] &&
+                     asn1_check_version(0) && XML_ExpatVersion()[0] ? 0 : 1;
+          }
+          C
+          "$cc" -O2 -mcpu=cortex-a35 \
+            -I"$stage/usr/include" \
+            -L"$stage/usr/lib" -Wl,-rpath-link,"$stage/usr/lib" \
+            four-reports/four-consumer.c \
+            -Wl,--no-as-needed -lexpat -lz -lsqlite3 -ltasn1 \
+            -o four-reports/four-consumer-aarch64
+          readelf -h four-reports/four-consumer-aarch64 > four-reports/four-consumer-elf.txt
+          readelf -d four-reports/four-consumer-aarch64 > four-reports/four-consumer-needed.txt
+          readelf -V four-reports/four-consumer-aarch64 > four-reports/four-consumer-versions.txt
+          grep -Eq 'Machine:.*AArch64' four-reports/four-consumer-elf.txt
+          for so in libz.so.1 libsqlite3.so.0 libtasn1.so.6 libexpat.so.1; do
+            grep -Fq "Shared library: [$so]" four-reports/four-consumer-needed.txt || {
+              echo "ERROR: consumer lacks $so" >&2; exit 8;
+            }
+          done
+          {
+            echo 'FOUR_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64'
+            echo 'FOUR_DEPENDENCY_CONSUMER_LINK=PASS_ALL_FOUR_REAL_SONAMES'
+            echo 'LIBRARIES=zlib_1.3.1,sqlite_3.50.2,libtasn1_4.21.0,expat_2.7.1'
+            echo 'MAX_ALLOWED_GLIBC=2.41'
+            echo 'SOURCE_EXACT_ROCKNIX_RECIPE=yes'
+            echo 'PRIVATE_STAGING=yes'
+            echo 'SDK_SYSROOT_MODIFIED=no'
+            echo 'WEBKIT_BROWSER_BUILT=no'
+            echo 'R36H_EXECUTED=no'
+            echo 'NOT_INSTALLABLE_ON_R36H=yes'
+          } | tee four-reports/four-deps-result.txt
+          cat four-reports/four-deps-result.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve AArch64 consumer, libraries and reproducible reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-FOUR-REAL-WPE-DEPS-PRIVATE-STAGE
+          path: |
+            four-reports/
+            four-stage/usr/lib/
+            four-stage/usr/include/
+          retention-days: 14
+          if-no-files-found: warn
