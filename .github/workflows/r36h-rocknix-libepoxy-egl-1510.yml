@@ -45,6 +45,21 @@ jobs:
           github-token: ${{ github.token }}
           name: ROCKNIX-RK3326-toolchain-HOST-ONLY
           path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692039643
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libglvnd-1.7.0-EGL-GLES2-TARGET-STAGE
+          path: glvnd-artifact
+      - name: Verify authentic target EGL development artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'GLVND_EGL_GLES_HEADERS=PASS_REAL_TARGET_STAGE' \
+            glvnd-artifact/glvnd-target/reports/result.txt
+          test -s glvnd-artifact/glvnd-target/stage/usr/include/EGL/eglplatform.h
+          test -s glvnd-artifact/glvnd-target/stage/usr/include/KHR/khrplatform.h
       - name: Restore real ROCKNIX RK3326 AArch64 GCC + sysroot
         shell: bash
         run: |
