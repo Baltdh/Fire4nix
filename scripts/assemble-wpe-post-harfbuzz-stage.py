@@ -68,8 +68,8 @@ def readelf(path: Path) -> str:
     return out.stdout
 
 def main() -> None:
-    check(len(sys.argv)==10,
-          "usage: assemble-wpe-post-harfbuzz-stage.py DEST EIGHT FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY GCRYPT")
+    check(len(sys.argv)==12,
+          "usage: assemble-wpe-post-harfbuzz-stage.py DEST EIGHT FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY GCRYPT SOUP3 SOUP_PREREQS")
     dest,*sources=map(Path,sys.argv[1:])
     check(not dest.exists() and not dest.is_symlink(), f"output exists: {dest}")
     dest.mkdir(parents=True)
@@ -77,6 +77,9 @@ def main() -> None:
         print(f"MERGE_SOURCE={src}")
         print(f"MERGED_FILES={copy_source(src,dest)}")
     required={
+      'libnghttp2.so.14':'NGHTTP2',
+      'libpsl.so.5':'PSL',
+      'libsoup-3.0.so.0':'Soup3',
       'libgpg-error.so.0':'GpgError',
       'libgcrypt.so.20':'Gcrypt',
       'libharfbuzz.so.0':'HarfBuzz',
@@ -101,15 +104,15 @@ def main() -> None:
         path=dest/'usr/lib'/filename
         check(path.is_file(),f"missing target {name}: {path}")
         readelf(path)
-    for pc in ('libgcrypt','gpg-error','harfbuzz','harfbuzz-icu','icu-uc','icu-i18n',
+    for pc in ('libnghttp2','libpsl','libsoup-3.0','libgcrypt','gpg-error','harfbuzz','harfbuzz-icu','icu-uc','icu-i18n',
                'epoxy','egl','glesv2','cairo','fontconfig','freetype2','pixman-1',
                'glib-2.0','gio-2.0','libpng16','libjpeg','zlib'):
         check((dest/'usr/lib/pkgconfig'/f'{pc}.pc').is_file(),
               f"missing target metadata {pc}.pc")
-    for hdr in ('gcrypt.h','gpg-error.h','harfbuzz/hb.h', 'harfbuzz/hb-icu.h', 'unicode/utypes.h',
+    for hdr in ('libsoup-3.0/libsoup/soup.h','gcrypt.h','gpg-error.h','harfbuzz/hb.h', 'harfbuzz/hb-icu.h', 'unicode/utypes.h',
                 'epoxy/egl.h', 'EGL/eglplatform.h', 'GLES2/gl2.h'):
         check((dest/'usr/include'/hdr).is_file(),f'missing target SDK header {hdr}')
-    print("WPE_HARFBUZZ_ICU_EPOXY_EGL_GCRYPT_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE")
+    print("WPE_HARFBUZZ_ICU_EPOXY_EGL_GCRYPT_SOUP3_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE")
     print("STAGE_INSTALLABLE=no")
 
 if __name__=='__main__':
