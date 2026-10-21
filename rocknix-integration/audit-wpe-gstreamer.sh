@@ -56,6 +56,19 @@ fi
       broken=$((broken+1))
     fi
   done
+  # GST_CAT_DEFAULT is a module-local category. Also inspect non-libgst
+  # shared objects and WPE helper executables: renamed libraries must not
+  # evade the packaging guard. No binary is executed by this check.
+  for f in "$LIB"/*.so "$LIB"/*.so.* "$ROOT"/libexec/wpe-webkit-2.0/*; do
+    [ -f "$f" ] || continue
+    [ -L "$f" ] && continue
+    case "${f##*/}" in libgst*) continue ;; esac
+    if readelf -h "$f" >/dev/null 2>&1 && \
+       readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT([[:space:]]|$)' >/dev/null; then
+      echo "UNRESOLVED_GST_CAT_DEFAULT=${f##*/}"
+      broken=$((broken+1))
+    fi
+  done
   echo "gst_libraries_checked=$checked"
   echo "gst_libraries_with_findings=$broken"
   if [ "$broken" -gt 0 ]; then
