@@ -74,7 +74,7 @@ jobs:
           cmake -S jpeg-source -B "$RUNNER_TEMP/jpeg-build" -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-            -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DCMAKE_INSTALL_LIBDIR=/usr/lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             -DENABLE_STATIC=ON -DENABLE_SHARED=ON -DWITH_JPEG8=ON \
             -DWITH_SIMD=ON -DENABLE_TESTING=OFF \
             2>&1 | tee jpeg-reports/configure.log
@@ -82,6 +82,7 @@ jobs:
           grep -Fxq 'WITH_JPEG8:BOOL=ON' "$RUNNER_TEMP/jpeg-build/CMakeCache.txt"
           grep -Fxq 'ENABLE_SHARED:BOOL=ON' "$RUNNER_TEMP/jpeg-build/CMakeCache.txt"
           grep -Fxq 'ENABLE_STATIC:BOOL=ON' "$RUNNER_TEMP/jpeg-build/CMakeCache.txt"
+          grep -Fxq 'CMAKE_INSTALL_LIBDIR:PATH=/usr/lib' "$RUNNER_TEMP/jpeg-build/CMakeCache.txt"
       - name: Build both static and shared JPEG for ROCKNIX AArch64 (not host)
         shell: bash
         run: |
