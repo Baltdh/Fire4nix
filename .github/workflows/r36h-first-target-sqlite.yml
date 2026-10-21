@@ -1,0 +1,116 @@
+name: Fire4Nix real ROCKNIX AArch64 SQLite target library
+on:
+  push:
+    branches: ['feat/r36h-first-rocknix-sqlite-target-20261021']
+    paths:
+      - '.github/workflows/r36h-first-target-sqlite.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  sqlite-real-aarch64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore original ROCKNIX GCC host path and verify target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sqlite-reports "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64"
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar --no-same-owner --no-same-permissions -xJf "$archive" -C "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64"
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test -x "$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = 'aarch64-rocknix-linux-gnu'
+          test -f "$sdk/fire4nix-toolchain.cmake"
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fq "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64" "$sdk/fire4nix-toolchain.cmake"
+          echo 'ROCKNIX_TOOLCHAIN_RESTORED=PASS' | tee sqlite-reports/compiler-report.txt
+      - name: Build actual SQLite 3.50.2 with ROCKNIX AArch64 GCC
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          cc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
+          ar="$sdk/bin/aarch64-rocknix-linux-gnu-ar"
+          ranlib="$sdk/bin/aarch64-rocknix-linux-gnu-ranlib"
+          sourcefile="$RUNNER_TEMP/sqlite-autoconf-3500200.tar.gz"
+          expected='84a616ffd31738e4590b65babb3a9e1ef9370f3638e36db220ee0e73f8ad2156'
+          curl -fLsS --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 90 \
+            'https://www.sqlite.org/2025/sqlite-autoconf-3500200.tar.gz' -o "$sourcefile"
+          echo "$expected  $sourcefile" | sha256sum -c -
+          grep -Fxq 'PKG_VERSION="3.50.2"' rocknix-source/packages/databases/sqlite/package.mk
+          grep -Fxq "PKG_SHA256=\"$expected\"" rocknix-source/packages/databases/sqlite/package.mk
+          test "$(git -C rocknix-source rev-parse HEAD)" = '3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb'
+          tar -xzf "$sourcefile" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/sqlite-autoconf-3500200"
+          CC="$cc" AR="$ar" RANLIB="$ranlib" \
+            ./configure --host=aarch64-rocknix-linux-gnu --prefix=/usr \
+            --disable-static --enable-shared --disable-readline \
+            --enable-threadsafe --soname=legacy \
+            > "$GITHUB_WORKSPACE/sqlite-reports/sqlite-configure.log" 2>&1 || {
+              tail -n 80 "$GITHUB_WORKSPACE/sqlite-reports/sqlite-configure.log"
+              exit 10
+            }
+          make -j2 > "$GITHUB_WORKSPACE/sqlite-reports/sqlite-build.log" 2>&1 || {
+            tail -n 100 "$GITHUB_WORKSPACE/sqlite-reports/sqlite-build.log"
+            exit 11
+          }
+          stage="$GITHUB_WORKSPACE/sqlite-rocknix-target-only"
+          make install DESTDIR="$stage" > "$GITHUB_WORKSPACE/sqlite-reports/sqlite-install.log" 2>&1 || {
+            tail -n 80 "$GITHUB_WORKSPACE/sqlite-reports/sqlite-install.log"
+            exit 12
+          }
+          so=$(find "$stage/usr/lib" -maxdepth 1 -type f -name 'libsqlite3.so*' -print -quit)
+          test -n "$so"
+          readelf -h "$so" | grep -Eq 'Class:.*ELF64'
+          readelf -h "$so" | grep -Eq 'Machine:.*AArch64'
+          test -f "$stage/usr/lib/pkgconfig/sqlite3.pc"
+          PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" PKG_CONFIG_PATH='' PKG_CONFIG_SYSROOT_DIR="$stage" \
+            pkg-config --exists 'sqlite3 >= 3.0'
+          req=$(readelf --version-info "$so" | sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -n 1 || true)
+          if [ -n "$req" ]; then
+            awk -v req="$req" 'BEGIN {
+              split(req,v,"."); exit !(v[1]<2 || (v[1]==2 && v[2]<=41))
+            }'
+          fi
+          {
+            echo 'SQLITE_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64'
+            echo 'SQLITE_VERSION=3.50.2'
+            echo 'ELF_MACHINE=AArch64'
+            echo "GLIBC_REQUIRED=${req:-none}"
+            echo 'TARGET_GLIBC_LIMIT=2.41'
+            echo 'TARGET_DEPLOYED=no'
+            echo 'WPE_BROWSER_BUILT=no'
+          } | tee "$GITHUB_WORKSPACE/sqlite-reports/sqlite-result.txt"
+          cat "$GITHUB_WORKSPACE/sqlite-reports/sqlite-result.txt" >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve SQLite ELF, pkgconfig and logs for audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-RK3326-SQLite-REAL-TARGET-TEST-ONLY
+          path: |
+            sqlite-reports/
+            sqlite-rocknix-target-only/usr/lib/
+            sqlite-rocknix-target-only/usr/include/
+          retention-days: 7
+          if-no-files-found: warn
