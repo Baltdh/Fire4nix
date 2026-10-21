@@ -1,0 +1,68 @@
+name: Fire4Nix audit reusable genuine ROCKNIX SDK for WPE
+
+on:
+  push:
+    branches:
+      - feat/r36h-reuse-real-rocknix-sdk-audit-20261021
+    paths:
+      - '.github/workflows/audit-r36h-real-rocknix-sdk.yml'
+      - 'scripts/audit-real-rocknix-sdk-checkpoint.sh'
+      - 'rocknix-integration/audit-wpe-sysroot-pkgconfig.sh'
+      - 'native/tests/test_wpe_sysroot_pkgconfig_audit.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sdk-readiness:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install host-only static SDK inspection tools
+        run: |
+          set -eu
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cmake ninja-build binutils pkg-config python3
+
+      - name: Download genuine toolchain checkpoint from successful build
+        uses: actions/download-artifact@v4
+        with:
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          path: recovered-checkpoint
+
+      - name: Restore immutable checkpoint and audit WPE target dependencies
+        shell: bash
+        env:
+          FIRE4NIX_ORIGINAL_RUN_ID: '39525819979'
+          FIRE4NIX_ORIGINAL_RUN_HEAD: '6342d15d4e538ca5e525346fbf477ab585e199bc'
+          FIRE4NIX_TOOLCHAIN_ARCHIVE: ${{ github.workspace }}/recovered-checkpoint/rocknix-toolchain-host-only.tar.xz
+          FIRE4NIX_SDK_AUDIT_REPORTS: ${{ github.workspace }}/sdk-audit-reports
+        run: |
+          set -euo pipefail
+          bash -n scripts/audit-real-rocknix-sdk-checkpoint.sh
+          sh -n rocknix-integration/audit-wpe-sysroot-pkgconfig.sh
+          sh native/tests/test_wpe_sysroot_pkgconfig_audit.sh
+          bash scripts/audit-real-rocknix-sdk-checkpoint.sh --inspect
+          {
+            echo '## Genuine ROCKNIX 20260801 SDK inspection'
+            cat sdk-audit-reports/SDK-READINESS.txt
+            echo
+            echo '**Artifact is host-only. No WebKit was built or run on R36H.**'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save real sysroot report even if blocked
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-REAL-SYSROOT-WPE-READINESS
+          path: sdk-audit-reports/
+          if-no-files-found: warn
+          retention-days: 14
