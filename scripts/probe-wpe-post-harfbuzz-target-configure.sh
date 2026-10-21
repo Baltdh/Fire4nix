@@ -58,6 +58,23 @@ export PKG_CONFIG_SYSROOT_DIR="$stage"
 for pc in libsoup-3.0 libgcrypt gpg-error harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   pkg-config --modversion "$pc" | awk -v name="$pc" '{print "TARGET_PC_" name "=" $0}'
 done | tee "$work/report/target-package-versions.txt"
+# Audit the full libsoup3 pkg-config Requires chain before CMake.
+# pkg-config --modversion alone may read the version while required modules
+# cannot resolve. This catches missing target metadata without host fallback.
+{
+  echo SOUP3_PC_PATH=\"$(pkg-config --variable=pcfiledir libsoup-3.0)\"
+  echo 'SOUP3_PC_CONTENT_BEGIN'
+  cat "$stage/usr/lib/pkgconfig/libsoup-3.0.pc"
+  echo 'SOUP3_PC_CONTENT_END'
+  if pkg-config --print-errors --exists 'libsoup-3.0 >= 3.0'; then
+    echo 'SOUP3_PKGCONFIG_FULL_REQUIRES=PASS'
+    pkg-config --cflags libsoup-3.0
+    pkg-config --libs libsoup-3.0
+  else
+    echo 'SOUP3_PKGCONFIG_FULL_REQUIRES=BLOCKED'
+    pkg-config --print-errors --exists 'libsoup-3.0 >= 3.0' || true
+  fi
+} 2>&1 | tee "$work/report/soup3-pkgconfig-resolution.txt"
 # Extend rather than replace the immutable SDK toolchain: this makes CMake
 # find target libraries from the downloaded private stage ahead of base libc.
 cat > "$work/probe-toolchain.cmake" <<EOF
