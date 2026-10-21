@@ -1,0 +1,82 @@
+name: Fire4Nix ROCKNIX AArch64 libgcrypt 1.11.1 WPE CMake dependency
+
+on:
+  push:
+    branches: ['feat/r36h-libgcrypt-1111-rocknix-wpe-20261021']
+    paths:
+      - 'scripts/build-rocknix-libgcrypt-1111-wpe.sh'
+      - '.github/workflows/r36h-rocknix-libgcrypt-1111-wpe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  real-arm64-libgcrypt:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Host-only source tools (not libgcrypt target)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc g++ make autoconf automake autopoint libtool libtool-bin \
+            pkg-config python3 gawk gettext bison
+          bash -n fire4nix/scripts/build-rocknix-libgcrypt-1111-wpe.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Recover genuine ROCKNIX RK3326 GCC and libc
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar -tJf "$archive" > "$RUNNER_TEMP/sdk-archive-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/sdk-archive-members.txt"; then
+            echo 'ERROR: unsafe SDK archive member' >&2; exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          echo 'ROCKNIX_REAL_SDK=PASS_AARCH64_GLIBC_2_41' >> "$GITHUB_STEP_SUMMARY"
+      - name: Build libgpg-error PIC then libgcrypt target and link cryptographic probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-rocknix-libgcrypt-1111-wpe.sh 2>&1 | tee libgcrypt-console.txt
+          grep -Fxq 'LIBGCRYPT_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' libgcrypt-target/reports/acceptance.txt
+          grep -Fxq 'LIBGCRYPT_CONSUMER_LINK=PASS_ELF64_AARCH64' libgcrypt-target/reports/acceptance.txt
+      - name: Preserve verified source, build logs and ARM64 ELF for future WPE configure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-libgcrypt-1.11.1-WPE-TARGET-TEST-ONLY
+          path: |
+            libgcrypt-target/reports/
+            libgcrypt-target/stage/usr/lib/
+            libgcrypt-target/stage/usr/include/
+            libgcrypt-console.txt
+          retention-days: 14
+          if-no-files-found: warn
