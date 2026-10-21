@@ -1,0 +1,165 @@
+name: Fire4Nix ROCKNIX AArch64 libpng linked with target zlib
+on:
+  push:
+    branches: ['feat/r36h-rocknix-libpng-zlib-linked-20261021']
+    paths:
+      - '.github/workflows/r36h-rocknix-libpng-zlib-chain.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  png-with-zlib:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore verified ROCKNIX target GCC and sysroot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p png-reports "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64"
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar -tJf "$archive" > png-reports/sdk-members.txt
+          if grep -E '(^/|(^|/)\.\.(/|$))' png-reports/sdk-members.txt; then
+            echo 'ERROR: path traversal in SDK checkpoint'; exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64"
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fq "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64" "$sdk/fire4nix-toolchain.cmake"
+          echo 'ROCKNIX_REAL_SDK=PASS_AARCH64_GLIBC_2_41' | tee png-reports/sdk.txt
+      - name: Cross-compile genuine zlib 1.3.1 into private target stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          arc="$RUNNER_TEMP/zlib-1.3.1.tar.gz"
+          curl -fLsS --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 90 \
+            'https://zlib.net/fossils/zlib-1.3.1.tar.gz' -o "$arc"
+          echo "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23  $arc" | sha256sum -c -
+          grep -Fxq 'PKG_VERSION="1.3.1"' rocknix-source/packages/compress/zlib/package.mk
+          grep -Fxq 'PKG_SHA256="9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"' \
+            rocknix-source/packages/compress/zlib/package.mk
+          tar -xzf "$arc" -C "$RUNNER_TEMP"
+          cmake -S "$RUNNER_TEMP/zlib-1.3.1" -B "$RUNNER_TEMP/build-zlib" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+            -DINSTALL_PKGCONFIG_DIR=/usr/lib/pkgconfig
+          cmake --build "$RUNNER_TEMP/build-zlib" --parallel 2
+          DESTDIR="$GITHUB_WORKSPACE/png-zlib-rocknix-stage" \
+            cmake --install "$RUNNER_TEMP/build-zlib"
+          stage="$GITHUB_WORKSPACE/png-zlib-rocknix-stage"
+          test -f "$stage/usr/lib/libz.so"
+          test -f "$stage/usr/include/zlib.h"
+          test -f "$stage/usr/lib/pkgconfig/zlib.pc"
+          readelf -h "$stage/usr/lib/libz.so" | grep -Eq 'Machine:.*AArch64'
+          echo 'TARGET_ZLIB=PASS_REAL_ROCKNIX_AARCH64' | tee png-reports/zlib.txt
+      - name: Cross-compile libpng 1.6.50 against private target zlib
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          stage="$GITHUB_WORKSPACE/png-zlib-rocknix-stage"
+          arc="$RUNNER_TEMP/libpng-1.6.50.tar.xz"
+          expected=4df396518620a7aa3651443e87d1b2862e4e88cad135a8b93423e01706232307
+          ok=0
+          for url in \
+            'https://sources.libreelec.tv/mirror/libpng/libpng-1.6.50.tar.xz' \
+            'https://downloads.sourceforge.net/project/libpng/libpng16/1.6.50/libpng-1.6.50.tar.xz'; do
+            rm -f "$arc"
+            if curl --proto '=https' --proto-redir '=https' -fLsS \
+              --connect-timeout 12 --max-time 70 "$url" -o "$arc" &&
+              echo "$expected  $arc" | sha256sum -c -; then
+              ok=1
+              echo "VERIFIED_SOURCE=$url" | tee png-reports/png-source.txt
+              break
+            fi
+          done
+          test "$ok" = 1 || { echo 'ERROR: no sha256-matching libpng source'; exit 6; }
+          grep -Fxq 'PKG_VERSION="1.6.50"' rocknix-source/packages/graphics/libpng/package.mk
+          grep -Fxq "PKG_SHA256=\"$expected\"" rocknix-source/packages/graphics/libpng/package.mk
+          # The ROCKNIX project overlay separately pins 1.6.40: this 1.6.50
+          # chain is an experimental WPE-stage proof, not a project package replacement.
+          grep -Fxq 'PKG_VERSION="1.6.40"' \
+            rocknix-source/projects/ROCKNIX/packages/graphics/libpng/package.mk
+          tar -xJf "$arc" -C "$RUNNER_TEMP"
+          cmake -S "$RUNNER_TEMP/libpng-1.6.50" -B "$RUNNER_TEMP/build-libpng" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$sdk/fire4nix-toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DZLIB_LIBRARY="$stage/usr/lib/libz.so" \
+            -DZLIB_INCLUDE_DIR="$stage/usr/include" \
+            -DPNG_SHARED=ON -DPNG_STATIC=OFF -DPNG_TESTS=OFF -DPNG_EXECUTABLES=OFF \
+            2>&1 | tee png-reports/png-configure.log
+          cmake --build "$RUNNER_TEMP/build-libpng" --parallel 2 \
+            2>&1 | tee png-reports/png-build.log
+          DESTDIR="$stage" cmake --install "$RUNNER_TEMP/build-libpng" \
+            2>&1 | tee png-reports/png-install.log
+          so=$(find "$stage/usr/lib" -maxdepth 1 -type f -name 'libpng16.so*' -print -quit)
+          test -s "$so"
+          readelf -h "$so" | grep -Eq 'Class:.*ELF64'
+          readelf -h "$so" | grep -Eq 'Machine:.*AArch64'
+          readelf -d "$so" | grep -Eq 'Shared library: \[libz\.so\.1\]'
+          test -f "$stage/usr/lib/pkgconfig/libpng16.pc"
+          PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" \
+            PKG_CONFIG_SYSROOT_DIR="$stage" pkg-config --exists 'libpng >= 1.6.50'
+          req=$(readelf --version-info "$so" | sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -1 || true)
+          if [ -n "$req" ]; then
+            awk -v r="$req" 'BEGIN {
+              split(r,v,"."); exit !(v[1]<2 || (v[1]==2 && v[2]<=41))
+            }'
+          fi
+          printf '#include <png.h>\n#include <zlib.h>\nint main(void){return png_access_version_number() == 0 || zlibVersion()[0] == 0;}\n' \
+            > "$RUNNER_TEMP/wpe-png-link-test.c"
+          "$sdk/bin/aarch64-rocknix-linux-gnu-gcc" \
+            -I"$stage/usr/include" "$RUNNER_TEMP/wpe-png-link-test.c" \
+            -L"$stage/usr/lib" -Wl,-rpath-link,"$stage/usr/lib" \
+            -lpng16 -lz -o "$RUNNER_TEMP/wpe-png-link-test"
+          readelf -h "$RUNNER_TEMP/wpe-png-link-test" | grep -Eq 'Machine:.*AArch64'
+          readelf -d "$RUNNER_TEMP/wpe-png-link-test" | grep -Fq 'libpng16.so'
+          readelf -d "$RUNNER_TEMP/wpe-png-link-test" | grep -Fq 'libz.so'
+          {
+            echo 'LIBPNG_ZLIB_CHAIN=PASS_REAL_ROCKNIX_AARCH64_TARGET_LINK'
+            echo 'LIBPNG_VERSION=1.6.50_EXPERIMENTAL'
+            echo 'TARGET_ZLIB_VERSION=1.3.1'
+            echo 'SOURCE_HASH=ORIGINAL_ROCKNIX_PACKAGE_SHA256'
+            echo 'LIBPNG_LINKED_WITH=libz.so.1'
+            echo "LIBPNG_GLIBC_MAX_REQUIRED=${req:-none}"
+            echo 'WPE_WEBKIT_BUILT=no'
+            echo 'TARGET_EXECUTED=no'
+            echo 'R36H_INSTALLABLE=no'
+            echo 'NOTE=ROCKNIX_project_override_pins_libpng_1.6.40'
+          } | tee png-reports/result.txt
+          cat png-reports/result.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve target libraries, headers and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-RK3326-LibPNG-Zlib-REAL-TARGET-TEST-ONLY
+          path: |
+            png-reports/
+            png-zlib-rocknix-stage/usr/lib/
+            png-zlib-rocknix-stage/usr/include/
+          retention-days: 7
+          if-no-files-found: warn
