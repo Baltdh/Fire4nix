@@ -106,6 +106,9 @@ else
   echo 'WPE_TARGET_CONFIGURE=BLOCKED_WITH_REAL_SDK' | tee -a "$work/report/status.txt"
   grep -E -A 8 'CMake Error|Could NOT find|Could not find|required package' "$work/report/cmake.log" |
     head -n 160 > "$work/report/first-errors.txt" || true
+  echo 'WPE_FIRST_CMAKE_BLOCKERS_BEGIN'
+  cat "$work/report/first-errors.txt"
+  echo 'WPE_FIRST_CMAKE_BLOCKERS_END'
 fi
 echo 'NO_FIRMWARE_WRITES=YES' >> "$work/report/status.txt"
 echo 'WPE_CONFIGURE_PROBE=RECORDED_REAL_TARGET_SDK' >> "$work/report/status.txt"
