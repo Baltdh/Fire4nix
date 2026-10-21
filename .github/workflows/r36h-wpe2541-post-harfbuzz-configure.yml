@@ -1,0 +1,121 @@
+name: Fire4Nix actual ROCKNIX WPE 2.54.1 CMake after HarfBuzz 11.2.1
+
+on:
+  push:
+    branches: ['test/r36h-wpe2541-post-harfbuzz-configure-20261021']
+    paths:
+      - '.github/workflows/r36h-wpe2541-post-harfbuzz-configure.yml'
+      - 'scripts/probe-wpe-post-harfbuzz-target-configure.sh'
+      - 'scripts/assemble-wpe-post-harfbuzz-stage.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  wpe-cmake-after-harfbuzz:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683307528
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-EIGHT-REAL-DEPS-JPEG-3.0.1-TARGET-ONLY
+          path: eight-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39687860420
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Fontconfig-2.17.1-CAIRO-PREREQ-TEST-ONLY
+          path: fontconfig-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39688962028
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Cairo-1.17.8-TARGET-PREREQ-ONLY
+          path: cairo-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39689665850
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-HarfBuzz-11.2.1-TARGET-STAGE-ONLY
+          path: harfbuzz-artifact
+      - name: Restore genuine pinned ROCKNIX AArch64 compiler, not Ubuntu
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'HARFBUZZ_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
+            harfbuzz-artifact/harfbuzz-target/reports/acceptance.txt
+      - name: Install CMake diagnostic host programs (not target libraries)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config python3 perl ruby gperf bison flex
+          python3 -m py_compile fire4nix/scripts/assemble-wpe-post-harfbuzz-stage.py
+          bash -n fire4nix/scripts/probe-wpe-post-harfbuzz-target-configure.sh
+      - name: Verify actual HarfBuzz gate disappeared on real WPE 2.54.1 CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/probe-wpe-post-harfbuzz-target-configure.sh
+          report=wpe-post-harfbuzz-probe/report/status.txt
+          grep -Fxq 'ROCKNIX_REAL_SDK_AARCH64=PASS' "$report"
+          grep -Fxq 'HARFBUZZ_FIRST_BLOCKER_CLEARED=YES' "$report"
+          grep -Fxq 'WPE_WEBKIT_BUILT=no' "$report"
+          grep -Fxq 'TARGET_EXECUTED=no' "$report"
+          {
+            echo '## Genuine ROCKNIX WPE CMake after HarfBuzz'
+            cat "$report"
+            echo ''
+            echo 'Successful diagnostic does NOT mean a complete WPE compile.'
+            echo ''
+            echo '### Next CMake errors (if any)'
+            grep -E -A 8 'CMake Error|Could NOT find|Could not find|required package' \
+              wpe-post-harfbuzz-probe/report/cmake.log | head -n 120 || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep full CMake diagnostics and verified stage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE2541-ROCKNIX-POST-HARFBUZZ-CMAKE-DIAGNOSTIC
+          path: |
+            wpe-post-harfbuzz-probe/report/
+            wpe-post-harfbuzz-probe/configure/CMakeCache.txt
+            wpe-post-harfbuzz-probe/configure/CMakeFiles/CMakeConfigureLog.yaml
+            wpe-post-harfbuzz-probe/configure/CMakeFiles/CMakeError.log
+          retention-days: 14
+          if-no-files-found: warn
