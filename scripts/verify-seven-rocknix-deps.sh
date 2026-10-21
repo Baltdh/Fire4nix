@@ -12,6 +12,38 @@ cc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
 [[ ! -e "$work" && ! -L "$work" ]] || exit 4
 [[ $(git -C "$root/rocknix-source" rev-parse HEAD) == 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb ]]
 [[ $("$cc" -dumpmachine) == aarch64-rocknix-linux-gnu ]]
+# GitHub Actions artifact zip does not preserve symbolic links. Reconstruct
+# SONAME and development links only from actual regular AArch64 ELF files.
+# Never follow external links, overwrite names or infer a library from a filename.
+python3 - "$six" "$glib" <<'PY'
+from pathlib import Path
+import re,subprocess,sys
+for root in map(Path,sys.argv[1:]):
+ directory=root/'usr/lib'
+ if not directory.is_dir(): raise SystemExit(f'missing library directory {directory}')
+ count=0
+ for f in sorted(directory.glob('lib*.so*')):
+  if f.is_symlink() or not f.is_file(): continue
+  head=subprocess.run(['readelf','-h',str(f)],capture_output=True,text=True,check=False)
+  if head.returncode or not re.search(r'Machine:\s+AArch64',head.stdout): continue
+  dyn=subprocess.run(['readelf','-d',str(f)],capture_output=True,text=True,check=False)
+  found=re.findall(r'\(SONAME\).*\[([^\]]+)\]',dyn.stdout)
+  if len(found)!=1: continue
+  soname=found[0]
+  if '/' in soname or '..' in soname or not soname.startswith('lib'): raise SystemExit(f'unsafe SONAME {soname}')
+  if not f.name.startswith(soname): continue
+  names=[soname]
+  if '.so' in soname: names.append(soname.split('.so',1)[0]+'.so')
+  for name in names:
+   dest=directory/name
+   if dest==f: continue
+   if dest.exists() or dest.is_symlink():
+    if dest.is_symlink() and dest.readlink()==Path(f.name): continue
+    raise SystemExit(f'link name already exists {dest}')
+   dest.symlink_to(f.name)
+   count+=1
+ print(f'RESTORED_LINKS={root.name}:{count}')
+PY
 for lib in "$six/usr/lib/libffi.a" "$six/usr/lib/libpcre2-8.a" \
   "$six/usr/lib/libpcre2-16.a" "$glib/usr/lib/libglib-2.0.so.0" \
   "$glib/usr/lib/libgobject-2.0.so.0" "$glib/usr/lib/libgio-2.0.so.0" \
