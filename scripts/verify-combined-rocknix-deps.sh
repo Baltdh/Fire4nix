@@ -66,7 +66,7 @@ python3 - "$stage" \
 from pathlib import Path
 import hashlib, shutil, sys
 dest=Path(sys.argv[1])
-dest.mkdir()
+dest.mkdir(exist_ok=True)
 count=0
 for source in (Path(p) for p in sys.argv[2:]):
     assert (source/'usr/lib').is_dir(), 'source without usr/lib'
