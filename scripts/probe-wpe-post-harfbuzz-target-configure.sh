@@ -25,6 +25,13 @@ grep -Fxq 'POST_HARFBUZZ_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE' "$work/
 readelf -h "$sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
 [[ -s "$sdk/fire4nix-toolchain.cmake" ]] || exit 4
 grep -Fq "$sdk" "$sdk/fire4nix-toolchain.cmake" || exit 4
+# WebKit FindHarfBuzz.cmake may locate the .pc version but fail to find the
+# linker alias after the GitHub Actions artifact ZIP dereferences symlinks.
+# Pin only *audited actual AArch64* SONAME and headers, not host libraries.
+[[ -s "$stage/usr/lib/libharfbuzz.so.0" && -s "$stage/usr/include/harfbuzz/hb.h" ]] || {
+  echo 'ERROR: actual staged HarfBuzz target library/header absent' >&2; exit 5;
+}
+readelf -h "$stage/usr/lib/libharfbuzz.so.0" | grep -Eq 'Machine:.*AArch64' || exit 5
 for pc in harfbuzz cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   [[ -s "$stage/usr/lib/pkgconfig/$pc.pc" ]] ||
      { echo "ERROR: real target pkg-config stage missing $pc" >&2; exit 4; }
@@ -43,7 +50,7 @@ EOF
 export PKG_CONFIG_PATH=''
 export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
 export PKG_CONFIG_SYSROOT_DIR="$stage"
-for pc in glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
+for pc in harfbuzz cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   pkg-config --modversion "$pc" | awk -v name="$pc" '{print "TARGET_PC_" name "=" $0}'
 done | tee "$work/report/target-package-versions.txt"
 # Extend rather than replace the immutable SDK toolchain: this makes CMake
@@ -74,6 +81,8 @@ echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 set +e
 cmake -S "$work/source" -B "$work/configure" -G Ninja \
  -DCMAKE_TOOLCHAIN_FILE="$work/probe-toolchain.cmake" \
+ -DHarfBuzz_LIBRARY:FILEPATH="$stage/usr/lib/libharfbuzz.so.0" \
+ -DHarfBuzz_INCLUDE_DIR:PATH="$stage/usr/include/harfbuzz" \
  -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
  -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
@@ -119,7 +128,7 @@ else
   cat "$work/report/first-errors.txt"
   echo 'WPE_FIRST_CMAKE_BLOCKERS_END'
 fi
-if grep -Eq 'CMake Error at .*FindHarfBuzz.cmake' "$work/report/cmake.log"; then
+if grep -Eq 'CMake Error at .*FindHarfBuzz.cmake|Could NOT find HarfBuzz|_HarfBuzz_REQUIRED_LIBS_FOUND|Required version \(2\.7\.4\).*found version' "$work/report/cmake.log"; then
   echo 'HARFBUZZ_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
   echo 'ERROR: WPE still cannot find genuine HarfBuzz after staged target build' >&2
   exit 18
