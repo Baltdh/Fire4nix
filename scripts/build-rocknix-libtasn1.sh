@@ -94,10 +94,34 @@ PKG_CONFIG_LIBDIR="$work/stage/usr/lib/pkgconfig" PKG_CONFIG_SYSROOT_DIR="$work/
 [[ -s "$work/stage/usr/include/libtasn1.h" ]] || {
   echo 'ERROR: target libtasn1.h development header missing' >&2; exit 6;
 }
+# Compile and link a target AArch64 consumer against newly staged libtasn1.
+# This does not execute target code on the Ubuntu build host.
+cat > "$work/build/libtasn1-consumer.c" <<'CONSUMER'
+#include <libtasn1.h>
+int main(void) { return asn1_check_version(0) ? 0 : 1; }
+CONSUMER
+"$cc" -O2 -mcpu=cortex-a35 \
+  -I"$work/stage/usr/include" \
+  -L"$work/stage/usr/lib" \
+  -Wl,-rpath-link,"$work/stage/usr/lib" \
+  -o "$work/build/libtasn1-consumer-aarch64" \
+  "$work/build/libtasn1-consumer.c" -ltasn1
+readelf -h "$work/build/libtasn1-consumer-aarch64" > "$report/consumer-elf-header.txt"
+readelf -d "$work/build/libtasn1-consumer-aarch64" > "$report/consumer-elf-needed.txt"
+grep -Eq 'Machine:.*AArch64' "$report/consumer-elf-header.txt"
+grep -Eq 'Shared library: \[libtasn1.so.6\]' "$report/consumer-elf-needed.txt"
+required_consumer=$(readelf -V "$work/build/libtasn1-consumer-aarch64" 2>/dev/null \
+  | grep -oE 'Name: GLIBC_[0-9]+\.[0-9]+' | sed 's/Name: GLIBC_//' \
+  | sort -Vu | tail -n 1 || true)
+if [[ -n "$required_consumer" ]] && ! awk -v req="$required_consumer" 'BEGIN { split(req,a,"."); exit !(a[1]<2 || (a[1]==2 && a[2]<=41)) }'; then
+ echo "ERROR: linked consumer requires newer GLIBC_$required_consumer" >&2; exit 6
+fi
+echo 'LIBTASN1_CONSUMER_LINK=PASS_AARCH64_TARGET_AND_SONAME' > "$report/consumer-link.txt"
 {
  echo 'LIBTASN1_BUILD=PASS_REAL_ROCKNIX_CROSS_COMPILE'
  echo 'LIBTASN1_TARGET=ELF64_AARCH64'
  echo "LIBTASN1_MAX_REQUIRED_GLIBC=${required:-NONE}"
+ echo 'LIBTASN1_CONSUMER_LINK=PASS_AARCH64_TARGET_AND_SONAME'
  echo 'LIBTASN1_DEV_PC=PASS'
  echo 'LIBTASN1_HEADERS=PASS'
  echo 'LIBTASN1_TARGET_EXECUTED=no'
