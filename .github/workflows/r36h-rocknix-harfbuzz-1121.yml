@@ -1,0 +1,103 @@
+name: Fire4Nix compile real HarfBuzz 11.2.1 for WPE ROCKNIX RK3326
+
+on:
+  push:
+    branches: ['feat/r36h-harfbuzz-1121-rocknix-target-20261021']
+    paths:
+      - '.github/workflows/r36h-rocknix-harfbuzz-1121.yml'
+      - 'scripts/build-rocknix-harfbuzz-1121-target.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  harfbuzz-target:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Install host-only Meson compiler tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc g++ cmake ninja-build pkg-config python3-pip python3-setuptools \
+            python3-packaging python3-pyelftools gettext gperf ragel
+          python3 -m pip install --user 'meson==1.8.3'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          bash -n fire4nix/scripts/build-rocknix-harfbuzz-1121-target.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39687860420
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Fontconfig-2.17.1-CAIRO-PREREQ-TEST-ONLY
+          path: fontconfig-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39688962028
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Cairo-1.17.8-TARGET-PREREQ-ONLY
+          path: cairo-artifact
+      - name: Restore genuine ROCKNIX RK3326 compiler, not Ubuntu compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = 'aarch64-rocknix-linux-gnu'
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'FONTCONFIG_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
+            fontconfig-artifact/fontconfig-target/reports/acceptance.txt
+          grep -Fxq 'CAIRO_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
+            cairo-artifact/cairo-target/reports/acceptance.txt
+      - name: Compile official HarfBuzz 11.2.1 target Cairo FreeType GLib and link AArch64 text consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-rocknix-harfbuzz-1121-target.sh 2>&1 | tee harfbuzz-console.txt
+          grep -Fxq 'HARFBUZZ_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' harfbuzz-target/reports/acceptance.txt
+          grep -Fxq 'HARFBUZZ_TARGET_CONSUMER_LINK=PASS_ELF64_AARCH64' harfbuzz-target/reports/acceptance.txt
+          {
+            echo '## WPE blocker: real HarfBuzz target build'
+            cat harfbuzz-target/reports/acceptance.txt
+            echo 'No R36H execution. Do not treat this as a WebKit binary.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve HarfBuzz ARM64 stage and actual diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-HarfBuzz-11.2.1-TARGET-STAGE-ONLY
+          path: |
+            harfbuzz-target/reports/
+            harfbuzz-target/output/usr/lib/
+            harfbuzz-target/output/usr/include/
+            harfbuzz-target/libfire4nix-harfbuzz-consumer.so
+            harfbuzz-console.txt
+          retention-days: 14
+          if-no-files-found: warn
