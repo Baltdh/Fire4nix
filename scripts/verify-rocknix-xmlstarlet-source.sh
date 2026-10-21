@@ -2,7 +2,7 @@
 # Verify the *exact* xmlstarlet 1.6.1 source requested by ROCKNIX 20260801.
 # Read/download on build host only. No changes to package hashes or R36H.
 set -euo pipefail
-mode=\${1:---check}
+mode=${1:---check}
 case "$mode" in --check) ;; --help)
   echo 'FIRE4NIX_XMLSTARLET_REPORT=/absolute/report.txt bash scripts/verify-rocknix-xmlstarlet-source.sh --check'; exit 0;;
   *) echo 'ERROR: use --check or --help' >&2; exit 2;;
@@ -14,7 +14,7 @@ for cmd in curl sha256sum tar mktemp grep; do
 done
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-report=\${FIRE4NIX_XMLSTARLET_REPORT:-"$work/source-report.txt"}
+report=${FIRE4NIX_XMLSTARLET_REPORT:-"$work/source-report.txt"}
 mkdir -p "$(dirname "$report")"
 {
   echo "PACKAGE=xmlstarlet"
@@ -28,7 +28,7 @@ urls=(
   'https://deb.debian.org/debian/pool/main/x/xmlstarlet/xmlstarlet_1.6.1.orig.tar.gz'
   'https://downloads.sourceforge.net/project/xmlstar/xmlstarlet/1.6.1/xmlstarlet-1.6.1.tar.gz'
 )
-for url in "\${urls[@]}"; do
+for url in "${urls[@]}"; do
   echo "CHECKING_URL=$url"
   archive="$work/xmlstarlet-1.6.1.tar.gz"
   rm -f "$archive"
