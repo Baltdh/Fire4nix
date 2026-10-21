@@ -96,8 +96,8 @@ endian = 'little'
 sys_root = '$sysroot'
 pkg_config_libdir = ['$work/deps/usr/lib/pkgconfig', '$sysroot/usr/lib/pkgconfig']
 [built-in options]
-c_args = ['-mcpu=cortex-a35','-mno-outline-atomics','-I$work/deps/usr/include','-I$work/deps/usr/include/freetype2','-I$work/deps/usr/include/glib-2.0','-I$work/deps/usr/lib/glib-2.0/include']
-cpp_args = ['-mcpu=cortex-a35','-mno-outline-atomics','-I$work/deps/usr/include','-I$work/deps/usr/include/freetype2','-I$work/deps/usr/include/glib-2.0','-I$work/deps/usr/lib/glib-2.0/include']
+c_args = ['-mcpu=cortex-a35','-mno-outline-atomics','-I$work/deps/usr/include','-I$work/deps/usr/include/freetype2','-I$work/deps/usr/include/cairo','-I$work/deps/usr/include/glib-2.0','-I$work/deps/usr/lib/glib-2.0/include']
+cpp_args = ['-mcpu=cortex-a35','-mno-outline-atomics','-I$work/deps/usr/include','-I$work/deps/usr/include/freetype2','-I$work/deps/usr/include/cairo','-I$work/deps/usr/include/glib-2.0','-I$work/deps/usr/lib/glib-2.0/include']
 c_link_args = ['-L$work/deps/usr/lib','-Wl,-rpath-link,$work/deps/usr/lib']
 cpp_link_args = ['-L$work/deps/usr/lib','-Wl,-rpath-link,$work/deps/usr/lib']
 EOF
