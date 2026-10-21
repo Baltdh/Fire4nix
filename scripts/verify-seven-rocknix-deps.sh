@@ -4,7 +4,7 @@ set -euo pipefail
 [[ ${GITHUB_ACTIONS:-} == true && $(id -u) != 0 && -n ${GITHUB_WORKSPACE:-} ]] || exit 4
 root="$GITHUB_WORKSPACE"
 six="$root/six-artifact/stage"
-glib="$root/glib-artifact/stage"
+glib="$root/glib-artifact/glib-target/stage"
 work="$root/seven-deps"
 stage="$work/stage"
 sdk="$root/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
