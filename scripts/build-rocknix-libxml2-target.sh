@@ -43,7 +43,7 @@ if ! DESTDIR="$work/stage" cmake --install "$work/build" > "$work/reports/instal
  echo 'LIBXML2_INSTALL=BLOCKED'; tail -n 95 "$work/reports/install.log"; exit 12
 fi
 # Resolve versioned ELF via the provided SONAME link; no target code execution.
-lib="$work/stage/usr/lib/libxml2.so.2"
+lib="$work/stage/usr/lib/libxml2.so.16"
 if ! test -s "$lib"; then
  lib=$(find "$work/stage/usr/lib" -maxdepth 1 -type f -name 'libxml2.so*' -print -quit)
 fi
@@ -85,7 +85,7 @@ C
  -L"$work/stage/usr/lib" -Wl,-rpath-link,"$work/stage/usr/lib" \
  -lxml2 -o "$work/libfire4nix-xml-probe.so"
 readelf -h "$work/libfire4nix-xml-probe.so" | grep -Eq 'Machine:.*AArch64'
-readelf -d "$work/libfire4nix-xml-probe.so" | grep -Fq 'Shared library: [libxml2.so.2]'
+readelf -d "$work/libfire4nix-xml-probe.so" | tee "$work/reports/consumer-dynamic.txt" | grep -Fq 'Shared library: [libxml2.so.16]'
 {
  echo 'LIBXML2_BUILD=PASS_REAL_ROCKNIX_AARCH64'
  echo 'LIBXML2_VERSION=2.14.4'
