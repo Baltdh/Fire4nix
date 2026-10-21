@@ -6,7 +6,7 @@ set -euo pipefail
 root="$GITHUB_WORKSPACE"
 sdk="$root/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
 font="$root/fontconfig-artifact/fontconfig-target/stage"
-cairo="$root/cairo-artifact/stage"
+cairo="$root/cairo-artifact/cairo-target/stage"
 icu="$root/icu-artifact/icu74-target/stage"
 work="$root/harfbuzz-icu-target"
 [[ ! -e "$work" && ! -L "$work" ]] || { echo "ERROR: existing output"; exit 4; }
@@ -20,7 +20,7 @@ grep -Fxq 'PKG_VERSION="11.2.1"' "$recipe"
 grep -Fxq "PKG_SHA256=\"$hash\"" "$recipe"
 grep -q -- '-Dicu=disabled' "$recipe" || { echo 'ERROR: upstream ICU default changed'; exit 4; }
 grep -Fxq 'ICU74_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/icu-artifact/icu74-target/reports/result.txt"
-grep -Fxq 'CAIRO_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/cairo-artifact/reports/acceptance.txt"
+grep -Fxq 'CAIRO_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/cairo-artifact/cairo-target/reports/acceptance.txt"
 grep -Fxq 'FONTCONFIG_BUILD=PASS_REAL_ROCKNIX_AARCH64' "$root/fontconfig-artifact/fontconfig-target/reports/acceptance.txt"
 for f in "$icu/usr/lib/libicuuc.so.74" "$icu/usr/lib/libicui18n.so.74" \
  "$font/usr/lib/libfreetype.so.6" "$font/usr/lib/libglib-2.0.so.0" \
