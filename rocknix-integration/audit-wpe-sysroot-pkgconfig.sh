@@ -22,7 +22,17 @@ for p in usr/lib/pkgconfig usr/lib64/pkgconfig usr/share/pkgconfig \
   usr/lib/aarch64-linux-gnu/pkgconfig lib/pkgconfig lib64/pkgconfig \
   lib/aarch64-linux-gnu/pkgconfig; do
   if [ -d "$root/$p" ]; then
-    if [ -z "$libdirs" ]; then libdirs="$root/$p"; else libdirs="$libdirs:$root/$p"; fi
+    # An absolute/relative parent-directory symlink can escape the sysroot
+    # despite the text path beginning with "$root". Use the physical path.
+    pcdir=$(CDPATH= cd "$root/$p" && pwd -P) || exit 4
+    case "$pcdir" in
+      "$root"/*) ;;
+      *) echo "TARGET_PC_UNSAFE_SEARCH_DIRECTORY=$p resolved=$pcdir"
+         echo 'SYSROOT_PC_AUDIT=BLOCKED_HOST_PKGCONFIG_DIRECTORY'
+         [ "$mode" != --pc-ready ] || exit 6
+         exit 0 ;;
+    esac
+    if [ -z "$libdirs" ]; then libdirs="$pcdir"; else libdirs="$libdirs:$pcdir"; fi
   fi
 done
 [ -n "$libdirs" ] || {
