@@ -1,0 +1,26 @@
+name: Fire4Nix static runtime dependency closure audit
+
+on:
+  push:
+    paths:
+      - 'rocknix-integration/audit-wpe-runtime-needed-closure.py'
+      - 'native/tests/test_wpe_runtime_needed_closure.sh'
+      - '.github/workflows/audit-wpe-runtime-needed-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-closure:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate real ELF fixtures for missing DT_NEEDED and RPATH leaks
+        run: bash native/tests/test_wpe_runtime_needed_closure.sh
+      - name: Limitations
+        run: |
+          echo 'Only test fixtures; no actual ROCKNIX sysroot or WPE runtime has been supplied.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'SONAME presence does not certify ABI or that a browser is runnable.' >> "$GITHUB_STEP_SUMMARY"
