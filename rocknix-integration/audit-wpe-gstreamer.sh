@@ -5,7 +5,10 @@ set -u
 MODE=${1:---audit}
 case "$MODE" in --audit|--strict) ;; *) echo "Usage: $0 [--audit|--strict] [runtime-root]" >&2; exit 2 ;; esac
 ROOT=${2:-${FIRE4NIX_WPE_ROOT:-/storage/games-external/roms/ports/Fire4Nix-RK3326-Resgate/Fire4Nix/runtime/aarch64}}
-case "$ROOT" in */lib) LIB=$ROOT ;; *) LIB=$ROOT/lib ;; esac
+case "$ROOT" in
+  */lib) LIB=$ROOT; RUNTIME_ROOT=${ROOT%/lib} ;;
+  *) LIB=$ROOT/lib; RUNTIME_ROOT=$ROOT ;;
+esac
 [ -d "$LIB" ] || { echo "ERROR: no lib directory: $LIB" >&2; exit 2; }
 command -v readelf >/dev/null 2>&1 || { echo 'ERROR: readelf required' >&2; exit 2; }
 REPORT=${FIRE4NIX_GST_REPORT:-}
@@ -51,7 +54,7 @@ fi
     readelf -d "$f" 2>/dev/null | grep NEEDED | sed -n '1,30p' || true
     echo "NEEDED_END=$name"
     # GST_CAT_DEFAULT is usually defined by the module, not libgstreamer API.
-    if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT([[:space:]]|$)' >/dev/null; then
+    if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
       echo "UNRESOLVED_GST_CAT_DEFAULT=$name"
       broken=$((broken+1))
     fi
@@ -59,12 +62,12 @@ fi
   # GST_CAT_DEFAULT is a module-local category. Also inspect non-libgst
   # shared objects and WPE helper executables: renamed libraries must not
   # evade the packaging guard. No binary is executed by this check.
-  for f in "$LIB"/*.so "$LIB"/*.so.* "$ROOT"/libexec/wpe-webkit-2.0/*; do
+  for f in "$LIB"/*.so "$LIB"/*.so.* "$RUNTIME_ROOT"/libexec/wpe-webkit-2.0/*; do
     [ -f "$f" ] || continue
     [ -L "$f" ] && continue
     case "${f##*/}" in libgst*) continue ;; esac
     if readelf -h "$f" >/dev/null 2>&1 && \
-       readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT([[:space:]]|$)' >/dev/null; then
+       readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
       echo "UNRESOLVED_GST_CAT_DEFAULT=${f##*/}"
       broken=$((broken+1))
     fi
