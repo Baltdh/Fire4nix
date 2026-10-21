@@ -32,7 +32,8 @@ grep -Fxq 'PKG_VERSION="1.55"' "$gpg_recipe"
 grep -Fxq "PKG_SHA256=\"$gpg_hash\"" "$gpg_recipe"
 grep -Fxq 'PKG_VERSION="1.11.1"' "$gcrypt_recipe"
 grep -Fxq "PKG_SHA256=\"$gcrypt_hash\"" "$gcrypt_recipe"
-grep -Fq -- '--disable-shared' "$gpg_recipe"
+gpg_override="$base/rocknix-source/projects/ROCKNIX/packages/security/libgpg-error/package.mk"
+grep -Fq -- '--disable-static --enable-shared' "$gpg_override"
 grep -Fq 'libgpg-error' "$gcrypt_recipe"
 
 get_source() {
@@ -63,8 +64,8 @@ get_source libgpg-error 1.55 "$gpg_hash"
 get_source libgcrypt 1.11.1 "$gcrypt_hash"
 printf 'GCRYPT_SOURCES=PASS_ROCKNIX_ORIGINAL_SHA256\n' | tee -a "$reports/sources.txt"
 
-# We use the original ROCKNIX static libgpg-error recipe: do not silently
-# introduce an additional shared libgpg-error SONAME at device runtime.
+# Effective ROCKNIX override requires shared libgpg-error, unlike the base
+# package's static-only defaults. Match the PROJECT override exactly.
 mkdir -p "$work/gpg-build" "$work/gcrypt-build"
 export CFLAGS='-O2 -mcpu=cortex-a35 -fPIC'
 export CPPFLAGS=''
@@ -79,7 +80,7 @@ export CC_FOR_BUILD=gcc
   "$work/libgpg-error-source/configure" \
     --host=aarch64-rocknix-linux-gnu --build="$(gcc -dumpmachine)" \
     --prefix=/usr --libdir=/usr/lib \
-    --enable-static --disable-shared --disable-nls --disable-rpath \
+    --disable-static --enable-shared --disable-nls --disable-rpath \
     --with-gnu-ld --with-pic \
     > "$reports/gpg-configure.log" 2>&1
 ) || {
@@ -95,8 +96,11 @@ make -C "$work/gpg-build" DESTDIR="$stage" install \
   echo 'GPGERROR_TARGET_INSTALL=BLOCKED'
   tail -n 110 "$reports/gpg-install.log"; exit 9;
 }
-test -s "$stage/usr/lib/libgpg-error.a"
+test -s "$stage/usr/lib/libgpg-error.so.0"
 test -s "$stage/usr/include/gpg-error.h"
+readelf -h "$stage/usr/lib/libgpg-error.so.0" | grep -Eq 'Machine:.*AArch64'
+readelf -d "$stage/usr/lib/libgpg-error.so.0" > "$reports/libgpg-error-dynamic.txt"
+grep -Fq 'Shared library: [libc.so.6]' "$reports/libgpg-error-dynamic.txt"
 # Confirm gpg-error-config and .pc refer to the stage, not host libraries.
 if [[ -s "$stage/usr/bin/gpg-error-config" ]]; then
   sed -i -e "s:\(['= ]\)/usr:\1$stage/usr:g" "$stage/usr/bin/gpg-error-config"
@@ -107,7 +111,7 @@ fi
 if [[ -s "$work/libgpg-error-source/src/syscfg/lock-obj-pub.aarch64-unknown-linux-gnu.h" ]]; then
   printf 'GPGERROR_AARCH64_LOCK_HEADER=FOUND\n' | tee "$reports/lock-header.txt"
 fi
-echo 'GPGERROR_BUILD=PASS_ROCKNIX_AARCH64_STATIC_PIC' | tee "$reports/gpg-result.txt"
+echo 'GPGERROR_BUILD=PASS_ROCKNIX_AARCH64_SHARED_EFFECTIVE_PROFILE' | tee "$reports/gpg-result.txt"
 
 export CPPFLAGS="-I$stage/usr/include"
 export LDFLAGS="-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib"
@@ -149,6 +153,7 @@ readelf -Ws "$so" > "$reports/libgcrypt-elf-symbols.txt"
 grep -Eq 'Class:.*ELF64' "$reports/libgcrypt-elf-header.txt"
 grep -Eq 'Machine:.*AArch64' "$reports/libgcrypt-elf-header.txt"
 grep -Fq '(SONAME)' "$reports/libgcrypt-elf-dynamic.txt"
+grep -Fq 'Shared library: [libgpg-error.so.0]' "$reports/libgcrypt-elf-dynamic.txt"
 grep -Eq 'GLOBAL.*DEFAULT.*gcry_check_version' "$reports/libgcrypt-elf-symbols.txt"
 if grep -Eq 'TEXTREL|Shared library: \[libgst' "$reports/libgcrypt-elf-dynamic.txt"; then
   echo 'ERROR: unexpected GStreamer or TEXTREL' >&2; exit 13;
@@ -176,11 +181,12 @@ readelf -h "$reports/libfire4nix-wpe-libgcrypt-consumer.so" > "$reports/consumer
 readelf -d "$reports/libfire4nix-wpe-libgcrypt-consumer.so" > "$reports/consumer-dynamic.txt"
 grep -Eq 'Machine:.*AArch64' "$reports/consumer-header.txt"
 grep -Fq 'Shared library: [libgcrypt.so.20]' "$reports/consumer-dynamic.txt"
+grep -Fq 'Shared library: [libgpg-error.so.0]' "$reports/consumer-dynamic.txt"
 {
   echo 'LIBGCRYPT_TARGET_BUILD=PASS_REAL_ROCKNIX_AARCH64'
   echo 'LIBGCRYPT_VERSION=1.11.1'
   echo 'LIBGPG_ERROR_VERSION=1.55'
-  echo 'LIBGPG_ERROR_STATIC_PIC=YES'
+  echo 'LIBGPG_ERROR_SHARED_EFFECTIVE_ROCKNIX=YES'
   echo 'LIBGCRYPT_ORIGINAL_HASHES=VERIFIED_ROCKNIX'
   echo 'LIBGCRYPT_CONSUMER_LINK=PASS_ELF64_AARCH64'
   echo 'GLIBC_MAX_ALLOWED=2.41'
