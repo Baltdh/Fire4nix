@@ -17,7 +17,7 @@ cc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
 # Never follow external links, overwrite names or infer a library from a filename.
 python3 - "$six" "$glib" <<'PY'
 from pathlib import Path
-import re,subprocess,sys
+import re,subprocess,sys,hashlib
 for root in map(Path,sys.argv[1:]):
  directory=root/'usr/lib'
  if not directory.is_dir(): raise SystemExit(f'missing library directory {directory}')
@@ -39,6 +39,9 @@ for root in map(Path,sys.argv[1:]):
    if dest==f: continue
    if dest.exists() or dest.is_symlink():
     if dest.is_symlink() and dest.readlink()==Path(f.name): continue
+    # Artifact archives can preserve a dereferenced development link as
+    # another regular file. Accept only byte-identical copies of the ELF.
+    if dest.is_file() and not dest.is_symlink() and hashlib.sha256(dest.read_bytes()).digest()==hashlib.sha256(f.read_bytes()).digest(): continue
     raise SystemExit(f'link name already exists {dest}')
    dest.symlink_to(f.name)
    count+=1
