@@ -30,12 +30,26 @@ jobs:
           mkdir -p source-reports
           bash -n fire4nix/scripts/verify-rocknix-xmlstarlet-source.sh
           bash -n fire4nix/rocknix-integration/stage-xmlstarlet-source-mirror.sh
+          bash -n fire4nix/scripts/build-rocknix-rk3326-toolchain.sh
           grep -Fxq 'PKG_VERSION="1.6.1"' rocknix-source/packages/textproc/xmlstarlet/package.mk
           grep -Fxq 'PKG_SHA256="15d838c4f3375332fd95554619179b69e4ec91418a3a5296e7c631b7ed19e7ca"' rocknix-source/packages/textproc/xmlstarlet/package.mk
       - name: Download archive and validate original upstream SHA256
         env:
           FIRE4NIX_XMLSTARLET_REPORT: ${{ github.workspace }}/source-reports/xmlstarlet-source.txt
         run: bash fire4nix/scripts/verify-rocknix-xmlstarlet-source.sh --check
+      - name: Reject forged verification report before changing recipe
+        env:
+          FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
+        run: |
+          set -eu
+          cp source-reports/xmlstarlet-source.txt source-reports/forged-source.txt
+          sed -i 's/^VERIFIED_SHA256=.*/VERIFIED_SHA256=0000000000000000000000000000000000000000000000000000000000000000/' source-reports/forged-source.txt
+          if FIRE4NIX_XMLSTARLET_REPORT="$GITHUB_WORKSPACE/source-reports/forged-source.txt" bash fire4nix/rocknix-integration/stage-xmlstarlet-source-mirror.sh --apply; then
+            echo 'ERROR: tampered xmlstarlet report was accepted' >&2
+            exit 1
+          fi
+          git -C rocknix-source diff --quiet -- packages/textproc/xmlstarlet/package.mk
+          echo 'FORGED_REPORT_REJECTED=PASS' >> "$GITHUB_STEP_SUMMARY"
       - name: Stage URL-only patch in isolated upstream checkout
         env:
           FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
