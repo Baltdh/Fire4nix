@@ -108,7 +108,7 @@ cmake -S "$source_dir" -B "$build_dir" -G Ninja \
   2>&1 | tee "$report/cmake-configure.log"
 cmake --build "$build_dir" --parallel 2 2>&1 | tee "$report/cmake-build.log"
 DESTDIR="$stage" cmake --install "$build_dir" 2>&1 | tee "$report/cmake-install.log"
-for pc in libwebp libwebpmux libwebpdemux glib-2.0; do
+for pc in libwebp libwebpmux libwebpdemux libwebpdecoder libsharpyuv glib-2.0; do
   PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" \
     PKG_CONFIG_SYSROOT_DIR="$stage" pkg-config --exists "$pc" || {
       echo "ERROR: $pc target .pc missing" >&2; exit 6;
@@ -116,7 +116,7 @@ for pc in libwebp libwebpmux libwebpdemux glib-2.0; do
   PKG_CONFIG_PATH='' PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig" \
     PKG_CONFIG_SYSROOT_DIR="$stage" pkg-config --modversion "$pc"
 done > "$report/target-pkgconfig-versions.txt"
-for lib in webp webpdemux webpmux; do
+for lib in sharpyuv webpdecoder webp webpdemux webpmux; do
   found=$(find "$stage/usr/lib" -maxdepth 1 -type f -name "lib$lib.so*" -print -quit)
   [[ -n "$found" && -s "$found" ]] || { echo "ERROR: lib$lib shared library missing" >&2; exit 6; }
   readelf -h "$found" | grep -Eq 'Class:.*ELF64'
