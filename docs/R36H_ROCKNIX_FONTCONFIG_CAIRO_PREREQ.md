@@ -35,3 +35,31 @@ Os artefatos são baixados **com identificadores exatos de execução**; o scrip
 ## Próximo passo
 
 Compilar Cairo **1.17.8** efetivo do ROCKNIX com Fontconfig/Pixman/FreeType/libpng/zlib/GLib, inspecionando também suas dependências para o ambiente Wayland. Depois compilar HarfBuzz **11.2.1**, reexecutar a descoberta CMake do WPE e avançar para a compilação real do motor.
+
+## Resultado auditado em 21/10/2026
+
+A execução [39687860420](https://github.com/Baltdh/Fire4nix/actions/runs/39687860420)
+terminou **SUCCESS** no commit `21ce0b514f595ef1b6056ac7e5b4efd07d715311`.
+
+- `FONTCONFIG_INPUT_STAGES=PASS_REAL_AARCH64_COLLISION_SAFE`
+- `EXPAT_TARGET=PASS_PREVIOUSLY_VERIFIED_CI_AARCH64`:
+  importação somente do Expat 2.7.1 do artifact previamente validado
+  [39678297202](https://github.com/Baltdh/Fire4nix/actions/runs/39678297202);
+  uma nova tentativa de download de Expat foi rejeitada por checksum divergente.
+- `FONTCONFIG_SOURCE_URL=https://ftp2.osuosl.org/pub/blfs/conglomeration/fontconfig/fontconfig-2.17.1.tar.xz`;
+  SHA256 **idêntico** ao `PKG_SHA256` do ROCKNIX
+  `9f5cae93f4fffc1fbc05ae99cdfc708cd60dfd6612ffc0512827025c026fa541`.
+  A URL atual no GitLab retornou um tarball com hash diferente. Usar apenas
+  a versão exata validada, sem reduzir controles de integridade.
+- `FONTCONFIG_BUILD=PASS_REAL_ROCKNIX_AARCH64`
+- `FONTCONFIG_VERSION=2.17.1`
+- `FONTCONFIG_FREETYPE_EXPAT_XML_PIXMAN_CONSUMER=PASS_REAL_AARCH64`
+- `FONTCONFIG_GLIBC=PASS_MAX_2_41`
+- Artifact temporário de compilação:
+  [12387232114](https://github.com/Baltdh/Fire4nix/actions/runs/39687860420/artifacts/12387232114)
+  (`Fire4Nix-ROCKNIX-Fontconfig-2.17.1-CAIRO-PREREQ-TEST-ONLY`,
+  17.692.152 bytes).
+
+**Não são testes físicos de tela, input ou HTTPS**. O artefato é uma
+árvore de compilação experimental para o Cairo, não um aplicativo para
+executar no R36H.
