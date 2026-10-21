@@ -1,0 +1,61 @@
+name: Fire4Nix verify ROCKNIX XMLStarlet 1.6.1 original source
+
+on:
+  push:
+    paths:
+      - 'scripts/verify-rocknix-xmlstarlet-source.sh'
+      - 'rocknix-integration/stage-xmlstarlet-source-mirror.sh'
+      - '.github/workflows/verify-rocknix-xmlstarlet-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Validate both scripts and original source SHA-256
+        shell: bash
+        env:
+          FIRE4NIX_XMLSTARLET_REPORT: ${{ github.workspace }}/xmlstarlet-provenance/source.txt
+        run: |
+          set -euo pipefail
+          mkdir -p xmlstarlet-provenance
+          bash -n scripts/verify-rocknix-xmlstarlet-source.sh
+          bash -n rocknix-integration/stage-xmlstarlet-source-mirror.sh
+          bash scripts/verify-rocknix-xmlstarlet-source.sh --check
+          grep -Fxq 'XMLSTARLET_SOURCE_STATUS=PASS_ORIGINAL_ROCKNIX_SHA256' "$FIRE4NIX_XMLSTARLET_REPORT"
+      - name: Verify only xmlstarlet source URL changes in ephemeral ROCKNIX
+        shell: bash
+        env:
+          FIRE4NIX_XMLSTARLET_REPORT: ${{ github.workspace }}/xmlstarlet-provenance/source.txt
+          FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
+        run: |
+          set -euo pipefail
+          bash rocknix-integration/stage-xmlstarlet-source-mirror.sh --check
+          bash rocknix-integration/stage-xmlstarlet-source-mirror.sh --apply
+          git -C rocknix-source diff --check
+          test "$(git -C rocknix-source diff --name-only)" = 'packages/textproc/xmlstarlet/package.mk'
+          grep -Fxq 'PKG_SHA256="15d838c4f3375332fd95554619179b69e4ec91418a3a5296e7c631b7ed19e7ca"' rocknix-source/packages/textproc/xmlstarlet/package.mk
+          git -C rocknix-source diff -- packages/textproc/xmlstarlet/package.mk > xmlstarlet-provenance/source-url-only.patch
+          echo 'Original tarball SHA-256 matches ROCKNIX 20260801; source URL changed only in disposable CI tree.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No toolchain, WebKit, firmware or device installation performed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Save provenance report, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-xmlstarlet-original-source-verification
+          path: xmlstarlet-provenance/
+          retention-days: 14
+          if-no-files-found: warn
