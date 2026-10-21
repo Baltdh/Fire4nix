@@ -1,0 +1,76 @@
+name: Fire4Nix integrate seven genuine ROCKNIX AArch64 dependencies
+on:
+  push:
+    branches: ['feat/r36h-seven-deps-glib-integration-20261021']
+    paths:
+      - 'scripts/verify-seven-rocknix-deps.sh'
+      - '.github/workflows/r36h-seven-deps-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  seven-real-target-libs:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39679782372
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-SIX-REAL-DEPS-PRIVATE-STAGE
+          path: six-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39680591647
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-GLib-2.85.1-TARGET-STAGE
+          path: glib-artifact
+      - name: Restore pinned ROCKNIX cross-compiler in isolated checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          test -s six-artifact/stage/usr/lib/libpcre2-8.a
+          find glib-artifact/glib-target/stage/usr/lib -maxdepth 1 -type f -name 'libglib-2.0.so*' | grep -q .
+      - name: Stage libraries and link actual ARM64 consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/verify-seven-rocknix-deps.sh
+          bash fire4nix/scripts/verify-seven-rocknix-deps.sh | tee seven-console.txt
+          grep -Fxq 'SEVEN_DEPENDENCY_STAGE=PASS_REAL_ROCKNIX_AARCH64' seven-deps/report/result.txt
+      - name: Preserve target-only integrated stage, ELF reports and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-SEVEN-REAL-DEPS-PRIVATE-STAGE
+          path: |
+            seven-deps/stage/
+            seven-deps/report/
+            seven-deps/build/
+            seven-console.txt
+          retention-days: 14
+          if-no-files-found: warn
