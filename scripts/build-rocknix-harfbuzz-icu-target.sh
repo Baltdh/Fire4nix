@@ -153,7 +153,7 @@ int fire4nix_hb_icu_probe(void) {
 }
 C
 "$cc" -mcpu=cortex-a35 -mno-outline-atomics -O2 -fPIC -shared -Wl,-z,defs \
- -I"$work/stage/usr/include/harfbuzz" "$work/hb-probe.c" \
+ -I"$work/stage/usr/include/harfbuzz" -I"$work/deps/usr/include" "$work/hb-probe.c" \
  -L"$work/stage/usr/lib" -L"$work/deps/usr/lib" \
  -Wl,-rpath-link,"$work/deps/usr/lib" \
  -lharfbuzz-icu -lharfbuzz -licuuc -o "$work/libhb-icu-probe.so"
