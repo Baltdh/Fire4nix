@@ -121,7 +121,12 @@ for lib in webp webpdemux webpmux; do
   [[ -n "$found" && -s "$found" ]] || { echo "ERROR: lib$lib shared library missing" >&2; exit 6; }
   readelf -h "$found" | grep -Eq 'Class:.*ELF64'
   readelf -h "$found" | grep -Eq 'Machine:.*AArch64'
-  readelf -d "$found" | grep -E 'NEEDED|SONAME' > "$report/$lib-dynamic.txt"
+  readelf -d "$found" | grep -E 'NEEDED|SONAME|RPATH|RUNPATH' > "$report/$lib-dynamic.txt"
+  # Private WebP modules must locate their sibling DSOs without putting the
+  # ROCKNIX system /usr/lib ahead of the staged runtime.
+  if ! grep -Eq '\((RUNPATH|RPATH)\).*\[\$ORIGIN\]' "$report/$lib-dynamic.txt"; then
+    echo "ERROR: target lib$lib does not use a private-origin runtime path" >&2; exit 6;
+  fi
   if readelf -d "$found" | grep -Eq 'TEXTREL|Shared library: \[libgst'; then
     echo "ERROR: invalid target dynamic dependencies in $found" >&2; exit 6;
   fi
