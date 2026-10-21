@@ -1,0 +1,32 @@
+name: Fire4Nix ROCKNIX target ELF closure fixture
+on:
+  push:
+    paths:
+      - rocknix-integration/audit-wpe-target-elf-closure.py
+      - native/tests/test_wpe_target_elf_closure.sh
+      - .github/workflows/r36h-wpe-target-elf-closure.yml
+  pull_request:
+    paths:
+      - rocknix-integration/audit-wpe-target-elf-closure.py
+      - native/tests/test_wpe_target_elf_closure.sh
+      - .github/workflows/r36h-wpe-target-elf-closure.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install cross-ELF fixture tools
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends clang lld binutils python3
+      - name: Test AArch64 ELF dependency closure without execution
+        run: |
+          set -eu
+          python3 -m py_compile rocknix-integration/audit-wpe-target-elf-closure.py
+          sh -n native/tests/test_wpe_target_elf_closure.sh
+          sh native/tests/test_wpe_target_elf_closure.sh
+          echo 'Fixture-only AArch64 ELF audit passed; no physical ROCKNIX WebKit execution.' >> "$GITHUB_STEP_SUMMARY"
