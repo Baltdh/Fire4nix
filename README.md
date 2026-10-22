@@ -1,5 +1,14 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+## Etapa 1 concluída — dependências AArch64 ROCKNIX consolidadas (21/10/2026)
+
+- **15 artefatos** do compilador ROCKNIX RK3326 reunidos em um SDK de desenvolvimento privado, com proteção contra arquivos conflitantes e bibliotecas estrangeiras.
+- **157 bibliotecas ELF compartilhadas** auditadas; **22/22 requisitos de metadados WPE 2.54.1** encontrados na configuração mínima (sem GStreamer).
+- O último requisito `wayland-protocols` foi resolvido usando a receita efetiva ROCKNIX 1.44 (somente XML + pkg-config, sem ELF do Ubuntu).
+- Execução CI aprovada: [GitHub Actions #39705580079](https://github.com/Baltdh/Fire4nix/actions/runs/39705580079) para o estágio de 15 artefatos; relatório consolidado em [docs/R36H_STEP1_UNIFIED_ROCKNIX_SDK.md](docs/R36H_STEP1_UNIFIED_ROCKNIX_SDK.md).
+- **Atenção:** o estágio não contém WebKit compilado, não valida dependências transitivas completas, GIO/TLS, sandbox ou imagem gráfica no R36H. Não instalar no console. Os artefatos do GitHub Actions expiram e deverão ser reconstruídos para futuras builds.
+
+
 ## Revisão 1.07 — diagnóstico com WebKit e binário em cartões diferentes
 
 - **Causa operacional comprovada**: no backup consolidado, o arquivo antigo `Fire4Nix/fire4nix` é ELF **x86-64** e não é compatível com o R36H **AArch64**. Use somente `Fire4Nix/bin/fire4nix-native-aarch64` dos pacotes atuais.
