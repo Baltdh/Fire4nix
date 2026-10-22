@@ -1,8 +1,8 @@
-name: Fire4Nix real WPE 2.54.1 configure after WebP 1.6.0
+name: Fire4Nix real WPE 2.54.1 configure after LibXslt 1.1.43
 
 on:
   push:
-    branches: ['test/r36h-wpe2541-after-webp-20261021']
+    branches: ['test/r36h-wpe2541-after-libxslt-20261021']
     paths:
       - '.github/workflows/r36h-wpe2541-post-harfbuzz-configure.yml'
       - 'scripts/probe-wpe-post-harfbuzz-target-configure.sh'
@@ -119,6 +119,13 @@ jobs:
           github-token: ${{ github.token }}
           name: Fire4Nix-ROCKNIX-EIGHT-DEPS-WEBP-TEST-ONLY
           path: webp-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683799673
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libxslt-1.1.43-TARGET-STAGE
+          path: libxslt-artifact
       - name: Restore genuine pinned ROCKNIX AArch64 compiler, not Ubuntu
         shell: bash
         run: |
@@ -162,6 +169,9 @@ jobs:
           grep -Fxq 'WEBP_GLIB_PNG_CONSUMER_LINK=PASS_REAL_AARCH64' \
             webp-artifact/webp-reports/acceptance.txt
           test -s webp-artifact/eight-rocknix-stage/usr/include/webp/decode.h
+          grep -Fxq 'LIBXSLT_BUILD=PASS_REAL_ROCKNIX_AARCH64' \
+            libxslt-artifact/libxslt-target/reports/result.txt
+          test -s libxslt-artifact/libxslt-target/stage/usr/lib/pkgconfig/libxslt.pc
       - name: Install CMake diagnostic host programs (not target libraries)
         shell: bash
         run: |
@@ -183,10 +193,11 @@ jobs:
           grep -Fxq 'SOUP3_FIRST_BLOCKER_CLEARED=YES' "$report"
           grep -Fxq 'XKBCOMMON_FIRST_BLOCKER_CLEARED=YES' "$report"
           grep -Fxq 'WEBP_FIRST_BLOCKER_CLEARED=YES' "$report"
+          grep -Fxq 'LIBXSLT_FIRST_BLOCKER_CLEARED=YES' "$report"
           grep -Fxq 'WPE_WEBKIT_BUILT=no' "$report"
           grep -Fxq 'TARGET_EXECUTED=no' "$report"
           {
-            echo '## Genuine ROCKNIX WPE CMake after WebP 1.6.0'
+            echo '## Genuine ROCKNIX WPE CMake after LibXslt 1.1.43'
             cat "$report"
             echo ''
             echo 'Successful diagnostic does NOT mean a complete WPE compile.'
@@ -199,7 +210,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-WPE2541-ROCKNIX-AFTER-WEBP-CMAKE-DIAGNOSTIC
+          name: Fire4Nix-WPE2541-ROCKNIX-AFTER-LIBXSLT-CMAKE-DIAGNOSTIC
           path: |
             wpe-post-harfbuzz-probe/report/
             wpe-post-harfbuzz-probe/configure/CMakeCache.txt
