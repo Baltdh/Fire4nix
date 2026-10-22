@@ -2,15 +2,17 @@ name: Fire4Nix WPE two-process target and profile safety
 
 on:
   push:
-    branches: ['build/r36h-wpe-subprocesses-after-link-20261022']
+    branches: ['build/r36h-wpe-subprocesses-after-link-20261022', 'fix/r36h-wpe-process-build-explicit-dispatch-20261022']
     paths:
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_subprocess_target_guard.sh'
+      - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
       - '.github/workflows/r36h-wpe-process-target-guard.yml'
   pull_request:
     paths:
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_subprocess_target_guard.sh'
+      - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
       - '.github/workflows/r36h-wpe-process-target-guard.yml'
   workflow_dispatch:
 
