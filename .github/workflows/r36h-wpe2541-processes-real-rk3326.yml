@@ -83,7 +83,8 @@ jobs:
         timeout-minutes: 230
         run: |
           set -euo pipefail
-          bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh
+          # This script defaults to a safe usage error; opt in explicitly to cross-compilation.
+          bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh --build
           grep -Fxq 'WPE_SUBPROCESS_BUILD=PASS_REAL_AARCH64' \
             wpe-unified-sdk-build/report/wpe-subprocesses-result.txt
       - name: Preserve CMake, compiler logs and reproducibility evidence only
