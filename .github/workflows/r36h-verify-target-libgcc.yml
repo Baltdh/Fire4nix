@@ -1,0 +1,51 @@
+name: Fire4Nix validate ROCKNIX libgcc runtime SONAME
+on:
+  push:
+    branches: ['fix/r36h-libgcc-runtime-candidate-20261022']
+    paths:
+      - 'scripts/stage-verified-rocknix-libgcc.py'
+      - '.github/workflows/r36h-verify-target-libgcc.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  target-libgcc:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore SDK to disposable build directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build.ROCKNIX-RK3326.aarch64"
+          tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C "$GITHUB_WORKSPACE/build.ROCKNIX-RK3326.aarch64"
+          test -x build.ROCKNIX-RK3326.aarch64/toolchain/bin/aarch64-rocknix-linux-gnu-gcc
+      - name: Verify only real AArch64 libgcc and stage it separately
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/stage-verified-rocknix-libgcc.py
+          python3 scripts/stage-verified-rocknix-libgcc.py             --toolchain "$GITHUB_WORKSPACE/build.ROCKNIX-RK3326.aarch64/toolchain"             --output "$GITHUB_WORKSPACE/target-libgcc-stage" | tee "$GITHUB_WORKSPACE/libgcc-report.txt"
+          grep -Fxq 'TARGET_LIBGCC_STAGE=PASS_ISOLATED_ARM64_ELF' libgcc-report.txt
+          cat libgcc-report.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Save verified diagnostic manifest; no R36H install
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-verified-libgcc-isolated
+          path: |
+            target-libgcc-stage/
+            libgcc-report.txt
+          retention-days: 14
+          if-no-files-found: warn
