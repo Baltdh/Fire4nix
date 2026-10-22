@@ -114,9 +114,27 @@ fi
 LIB="$ROOT/runtime/lib/libWPEWebKit-2.0.so.1"
 CHILD="$ROOT/runtime/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing local WPE WebKit runtime"
-for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+# Stage-WPE from ROCKNIX (PR #116) records a verified configure profile.
+# Legacy runtimes with no BUILD-REPORT continue to require WPEGPUProcess.
+GPU_PROCESS_REQUIRED=1
+GPU_REPORT="$ROOT/runtime/BUILD-REPORT.txt"
+if [ -e "$GPU_REPORT" ]; then
+    [ -f "$GPU_REPORT" ] && [ ! -L "$GPU_REPORT" ] ||
+        fail 127 "Invalid WPE runtime build report"
+    gpu_evidence=$(sed -n 's/^GPU_PROCESS_PROFILE=//p' "$GPU_REPORT")
+    case "$gpu_evidence" in
+        disabled_verified_wayland) GPU_PROCESS_REQUIRED=0 ;;
+        required_unverified|enabled_verified|'') GPU_PROCESS_REQUIRED=1 ;;
+        *) fail 127 "Invalid or conflicting WPE GPU process profile" ;;
+    esac
+fi
+for child in WPEWebProcess WPENetworkProcess; do
     [ -s "$CHILD/$child" ] || fail 127 "Missing WebKit subprocess: $child"
 done
+if [ "$GPU_PROCESS_REQUIRED" -eq 1 ]; then
+    [ -s "$CHILD/WPEGPUProcess" ] || fail 127 "Missing WebKit subprocess: WPEGPUProcess"
+fi
+printf 'gpu_process_required=%s\n' "$GPU_PROCESS_REQUIRED" >> "$LOG"
 # A previous PortMaster/SD launch can leave incompatible system libraries on
 # LD_LIBRARY_PATH. Default to the selected Fire4Nix runtime only. Keep the
 # previous behavior behind an explicit opt-in for controlled comparisons.

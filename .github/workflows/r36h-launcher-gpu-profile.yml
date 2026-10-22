@@ -1,0 +1,36 @@
+name: Fire4Nix launcher verified GPU runtime profile
+on:
+  push:
+    branches: ['fix/r36h-launcher-honor-staged-gpu-profile-20261022']
+    paths:
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/tests/test_launcher_verified_gpu_profile.sh'
+      - '.github/workflows/r36h-launcher-gpu-profile.yml'
+  pull_request:
+    paths:
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/tests/test_launcher_verified_gpu_profile.sh'
+      - '.github/workflows/r36h-launcher-gpu-profile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-gpu-profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Syntax and offline launcher regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n installer/Fire4Nix-Iniciar.sh
+          sh -n native/tests/test_launcher_verified_gpu_profile.sh
+          sh native/tests/test_launcher_verified_gpu_profile.sh
+          echo 'R36H_GPU_DISABLED_LAUNCHER=PASS_HOST_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_WEBKIT_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
