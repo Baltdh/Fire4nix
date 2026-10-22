@@ -52,7 +52,7 @@ TARGET_EXECUTED=no
 R36H_INSTALLABLE=no
 EOF
 export PKG_CONFIG_PATH=''
-export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$stage/usr/share/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
 export PKG_CONFIG_SYSROOT_DIR="$stage"
 for pc in libnghttp2 libpsl libsoup-3.0 libgcrypt gpg-error harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   pkg-config --modversion "$pc" | awk -v name="$pc" '{print "TARGET_PC_" name "=" $0}'
@@ -102,7 +102,10 @@ echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 set +e
 # Host wayland-protocols XML files are generator inputs; target Wayland
 # libraries/headers stay in the pinned ROCKNIX sysroot.
-host_protocols=/usr/share/wayland-protocols
+host_protocols="$stage/usr/share/wayland-protocols"
+[[ -s "$stage/usr/share/pkgconfig/wayland-protocols.pc" ]] || {
+ echo 'ERROR: validated ROCKNIX Wayland Protocols 1.44 metadata missing' >&2; exit 26;
+}
 host_scanner=$(command -v wayland-scanner) || {
  echo 'ERROR: host wayland-scanner missing' >&2; exit 26;
 }
