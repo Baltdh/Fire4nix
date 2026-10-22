@@ -1,0 +1,148 @@
+name: Fire4Nix step 1 - consolidated ROCKNIX RK3326 ARM64 dependencies
+
+on:
+  push:
+    branches: ['feat/r36h-step1-unified-rocknix-sdk-20261021']
+    paths:
+      - 'scripts/assemble-step1-rocknix-stages.py'
+      - '.github/workflows/r36h-step1-unified-rocknix-sdk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  consolidate-arm64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate assembler syntax, never execute target ELF
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/assemble-step1-rocknix-stages.py
+          command -v readelf
+          echo 'ROCKNIX_SOURCE=3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb' >> "$GITHUB_STEP_SUMMARY"
+      - name: Restore pinned eight target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683307528
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-EIGHT-REAL-DEPS-JPEG-3.0.1-TARGET-ONLY
+          path: inputs/eight
+      - name: Restore pinned fonts target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39687860420
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Fontconfig-2.17.1-CAIRO-PREREQ-TEST-ONLY
+          path: inputs/fonts
+      - name: Restore pinned cairo target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39688962028
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Cairo-1.17.8-TARGET-PREREQ-ONLY
+          path: inputs/cairo
+      - name: Restore pinned icu target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39688837904
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-ICU-74.1-REAL-TARGET-STAGE
+          path: inputs/icu
+      - name: Restore pinned harfbuzz target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692709765
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-HarfBuzz-11.2.1-ICU-ON-TARGET
+          path: inputs/harfbuzz
+      - name: Restore pinned glvnd target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692039643
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libglvnd-1.7.0-EGL-GLES2-TARGET-STAGE
+          path: inputs/glvnd
+      - name: Restore pinned epoxy target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39692741218
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libepoxy-1.5.10-EGL-TARGET-ONLY
+          path: inputs/epoxy
+      - name: Restore pinned gcrypt target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39694338119
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-LibGcrypt-1.11.1-GpgError-1.55-TARGET-ONLY
+          path: inputs/gcrypt
+      - name: Restore pinned wayland target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39693569119
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Wayland-1.23.1-NATIVE-SCANNER-AARCH64-TARGET-ONLY
+          path: inputs/wayland
+      - name: Restore pinned webp target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683707451
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-EIGHT-DEPS-WEBP-TEST-ONLY
+          path: inputs/webp
+      - name: Restore pinned soup-prereqs target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39695182915
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-nghttp2-1.66.0-libpsl-0.21.5-TARGET
+          path: inputs/soup-prereqs
+      - name: Combine independently validated target SDK stages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p stage1-reports
+          python3 scripts/assemble-step1-rocknix-stages.py stage1-combined \
+            inputs/eight/eight-deps/stage \
+            inputs/fonts/fontconfig-target/stage \
+            inputs/cairo/cairo-target/stage \
+            inputs/icu/icu74-target/stage \
+            inputs/harfbuzz/harfbuzz-icu-target/stage \
+            inputs/glvnd/glvnd-target/stage \
+            inputs/epoxy/libepoxy-target/stage \
+            inputs/gcrypt/gcrypt-target/stage \
+            inputs/wayland/wayland-target/stage \
+            inputs/webp/eight-rocknix-stage \
+            inputs/soup-prereqs/soup-prereqs-target/stage \
+            2>&1 | tee stage1-reports/merge.txt
+          grep -Fx 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-reports/merge.txt
+          grep -Fx 'STAGE_INSTALLABLE=no' stage1-reports/merge.txt
+          cat stage1-reports/merge.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive private target stage only (NOT a browser)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: |
+            stage1-reports/
+            stage1-combined/usr/lib/
+            stage1-combined/usr/include/
+          retention-days: 7
+          if-no-files-found: warn
