@@ -121,6 +121,30 @@ jobs:
           github-token: ${{ github.token }}
           name: Fire4Nix-ROCKNIX-nghttp2-1.66.0-libpsl-0.21.5-TARGET
           path: inputs/soup-prereqs
+      - name: Restore pinned xkbcommon target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39697406436
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-XkbCommon-1.6.0-Wayland-WPE-TEST-ONLY
+          path: inputs/xkb
+      - name: Restore pinned libsoup3 target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39695603819
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libsoup3-3.6.5-TARGET-ONLY-NO-TLS-SMOKE
+          path: inputs/soup3
+      - name: Restore pinned libxslt target artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39683799673
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-libxslt-1.1.43-TARGET-STAGE
+          path: inputs/xslt
       - name: Combine independently validated target SDK stages
         shell: bash
         run: |
@@ -137,7 +161,10 @@ jobs:
             inputs/gcrypt/gcrypt-target/stage \
             inputs/wayland/wayland-target/stage \
             inputs/webp/eight-rocknix-stage \
-            inputs/soup-prereqs/soup-prereqs-target/stage 2>&1 | tee stage1-reports/merge.txt
+            inputs/soup-prereqs/soup-prereqs-target/stage \
+            inputs/xkb/xkbcommon-target/stage \
+            inputs/soup3/soup3-target/output \
+            inputs/xslt/libxslt-target/stage 2>&1 | tee stage1-reports/merge.txt
           grep -Fx 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-reports/merge.txt
           grep -Fx 'STAGE_INSTALLABLE=no' stage1-reports/merge.txt
           cat stage1-reports/merge.txt >> "$GITHUB_STEP_SUMMARY"
