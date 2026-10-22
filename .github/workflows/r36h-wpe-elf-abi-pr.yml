@@ -1,0 +1,50 @@
+name: Fire4Nix WPE ELF ABI regression (x86-64 + ARM64)
+
+on:
+  pull_request:
+    paths:
+      - 'rocknix-integration/audit-wpe-gstreamer.sh'
+      - 'native/tests/test_wpe_gstreamer_guard.sh'
+      - '.github/workflows/r36h-wpe-elf-abi-pr.yml'
+  push:
+    paths:
+      - 'rocknix-integration/audit-wpe-gstreamer.sh'
+      - 'native/tests/test_wpe_gstreamer_guard.sh'
+      - '.github/workflows/r36h-wpe-elf-abi-pr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-elf-abi:
+    name: ELF ABI regression / ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tools and POSIX shell syntax
+        run: |
+          set -eu
+          command -v cc
+          command -v readelf
+          sh -n rocknix-integration/audit-wpe-gstreamer.sh
+          sh -n native/tests/test_wpe_gstreamer_guard.sh
+      - name: Test ABI failures and clean fixture
+        run: sh native/tests/test_wpe_gstreamer_guard.sh
+      - name: Verify default production AArch64 target
+        if: matrix.runner == 'ubuntu-24.04-arm'
+        run: |
+          set -eu
+          d=$(mktemp -d)
+          trap 'rm -rf "$d"' EXIT
+          mkdir -p "$d/runtime/lib"
+          printf 'int fire4nix_clean(void) { return 0; }\n' | cc -shared -fPIC -x c - -o "$d/runtime/lib/libWPEWebKit-2.0.so.1"
+          FIRE4NIX_GST_REPORT="$d/result.txt" sh rocknix-integration/audit-wpe-gstreamer.sh --strict "$d/runtime" > /dev/null
+          grep -Fx 'expected_elf_machine=AArch64' "$d/result.txt"
+          grep -Fx 'expected_elf_class=ELF64' "$d/result.txt"
+          grep -Fx 'expected_endianness=little' "$d/result.txt"
+          grep -Fx 'status=NO_BUNDLED_GSTREAMER_FOUND' "$d/result.txt"

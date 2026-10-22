@@ -5,8 +5,17 @@ set -u
 MODE=${1:---audit}
 case "$MODE" in --audit|--strict) ;; *) echo "Usage: $0 [--audit|--strict] [runtime-root]" >&2; exit 2 ;; esac
 ROOT=${2:-${FIRE4NIX_WPE_ROOT:-/storage/games-external/roms/ports/Fire4Nix-RK3326-Resgate/Fire4Nix/runtime/aarch64}}
-case "$ROOT" in */lib) LIB=$ROOT ;; *) LIB=$ROOT/lib ;; esac
+case "$ROOT" in
+  */lib) LIB=$ROOT; RUNTIME_ROOT=${ROOT%/lib} ;;
+  *) LIB=$ROOT/lib; RUNTIME_ROOT=$ROOT ;;
+esac
 [ -d "$LIB" ] || { echo "ERROR: no lib directory: $LIB" >&2; exit 2; }
+# Production/staging always targets the R36H AArch64 ABI. A narrow override
+# enables compiling host-architecture ELF fixtures in the offline unit test.
+EXPECTED_MACHINE=${FIRE4NIX_GST_EXPECTED_MACHINE:-AArch64}
+case "$EXPECTED_MACHINE" in AArch64|'Advanced Micro Devices X86-64') ;; *)
+  echo 'ERROR: unsupported ELF machine override' >&2; exit 2 ;;
+esac
 command -v readelf >/dev/null 2>&1 || { echo 'ERROR: readelf required' >&2; exit 2; }
 REPORT=${FIRE4NIX_GST_REPORT:-}
 if [ -z "$REPORT" ]; then
@@ -26,6 +35,9 @@ fi
 {
   echo "Fire4Nix GStreamer static ABI audit v1"
   echo "mode=$MODE"
+  echo "expected_elf_machine=$EXPECTED_MACHINE"
+  echo "expected_elf_class=ELF64"
+  echo "expected_endianness=little"
   echo "libdir=$LIB"
   echo "webkit=$wpe"
   echo "device_arch=$(uname -m 2>/dev/null || echo unknown)"
@@ -47,12 +59,52 @@ fi
       broken=$((broken+1))
       continue
     fi
+    if ! readelf -h "$f" 2>/dev/null | grep 'Machine:' | grep -Fq "$EXPECTED_MACHINE"; then
+      echo "WRONG_ELF_MACHINE=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if ! readelf -h "$f" 2>/dev/null | grep -q 'Class:.*ELF64' ||
+       ! readelf -h "$f" 2>/dev/null | grep -q 'Data:.*little endian'; then
+      echo "WRONG_ELF_CLASS_OR_ENDIAN=$name"
+      broken=$((broken+1))
+      continue
+    fi
     echo "NEEDED_BEGIN=$name"
     readelf -d "$f" 2>/dev/null | grep NEEDED | sed -n '1,30p' || true
     echo "NEEDED_END=$name"
     # GST_CAT_DEFAULT is usually defined by the module, not libgstreamer API.
-    if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT([[:space:]]|$)' >/dev/null; then
+    if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
       echo "UNRESOLVED_GST_CAT_DEFAULT=$name"
+      broken=$((broken+1))
+    fi
+  done
+  # GST_CAT_DEFAULT is a module-local category. Also inspect non-libgst
+  # shared objects and WPE helper executables: renamed libraries must not
+  # evade the packaging guard. No binary is executed by this check.
+  for f in "$LIB"/*.so "$LIB"/*.so.* "$RUNTIME_ROOT"/libexec/wpe-webkit-2.0/*; do
+    [ -f "$f" ] || continue
+    [ -L "$f" ] && continue
+    case "${f##*/}" in libgst*) continue ;; esac
+    name=${f##*/}
+    if ! readelf -h "$f" >/dev/null 2>&1; then
+      echo "BROKEN_ELF=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if ! readelf -h "$f" 2>/dev/null | grep 'Machine:' | grep -Fq "$EXPECTED_MACHINE"; then
+      echo "WRONG_ELF_MACHINE=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if ! readelf -h "$f" 2>/dev/null | grep -q 'Class:.*ELF64' ||
+       ! readelf -h "$f" 2>/dev/null | grep -q 'Data:.*little endian'; then
+      echo "WRONG_ELF_CLASS_OR_ENDIAN=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
+      echo "UNRESOLVED_GST_CAT_DEFAULT=${f##*/}"
       broken=$((broken+1))
     fi
   done
@@ -60,7 +112,7 @@ fi
   echo "gst_libraries_with_findings=$broken"
   if [ "$broken" -gt 0 ]; then
     echo 'status=BLOCK_GST_ABI'
-    echo 'reason=undefined_GST_CAT_DEFAULT_or_invalid_ELF'
+    echo 'reason=undefined_GST_CAT_DEFAULT_or_invalid_or_foreign_ELF'
     echo 'action=rebuild_GStreamer_consistently_or_rebuild_WPE_without_multimedia_dependencies'
   elif [ "$checked" -eq 0 ]; then
     echo 'status=NO_BUNDLED_GSTREAMER_FOUND'
