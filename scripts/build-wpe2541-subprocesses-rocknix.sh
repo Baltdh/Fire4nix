@@ -56,6 +56,11 @@ fi
   echo 'ERROR: prior genuine ROCKNIX CMake/SDK proof missing' >&2; exit 7;
 }
 grep -Fxq 'WPE_CMAKE_EXIT_CODE=0' "$report/status.txt"
+# Require the fixed source provenance from #114. Earlier link experiments
+# configured against Ubuntu host XML and must not be repackaged accidentally.
+grep -Fxq 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' "$report/status.txt" || {
+  echo 'ERROR: CMake build did not use ROCKNIX Wayland Protocols 1.44' >&2; exit 7;
+}
 grep -Fxq 'UNIFIED_ROCKNIX_SDK=PASS_STAGE1_15_ARTIFACTS' "$report/merge.txt"
 sdk="$root/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
 cc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
