@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'scripts/assemble-step1-rocknix-stages.py'
+      - 'native/tests/test_step1_assembler.py'
       - '.github/workflows/r36h-step1-unified-rocknix-sdk.yml'
   push:
     branches: ['feat/r36h-step1-unified-rocknix-sdk-20261021']
     paths:
       - 'scripts/assemble-step1-rocknix-stages.py'
+      - 'native/tests/test_step1_assembler.py'
       - '.github/workflows/r36h-step1-unified-rocknix-sdk.yml'
   workflow_dispatch:
 
@@ -28,6 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/assemble-step1-rocknix-stages.py
+          python3 native/tests/test_step1_assembler.py
           command -v readelf
           echo 'ROCKNIX_SOURCE=3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb' >> "$GITHUB_STEP_SUMMARY"
       - name: Restore pinned eight target artifact
