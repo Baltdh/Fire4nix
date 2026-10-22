@@ -5,9 +5,11 @@ on:
     branches: ['ci/r36h-audit-linked-wpe-build-artifact-20261022']
     paths:
       - '.github/workflows/r36h-verify-wpe-linked-artifact.yml'
+      - 'scripts/audit-linked-wpe-direct-needed.py'
   pull_request:
     paths:
       - '.github/workflows/r36h-verify-wpe-linked-artifact.yml'
+      - 'scripts/audit-linked-wpe-direct-needed.py'
   workflow_run:
     workflows:
       - 'Fire4Nix ROCKNIX WPE 2.54.1 real library link'
@@ -30,6 +32,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/verify-built-wpewebkit.py
           python3 native/tests/test_wpewebkit_build_elf.py
+          python3 native/tests/test_wpe_linked_direct_needed.py
   audit-actual-wpe-library:
     # workflow_run uses the default-branch workflow; never checkout the
     # triggering source branch or execute downloaded user-controlled content.
@@ -42,7 +45,7 @@ jobs:
         || github.event.workflow_run.head_branch == 'build/r36h-wpewebkit-library-rk3326-20261022'
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,6 +56,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/verify-built-wpewebkit.py
           python3 native/tests/test_wpewebkit_build_elf.py
+          python3 native/tests/test_wpe_linked_direct_needed.py
       - name: Download linked engine from the exact successful GitHub run (variant 112)
         if: github.event.workflow_run.head_branch == 'build/r36h-webkit-real-link-rocknix-20261022'
         uses: actions/download-artifact@v4
@@ -110,6 +114,47 @@ jobs:
             cat report/wpe-linked-library-elf.txt
             echo 'No WebProcess, NetworkProcess, closure, GPU or R36H execution proven.'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Restore pinned toolchain for linked WPE dependency census
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore target ARM64 SDK dependency stage
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - name: Report direct SONAME providers and missing runtime bundle items
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar -tJf "$archive" > "$RUNNER_TEMP/wpe-sdk-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/wpe-sdk-members.txt"; then
+            echo 'ERROR: unsafe SDK archive member' >&2; exit 4
+          fi
+          mkdir -p "$RUNNER_TEMP/rk3326-root"
+          tar --no-same-owner --no-same-permissions -xJf "$archive" -C "$RUNNER_TEMP/rk3326-root"
+          sdk="$RUNNER_TEMP/rk3326-root/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          sysroot="$sdk/aarch64-rocknix-linux-gnu/sysroot"
+          readelf -h "$sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          mapfile -d '' -t engines < <(find candidate -type f -name 'libWPEWebKit-2.0.so.1' -print0)
+          test "${#engines[@]}" -eq 1
+          python3 scripts/audit-linked-wpe-direct-needed.py \
+            --library "${engines[0]}" --sysroot "$sysroot" \
+            --sdk-stage "$GITHUB_WORKSPACE/stage1-artifact/stage1-combined" \
+            --report report/wpe-linked-direct-needed.txt
+          cat report/wpe-linked-direct-needed.txt >> "$GITHUB_STEP_SUMMARY"
+          echo 'Direct SONAME discovery only; not transitive closure or R36H proof.' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve the audit report, never republish unverified engine ELF
         if: always()
         uses: actions/upload-artifact@v4
