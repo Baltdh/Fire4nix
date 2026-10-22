@@ -32,10 +32,10 @@ def inspect_elf(header: str, dynamic: str, versions: str, symbols: str) -> dict[
         problems.append("WRONG_OR_MISSING_SONAME")
     if re.search(r"\(TEXTREL\)", dynamic):
         problems.append("TEXTREL_NOT_ALLOWED")
-    if not any("webkit_web_view_get_wpe_view" in line and not re.search(r"\\bUND\\b", line)
+    if not any("webkit_web_view_get_wpe_view" in line and not re.search(r"\bUND\b", line)
                for line in symbols.splitlines()):
         problems.append("MISSING_WPE_PLATFORM_ENTRYPOINT")
-    if any(re.search(r"\\bUND\\b", line) and re.search(r"GST_CAT_DEFAULT(?:@|\\s|$)", line)
+    if any(re.search(r"\bUND\b", line) and re.search(r"GST_CAT_DEFAULT(?:@|\s|$)", line)
            for line in symbols.splitlines()):
         problems.append("UNDEFINED_GST_CAT_DEFAULT")
     dependencies = re.findall(r"\(NEEDED\).*\[([^\]]+)\]", dynamic)
