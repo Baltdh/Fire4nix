@@ -1,0 +1,39 @@
+name: Fire4Nix Ports and install-once verified GPU profile
+on:
+  push:
+    branches: ['fix/r36h-ports-installer-gpu-off-runtime-20261022']
+    paths:
+      - 'installer/Fire4Nix-Direto.sh'
+      - 'scripts/Install-Fire4Nix-Once.sh'
+      - 'native/tests/test_ports_installer_gpu_profile.sh'
+      - '.github/workflows/r36h-ports-installer-gpu-profile.yml'
+  pull_request:
+    paths:
+      - 'installer/Fire4Nix-Direto.sh'
+      - 'scripts/Install-Fire4Nix-Once.sh'
+      - 'native/tests/test_ports_installer_gpu_profile.sh'
+      - '.github/workflows/r36h-ports-installer-gpu-profile.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe-port-and-install-profiles:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Shell syntax and mocked Ports / install-once integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n installer/Fire4Nix-Direto.sh
+          sh -n scripts/Install-Fire4Nix-Once.sh
+          sh -n native/tests/test_ports_installer_gpu_profile.sh
+          sh native/tests/test_ports_installer_gpu_profile.sh
+          sh native/tests/test_ports_direct.sh
+          sh native/tests/test_launcher_verified_gpu_profile.sh
+          echo 'PORTS_INSTALL_GPU_OFF_PROFILE=PASS_HOST_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WEBKIT_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"

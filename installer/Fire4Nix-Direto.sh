@@ -46,13 +46,36 @@ for root in "${FIRE4NIX_ROOT:-}" "$HERE/fire4nix-completo" "$HERE/Fire4Nix" "$HE
     if [ -f "$root/Fire4Nix-Iniciar.sh" ] &&
        [ -s "$root/bin/fire4nix-native-aarch64" ] &&
        [ -s "$root/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
-        # Require the three auxiliary processes before selecting this SD.
+        # Match the primary launcher: only a verified ROCKNIX Wayland
+        # GPU-off report permits omitting WPEGPUProcess. No report retains
+        # the conservative three-process requirement for legacy runtimes.
+        gpu_required=1
+        gpu_report="$root/runtime/BUILD-REPORT.txt"
+        if [ -e "$gpu_report" ] || [ -L "$gpu_report" ]; then
+            if [ ! -f "$gpu_report" ] || [ -L "$gpu_report" ]; then
+                log "skipped_invalid_gpu_report=$root"
+                continue
+            fi
+            gpu_profile=$(sed -n 's/^GPU_PROCESS_PROFILE=//p' "$gpu_report") || {
+                log "skipped_unreadable_gpu_report=$root"
+                continue
+            }
+            case "$gpu_profile" in
+                disabled_verified_wayland) gpu_required=0 ;;
+                required_unverified|enabled_verified|'') gpu_required=1 ;;
+                *) log "skipped_invalid_gpu_profile=$root"; continue ;;
+            esac
+        fi
         missing_child=""
-        for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+        for child in WPEWebProcess WPENetworkProcess; do
             if [ ! -s "$root/runtime/libexec/wpe-webkit-2.0/$child" ]; then
                 missing_child="$missing_child $child"
             fi
         done
+        if [ "$gpu_required" -eq 1 ] &&
+           [ ! -s "$root/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess" ]; then
+            missing_child="$missing_child WPEGPUProcess"
+        fi
         if [ -n "$missing_child" ]; then
             log "skipped_incomplete_runtime=$root missing=$missing_child"
             continue
