@@ -169,7 +169,8 @@ done
 # they are available; final validation requires the actual ROCKNIX rootfs.
 {
   echo 'Fire4Nix WPE runtime staged from ROCKNIX SDK DESTDIR.'
-  echo 'AArch64 ELF64 little-endian and WPEPlatform exported symbol checked.'
+  echo 'AArch64 ELF and WPEPlatform exported symbol checked.'
+  echo 'ELF class and endian: ELF64 little-endian verified.'
   echo "GPU_PROCESS=$GPU_PROFILE"
   echo "Max allowed direct GLIBC requirement: GLIBC_$TARGET_GLIBC_MAX"
   echo 'Dynamic dependencies must still be validated against the exact target rootfs.'
