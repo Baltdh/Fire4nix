@@ -2,11 +2,12 @@ name: Fire4Nix WPE 2.54.1 reduced Wayland configure without DRM or GBM
 
 on:
   push:
-    branches: ['build/r36h-wpeplatform-first-rocknix-objects-20261021']
+    branches: ['build/r36h-jsc-real-rocknix-target-20261021']
     paths:
       - '.github/workflows/r36h-wpe2541-post-harfbuzz-configure.yml'
       - 'scripts/probe-wpe-post-harfbuzz-target-configure.sh'
       - 'scripts/build-rocknix-wpeplatform-objects.sh'
+      - 'scripts/build-rocknix-jsc-real-target.sh'
       - 'scripts/assemble-wpe-post-harfbuzz-stage.py'
   workflow_dispatch:
 
@@ -17,7 +18,7 @@ permissions:
 jobs:
   wpe-cmake-after-harfbuzz:
     runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -223,6 +224,14 @@ jobs:
           bash -n fire4nix/scripts/build-rocknix-wpeplatform-objects.sh
           timeout 1150s bash fire4nix/scripts/build-rocknix-wpeplatform-objects.sh
           grep -Fxq 'WPEPLATFORM_REAL_ROCKNIX_AARCH64=PASS' wpe-post-harfbuzz-probe/report/wpeplatform-target-result.txt
+      - name: Build genuine ROCKNIX AArch64 JavaScriptCore jsc and audit ELF
+        shell: bash
+        timeout-minutes: 37
+        run: |
+          set -euo pipefail
+          bash -n fire4nix/scripts/build-rocknix-jsc-real-target.sh
+          timeout 2150s bash fire4nix/scripts/build-rocknix-jsc-real-target.sh
+          grep -Fxq 'JSC_REAL_ROCKNIX_AARCH64=PASS_COMPILER_LINK_ELF' wpe-post-harfbuzz-probe/report/jsc-rocknix-result.txt
       - name: Keep full CMake diagnostics and verified stage report
         if: always()
         uses: actions/upload-artifact@v4
