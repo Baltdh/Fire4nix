@@ -60,7 +60,6 @@ if [[ "$invocations" != "$expected" ]]; then
 fi
 # The target subprocess job is opt-in to avoid starting an hours-long
 # ARM64 WebKit build through an unrelated host-only unit test.
-grep -Eq '^  workflow_dispatch:[[:space:]]*
- "$workflow"
+grep -Fq '  workflow_dispatch:' "$workflow"
 echo 'WPE_TWO_PROCESSES_WORKFLOW=PASS_EXPLICIT_BUILD_MODE'
 echo 'WPE_TWO_PROCESSES_STATIC_GUARD=PASS_NO_TARGET_EXECUTION'
