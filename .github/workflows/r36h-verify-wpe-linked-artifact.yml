@@ -14,6 +14,7 @@ on:
     workflows:
       - 'Fire4Nix ROCKNIX WPE 2.54.1 real library link'
       - 'Fire4Nix real WPEWebKit 2.54.1 ARM64 shared library link'
+      - 'Fire4Nix WPE 2.54.1 ROCKNIX protocols 1.44 real ARM64 link'
     types: [completed]
 
 permissions:
@@ -43,6 +44,7 @@ jobs:
       && (
         github.event.workflow_run.head_branch == 'build/r36h-webkit-real-link-rocknix-20261022'
         || github.event.workflow_run.head_branch == 'build/r36h-wpewebkit-library-rk3326-20261022'
+        || github.event.workflow_run.head_branch == 'build/r36h-wpewebkit-pinned-protocols144-20261022'
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -74,6 +76,15 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           name: Fire4Nix-ROCKNIX-WPE2541-LINKED-LIBRARY-NOT-INSTALLABLE
+          path: candidate
+      - name: Download new pinned ROCKNIX Wayland Protocols 1.44 WPE library
+        if: github.event.workflow_run.head_branch == 'build/r36h-wpewebkit-pinned-protocols144-20261022'
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-WPE2541-PROTOCOLS144-LINKED-LIBRARY-NOT-INSTALLABLE
           path: candidate
       - name: Audit the real linked ELF, never execute it
         shell: bash
