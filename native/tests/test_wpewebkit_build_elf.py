@@ -69,12 +69,12 @@ class LinkedWpeElfTest(unittest.TestCase):
                       self.inspect(sym=undefined)["WPE_LIBRARY_ISSUES"])
 
     def test_media_free_gstreamer_dependency_is_forbidden(self):
-        d = DYNAMIC + "0x1 (NEEDED) Shared library: [libgstreamer-1.0.so.0]\\n"
+        d = DYNAMIC + "0x1 (NEEDED) Shared library: [libgstreamer-1.0.so.0]\n"
         self.assertIn("GSTREAMER_DEPENDENCY_IN_MEDIA_FREE_BUILD",
                       self.inspect(d=d)["WPE_LIBRARY_ISSUES"])
 
     def test_undefined_gst_cat_default_is_forbidden(self):
-        sym = DYN_SYMBOLS + "\\n  99: 0 0 OBJECT GLOBAL DEFAULT UND GST_CAT_DEFAULT@GST_1.0"
+        sym = DYN_SYMBOLS + "\n  99: 0 0 OBJECT GLOBAL DEFAULT UND GST_CAT_DEFAULT@GST_1.0"
         self.assertIn("UNDEFINED_GST_CAT_DEFAULT",
                       self.inspect(sym=sym)["WPE_LIBRARY_ISSUES"])
 
