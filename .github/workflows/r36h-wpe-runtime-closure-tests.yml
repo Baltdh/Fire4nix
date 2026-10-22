@@ -1,0 +1,35 @@
+name: Fire4Nix WPE runtime recursive ELF closure audit
+on:
+  push:
+    branches: ['audit/r36h-wpe-real-runtime-dependency-closure-20261022']
+    paths:
+      - 'scripts/audit-wpe-runtime-closure.py'
+      - 'native/tests/test_wpe_runtime_elf_closure.py'
+      - '.github/workflows/r36h-wpe-runtime-closure-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/audit-wpe-runtime-closure.py'
+      - 'native/tests/test_wpe_runtime_elf_closure.py'
+      - '.github/workflows/r36h-wpe-runtime-closure-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-static-closure:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and exercise read-only ELF dependency checker
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/audit-wpe-runtime-closure.py
+          python3 -m py_compile native/tests/test_wpe_runtime_elf_closure.py
+          python3 native/tests/test_wpe_runtime_elf_closure.py
+          python3 scripts/audit-wpe-runtime-closure.py --help > /dev/null
+          echo 'WPE_STATIC_CLOSURE_UNIT_TESTS=PASS_HOST_FIXTURES_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_AARCH64_RUNTIME_BUILT_OR_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
