@@ -1,0 +1,120 @@
+name: Fire4Nix verify genuine linked WPEWebKit ARM64 artifact
+
+on:
+  push:
+    branches: ['ci/r36h-audit-linked-wpe-build-artifact-20261022']
+    paths:
+      - '.github/workflows/r36h-verify-wpe-linked-artifact.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/r36h-verify-wpe-linked-artifact.yml'
+  workflow_run:
+    workflows:
+      - 'Fire4Nix ROCKNIX WPE 2.54.1 real library link'
+      - 'Fire4Nix real WPEWebKit 2.54.1 ARM64 shared library link'
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  regression-check:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate static WebKit ELF inspection before receiving build artifacts
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/verify-built-wpewebkit.py
+          python3 native/tests/test_wpewebkit_build_elf.py
+  audit-actual-wpe-library:
+    # workflow_run uses the default-branch workflow; never checkout the
+    # triggering source branch or execute downloaded user-controlled content.
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && (
+        github.event.workflow_run.head_branch == 'build/r36h-webkit-real-link-rocknix-20261022'
+        || github.event.workflow_run.head_branch == 'build/r36h-wpewebkit-library-rk3326-20261022'
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Recheck trusted default-branch static validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/verify-built-wpewebkit.py
+          python3 native/tests/test_wpewebkit_build_elf.py
+      - name: Download linked engine from the exact successful GitHub run (variant 112)
+        if: github.event.workflow_run.head_branch == 'build/r36h-webkit-real-link-rocknix-20261022'
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          name: Fire4Nix-WPE2541-AARCH64-LIBRARY-ONLY-NOT-INSTALLABLE
+          path: candidate
+      - name: Download linked engine from the exact successful GitHub run (variant 113)
+        if: github.event.workflow_run.head_branch == 'build/r36h-wpewebkit-library-rk3326-20261022'
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-WPE2541-LINKED-LIBRARY-NOT-INSTALLABLE
+          path: candidate
+      - name: Audit the real linked ELF, never execute it
+        shell: bash
+        env:
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test -d candidate
+          mkdir -p report
+          mapfile -d '' -t engines < <(find candidate -type f -name 'libWPEWebKit-2.0.so.1' -print0)
+          test "${#engines[@]}" -eq 1 || {
+            echo "ERROR: expected precisely one real linked WPE engine; got ${#engines[@]}" >&2
+            exit 5
+          }
+          if find candidate -type l -print | grep .; then
+            echo 'ERROR: symlink present in untrusted downloaded artifact' >&2
+            exit 5
+          fi
+          python3 scripts/verify-built-wpewebkit.py \
+            --library "${engines[0]}" \
+            --report report/wpe-linked-library-elf.txt
+          grep -Fxq 'WPE_LIBRARY_ELF_AUDIT=PASS_STATIC_AARCH64' report/wpe-linked-library-elf.txt
+          grep -Fxq 'WPE_PLATFORM_EXPORT_PRESENT=true' report/wpe-linked-library-elf.txt
+          grep -Fxq 'WPE_MEDIA_FREE=true' report/wpe-linked-library-elf.txt
+          {
+            echo "SOURCE_RUN=$SOURCE_RUN"
+            echo "SOURCE_BRANCH=$SOURCE_BRANCH"
+            echo "SOURCE_SHA=$SOURCE_SHA"
+            echo 'VALIDATION=STATIC_ELF_AARCH64_ONLY'
+            echo 'TARGET_EXECUTED=no'
+            echo 'R36H_INSTALLABLE=no'
+          } > report/build-provenance.txt
+          {
+            echo '## WPE WebKit 2.54.1 actual linked ELF'
+            cat report/build-provenance.txt
+            cat report/wpe-linked-library-elf.txt
+            echo 'No WebProcess, NetworkProcess, closure, GPU or R36H execution proven.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve the audit report, never republish unverified engine ELF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE2541-Actual-Linked-ELF-Audit-NOT-INSTALLABLE
+          path: report/
+          if-no-files-found: warn
+          retention-days: 30
