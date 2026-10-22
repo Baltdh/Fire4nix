@@ -1,0 +1,49 @@
+name: Fire4Nix media-free WPE runtime GPU profile regression
+on:
+  push:
+    branches: ['fix/r36h-media-free-gpu-process-runtime-20261022']
+    paths:
+      - 'rocknix-integration/stage-wpe-runtime.sh'
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/tests/test_runtime_gpu_optional.sh'
+      - '.github/workflows/r36h-wpe-gpu-profile-tests.yml'
+  pull_request:
+    paths:
+      - 'rocknix-integration/stage-wpe-runtime.sh'
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/tests/test_runtime_gpu_optional.sh'
+      - '.github/workflows/r36h-wpe-gpu-profile-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-gpu-profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n rocknix-integration/stage-wpe-runtime.sh
+          sh -n installer/Fire4Nix-Iniciar.sh
+          sh -n native/tests/test_runtime_gpu_optional.sh
+          command -v readelf
+          command -v sha256sum
+      - name: Test both media-free and legacy GPU paths offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh native/tests/test_runtime_gpu_optional.sh
+      - name: Record static test limitation
+        shell: bash
+        run: |
+          echo 'GPU_PROFILE_TESTS=PASS_HOST_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WEBKIT_COMPILED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_DEVICE_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
