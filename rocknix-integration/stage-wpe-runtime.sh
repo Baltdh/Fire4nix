@@ -43,7 +43,31 @@ for p in "$INPUT/usr/libexec/wpe-webkit-2.0" "$INPUT/usr/lib/wpe-webkit-2.0"; do
   if [ -d "$p" ]; then CHILDROOT="$p"; break; fi
 done
 [ -n "$CHILDROOT" ] || { echo 'ERROR: staged WPE subprocess directory missing' >&2; exit 3; }
-for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+# A media-free WPEPlatform Wayland build may intentionally disable GPUProcess.
+# Allow that subprocess to be omitted ONLY with an explicit, verified CMakeCache.
+# Without a cache, preserve the previous strict three-process requirement.
+PROCESSES="WPEWebProcess WPENetworkProcess WPEGPUProcess"
+GPU_PROFILE=required_unverified
+CACHE=${FIRE4NIX_WPE_CMAKE_CACHE:-}
+if [ -n "$CACHE" ]; then
+  [ -s "$CACHE" ] || { echo 'ERROR: WPE CMakeCache not found' >&2; exit 3; }
+  if grep -Fxq 'ENABLE_GPU_PROCESS:BOOL=OFF' "$CACHE"; then
+    for requirement in 'ENABLE_WPE_PLATFORM_WAYLAND:BOOL=ON' 'USE_GSTREAMER:BOOL=OFF' 'USE_GBM:BOOL=OFF' 'USE_LIBDRM:BOOL=OFF'; do
+      grep -Fxq "$requirement" "$CACHE" || {
+        echo "ERROR: GPU-off profile missing verified CMake option $requirement" >&2
+        exit 3
+      }
+    done
+    PROCESSES="WPEWebProcess WPENetworkProcess"
+    GPU_PROFILE=disabled_verified_wayland
+  elif grep -Fxq 'ENABLE_GPU_PROCESS:BOOL=ON' "$CACHE"; then
+    GPU_PROFILE=enabled_verified
+  else
+    echo 'ERROR: WPE CMakeCache has no explicit GPU process ON or OFF' >&2
+    exit 3
+  fi
+fi
+for p in $PROCESSES; do
   [ -s "$CHILDROOT/$p" ] || { echo "ERROR: missing staged $p" >&2; exit 3; }
 done
 check_arm64() {
@@ -67,7 +91,7 @@ check_glibc_max() {
 }
 check_arm64 "$LIBROOT/libWPEWebKit-2.0.so.1" || exit 4
 check_glibc_max "$LIBROOT/libWPEWebKit-2.0.so.1" || exit 4
-for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+for p in $PROCESSES; do
   check_arm64 "$CHILDROOT/$p" || exit 4
   check_glibc_max "$CHILDROOT/$p" || exit 4
 done
@@ -90,7 +114,7 @@ for lib in "$LIBROOT/"*.so "$LIBROOT/"*.so.*; do
   fi
   cp -a "$lib" "$TEMP/lib/"
 done
-for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+for p in $PROCESSES; do
   cp -a "$CHILDROOT/$p" "$TEMP/libexec/wpe-webkit-2.0/$p"
 done
 # Reject broken GStreamer ELF before committing a runtime. The R36H rescue
@@ -128,12 +152,10 @@ for lib in "$TEMP/lib/"*.so*; do
 done
 (
   cd "$TEMP"
-  for p in lib/libWPEWebKit-2.0.so.1 \
-   libexec/wpe-webkit-2.0/WPEWebProcess \
-   libexec/wpe-webkit-2.0/WPENetworkProcess \
-   libexec/wpe-webkit-2.0/WPEGPUProcess; do
-    sha256sum "$p"
-  done > SHA256SUMS.txt
+  sha256sum lib/libWPEWebKit-2.0.so.1 > SHA256SUMS.txt
+  for p in $PROCESSES; do
+    sha256sum "libexec/wpe-webkit-2.0/$p"
+  done >> SHA256SUMS.txt
 )
 # Document unresolved target link dependencies without falsely asserting that
 # they are available; final validation requires the actual ROCKNIX rootfs.
@@ -141,6 +163,7 @@ done
   echo 'Fire4Nix WPE runtime staged from ROCKNIX SDK DESTDIR.'
   echo 'AArch64 ELF and WPEPlatform exported symbol checked.'
   echo "Max allowed direct GLIBC requirement: GLIBC_$TARGET_GLIBC_MAX"
+  echo "GPU_PROCESS_PROFILE=$GPU_PROFILE"
   echo 'Dynamic dependencies must still be validated against the exact target rootfs.'
   echo 'Graphical startup and Mali/Wayland have NOT been tested here.'
   for p in "$TEMP/lib/libWPEWebKit-2.0.so.1" "$TEMP/libexec/wpe-webkit-2.0/WPEWebProcess"; do

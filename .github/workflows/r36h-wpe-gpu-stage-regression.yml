@@ -1,0 +1,37 @@
+name: Fire4Nix ARM64 staged WPE GPU process profile guard
+
+on:
+  push:
+    branches: ['fix/r36h-wpe-runtime-gpu-process-off-20261022']
+    paths:
+      - 'rocknix-integration/stage-wpe-runtime.sh'
+      - 'native/tests/test_wpe_runtime_gpu_profile.sh'
+      - '.github/workflows/r36h-wpe-gpu-stage-regression.yml'
+  pull_request:
+    paths:
+      - 'rocknix-integration/stage-wpe-runtime.sh'
+      - 'native/tests/test_wpe_runtime_gpu_profile.sh'
+      - '.github/workflows/r36h-wpe-gpu-stage-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-gpu-stage:
+    name: Stage mocked ELF64 ARM64 WPE subprocesses
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check audit tools and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v readelf
+          command -v cc
+          sh -n rocknix-integration/stage-wpe-runtime.sh
+          sh -n rocknix-integration/audit-wpe-gstreamer.sh
+          sh -n native/tests/test_wpe_runtime_gpu_profile.sh
+      - name: Verify WPEProcess staging including GPU disabled Wayland profile
+        run: sh native/tests/test_wpe_runtime_gpu_profile.sh
