@@ -108,6 +108,16 @@ tar -xJf "$archive" -C "$work/source" --strip-components=1
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
+# Unifdef is a build-host code-preprocessing tool, never a target ELF.
+command -v unifdef >/dev/null || {
+  echo 'ERROR: missing host-side unifdef required by WPE CMake' >&2
+  exit 25
+}
+host_unifdef=$(command -v unifdef)
+case "$host_unifdef" in
+  /usr/bin/unifdef|/bin/unifdef) ;;
+  *) echo "ERROR: unexpected host unifdef location $host_unifdef" >&2; exit 25 ;;
+esac
 cmake -S "$work/source" -B "$work/configure" -G Ninja \
  -DCMAKE_TOOLCHAIN_FILE="$work/probe-toolchain.cmake" \
  -DHarfBuzz_LIBRARY:FILEPATH="$stage/usr/lib/libharfbuzz.so.0" \
@@ -133,6 +143,7 @@ cmake -S "$work/source" -B "$work/configure" -G Ninja \
  -DLIBXSLT_LIBRARY:FILEPATH="$stage/usr/lib/libxslt.so.1" \
  -DLIBXSLT_INCLUDE_DIR:PATH="$stage/usr/include" \
  -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH:BOOL=OFF \
+ -DUNIFDEF_EXECUTABLE:FILEPATH="$host_unifdef" \
  -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
  -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
