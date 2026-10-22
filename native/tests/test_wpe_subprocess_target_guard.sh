@@ -47,4 +47,19 @@ sed -i 's/USE_GSTREAMER:BOOL=ON/USE_GSTREAMER:BOOL=OFF/' "$temp/configure/CMakeC
 if FIRE4NIX_WPE_BUILD_WORK="$temp" bash "$script" --build > /dev/null 2>&1; then
   echo 'FAIL: cross-build executed outside authenticated CI' >&2; exit 1
 fi
+# The CI-only script fails closed with no mode argument. Prevent the
+# workflow from being silently wired to the invalid default again.
+# This is a textual dispatch contract test, not a target compilation.
+workflow="$root/.github/workflows/r36h-wpe2541-processes-real-rk3326.yml"
+invocations=$(grep -F 'bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh' "$workflow")
+expected='          bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh --build'
+if [[ "$invocations" != "$expected" ]]; then
+  echo 'FAIL: real WPE process workflow must explicitly pass --build exactly once' >&2
+  printf 'found: %s\n' "$invocations" >&2
+  exit 1
+fi
+# The target subprocess job is opt-in to avoid starting an hours-long
+# ARM64 WebKit build through an unrelated host-only unit test.
+grep -Fq '  workflow_dispatch:' "$workflow"
+echo 'WPE_TWO_PROCESSES_WORKFLOW=PASS_EXPLICIT_BUILD_MODE'
 echo 'WPE_TWO_PROCESSES_STATIC_GUARD=PASS_NO_TARGET_EXECUTION'
