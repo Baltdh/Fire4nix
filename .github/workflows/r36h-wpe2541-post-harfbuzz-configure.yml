@@ -178,11 +178,13 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config python3 perl ruby gperf bison flex unifdef
+            cmake ninja-build pkg-config python3 perl ruby gperf bison flex unifdef unifdef
           command -v unifdef
           test -x /usr/bin/unifdef
           python3 -m py_compile fire4nix/scripts/assemble-wpe-post-harfbuzz-stage.py
           bash -n fire4nix/scripts/probe-wpe-post-harfbuzz-target-configure.sh
+          command -v unifdef
+          unifdef -V 2>&1 | head -n 3 || true
       - name: Verify actual HarfBuzz gate disappeared on real WPE 2.54.1 CMake
         shell: bash
         run: |
