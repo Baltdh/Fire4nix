@@ -79,6 +79,8 @@ class RuntimeClosureTests(unittest.TestCase):
         result = self.run_audit()
         self.assertEqual(result["WPE_STAGE_ONLY_DEPENDENCIES"],
                          ["libWPEWebKit-2.0.so.1:libprivate.so.1"])
+        self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
+        self.assertEqual(result["WPE_STAGE_ONLY_COUNTS_AS_BLOCKER"], "yes")
         self.assertEqual(result["R36H_INSTALLABLE"], "no")
 
     def test_reject_wrong_elf_arch_and_glibc(self):

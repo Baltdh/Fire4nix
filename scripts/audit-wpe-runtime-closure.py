@@ -177,7 +177,10 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
                 stack.append(stage_idx[name])
             else:
                 missing.append(f"{path.name}:{name}")
-    status = "BLOCKED" if bad or missing else "SDK_STATIC_CANDIDATES_ONLY"
+    # A SONAME available only in the build overlay is NOT a runtime edge.
+    # Fail closed even when --strict is called directly outside the bundler.
+    status = ("BLOCKED" if bad or missing or from_build_only
+              else "SDK_STATIC_CANDIDATES_ONLY")
     return {
         "WPE_RUNTIME_CLOSURE": status,
         "WPE_REQUIRED_PROCESSES": ",".join(PROCESSES + (("WPEGPUProcess",) if gpu_required else ())),
@@ -188,6 +191,7 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
         "WPE_MISSING_SONAMES": sorted(set(missing)),
         "WPE_STAGE_ONLY_DEPENDENCIES": sorted(set(from_build_only)),
         "WPE_ABI_FINDINGS": sorted(set(bad)),
+        "WPE_STAGE_ONLY_COUNTS_AS_BLOCKER": "yes",
         "WPE_REAL_DEVICE_LOADER_PROVEN": "no",
         "WPE_GRAPHICS_OR_HTTPS_PROVEN": "no",
         "R36H_INSTALLABLE": "no",
