@@ -1,0 +1,55 @@
+name: Fire4Nix ROCKNIX Wayland Protocols 1.44 target-only data
+
+on:
+  push:
+    branches: ['feat/r36h-step1-unified-rocknix-sdk-20261021']
+    paths:
+      - 'scripts/stage-rocknix-wayland-protocols-144.sh'
+      - '.github/workflows/r36h-wayland-protocols-144.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-data:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Install host tools for architecture-independent Wayland XML
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build pkg-config libwayland-dev file curl xz-utils
+          bash -n fire4nix/scripts/stage-rocknix-wayland-protocols-144.sh
+      - name: Validate pinned real ROCKNIX release and stage protocols
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/stage-rocknix-wayland-protocols-144.sh \
+            2>&1 | tee wayland-protocols-console.txt
+          grep -Fxq 'WAYLAND_PROTOCOLS_TARGET_DATA=PASS_ARCH_INDEPENDENT' \
+            wayland-protocols-target/reports/acceptance.txt
+          cat wayland-protocols-target/reports/acceptance.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve verified protocol XML and pkgconfig only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-Wayland-Protocols-1.44-TARGET-DATA-ONLY
+          path: |
+            wayland-protocols-target/stage/
+            wayland-protocols-target/reports/
+            wayland-protocols-console.txt
+          retention-days: 14
+          if-no-files-found: warn
