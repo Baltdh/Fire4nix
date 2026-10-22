@@ -1,0 +1,68 @@
+name: Fire4Nix linked WPE ARM64 direct dependency report
+
+on:
+  push:
+    branches: ['audit/r36h-linked-webkit-direct-needed-20261022']
+    paths:
+      - 'scripts/audit-linked-wpe-direct-needed.py'
+      - 'native/tests/test_wpe_linked_direct_needed.py'
+      - '.github/workflows/r36h-linked-wpe-direct-needed.yml'
+  pull_request:
+    paths:
+      - 'scripts/audit-linked-wpe-direct-needed.py'
+      - 'native/tests/test_wpe_linked_direct_needed.py'
+      - '.github/workflows/r36h-linked-wpe-direct-needed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-needed-classifier:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run direct-needed classification tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/audit-linked-wpe-direct-needed.py
+          python3 native/tests/test_wpe_linked_direct_needed.py
+      - name: Real AArch64 provider detection with native ARM64 ELF fixtures
+        if: matrix.os == 'ubuntu-24.04-arm'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          mkdir -p "$tmp/sysroot/usr/lib" "$tmp/sdk/usr/lib" "$tmp/report"
+          cat > "$tmp/libc.c" <<'EOF'
+          int library_symbol(void) { return 123; }
+          EOF
+          cc -shared -fPIC -Wl,-soname,libfixture.so.1 "$tmp/libc.c" -o "$tmp/sysroot/usr/lib/libfixture.so.1"
+          cat > "$tmp/wpe.c" <<'EOF'
+          extern int library_symbol(void);
+          int webkit_web_view_get_wpe_view(void) { return library_symbol(); }
+          EOF
+          cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 \
+            "$tmp/wpe.c" "$tmp/sysroot/usr/lib/libfixture.so.1" \
+            -o "$tmp/libWPEWebKit-2.0.so.1"
+          readelf -d "$tmp/libWPEWebKit-2.0.so.1" | grep -Fq '[libfixture.so.1]'
+          python3 scripts/audit-linked-wpe-direct-needed.py \
+            --library "$tmp/libWPEWebKit-2.0.so.1" \
+            --sysroot "$tmp/sysroot" --sdk-stage "$tmp/sdk" \
+            --report "$tmp/report/direct.txt" --strict
+          grep -Fxq 'WPE_DIRECT_ELF_NEEDED_STATUS=DIRECT_SONAMES_PRESENT_IN_TOOLCHAIN_SYSROOT' "$tmp/report/direct.txt"
+          mv "$tmp/sysroot/usr/lib/libfixture.so.1" "$tmp/sdk/usr/lib/libfixture.so.1"
+          python3 scripts/audit-linked-wpe-direct-needed.py \
+            --library "$tmp/libWPEWebKit-2.0.so.1" \
+            --sysroot "$tmp/sysroot" --sdk-stage "$tmp/sdk" \
+            --report "$tmp/report/bundle.txt" --strict
+          grep -Fxq 'WPE_DIRECT_BUNDLE_REQUIRED=libfixture.so.1' "$tmp/report/bundle.txt"
+          grep -Fxq 'WPE_DIRECT_ELF_NEEDED_STATUS=STAGE_LIBRARIES_MUST_BE_BUNDLED' "$tmp/report/bundle.txt"
+          echo 'REAL_AARCH64_DIRECT_NEEDED_REGRESSION=PASS' >> "$GITHUB_STEP_SUMMARY"
