@@ -1,0 +1,42 @@
+name: Fire4Nix WPEWebKit 2.54 linked ELF release gate
+
+on:
+  push:
+    branches: ['audit/r36h-wpewebkit-linked-elf-release-gate-20261022']
+    paths:
+      - 'scripts/verify-built-wpewebkit.py'
+      - 'native/tests/test_wpewebkit_build_elf.py'
+      - 'native/tests/test_wpewebkit_elf_gate_arm64.sh'
+      - '.github/workflows/r36h-wpewebkit-linked-elf-gate.yml'
+  pull_request:
+    paths:
+      - 'scripts/verify-built-wpewebkit.py'
+      - 'native/tests/test_wpewebkit_build_elf.py'
+      - 'native/tests/test_wpewebkit_elf_gate_arm64.sh'
+      - '.github/workflows/r36h-wpewebkit-linked-elf-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linked-wpe-elf-audit:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit regressions for real WPE WebKit ELF acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/verify-built-wpewebkit.py
+          python3 -m py_compile native/tests/test_wpewebkit_build_elf.py
+          python3 native/tests/test_wpewebkit_build_elf.py
+          bash -n native/tests/test_wpewebkit_elf_gate_arm64.sh
+      - name: Real ARM64 ELF shared-library CLI fixtures
+        if: matrix.runner == 'ubuntu-24.04-arm'
+        run: bash native/tests/test_wpewebkit_elf_gate_arm64.sh
