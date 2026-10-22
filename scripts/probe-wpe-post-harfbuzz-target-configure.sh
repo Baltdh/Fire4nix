@@ -108,6 +108,16 @@ tar -xJf "$archive" -C "$work/source" --strip-components=1
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
+# Host wayland-protocols XML files are generator inputs; target Wayland
+# libraries/headers stay in the pinned ROCKNIX sysroot.
+host_protocols=/usr/share/wayland-protocols
+host_scanner=$(command -v wayland-scanner) || {
+ echo 'ERROR: host wayland-scanner missing' >&2; exit 26;
+}
+case "$host_scanner" in /usr/bin/wayland-scanner|/bin/wayland-scanner) ;; *) echo "ERROR: unapproved scanner $host_scanner" >&2; exit 26;; esac
+for xml in stable/xdg-shell/xdg-shell.xml unstable/text-input/text-input-unstable-v3.xml unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml;do
+ test -s "$host_protocols/$xml" || { echo "ERROR: missing host protocol $xml" >&2; exit 26; }
+done
 # Unifdef is a build-host code-preprocessing tool, never a target ELF.
 command -v unifdef >/dev/null || {
   echo 'ERROR: missing host-side unifdef required by WPE CMake' >&2
@@ -144,6 +154,8 @@ cmake -S "$work/source" -B "$work/configure" -G Ninja \
  -DLIBXSLT_INCLUDE_DIR:PATH="$stage/usr/include" \
  -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH:BOOL=OFF \
  -DUNIFDEF_EXECUTABLE:FILEPATH="$host_unifdef" \
+ -DWAYLAND_PROTOCOLS_DATADIR:PATH="$host_protocols" \
+ -DWAYLAND_SCANNER:FILEPATH="$host_scanner" \
  -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
  -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
