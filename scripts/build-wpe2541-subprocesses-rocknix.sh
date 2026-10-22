@@ -144,6 +144,29 @@ done
 test ! -e "$runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
 grep -Fxq 'GPU_PROCESS_PROFILE=disabled_verified_wayland' "$runtime/BUILD-REPORT.txt"
 (cd "$runtime" && sha256sum -c SHA256SUMS.txt)
+# A correct AArch64 library may still depend on libraries available only in
+# the temporary compilation SDK overlay, not on the physical console.
+# Classify the complete reachable NEEDED graph before declaring staging done.
+closure="$report/wpe-runtime-closure.txt"
+python3 "$repo_root/scripts/audit-wpe-runtime-closure.py" \
+  --runtime "$runtime" \
+  --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
+  --sdk-stage "$root/stage1-artifact/stage1-combined" \
+  --report "$closure" --strict \
+  > "$report/wpe-runtime-closure.log" 2>&1 || {
+    echo 'WPE_PRIVATE_RUNTIME_CLOSURE=BLOCKED' | tee -a "$result"
+    tail -n 90 "$report/wpe-runtime-closure.log"
+    exit 14
+  }
+grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$closure" || exit 14
+# Stage-1 SDK overlay libraries are not automatically shipped or provided by
+# the R36H. Do not misreport a dependency found only there as runtime-ready.
+if ! grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' "$closure"; then
+  echo 'WPE_PRIVATE_RUNTIME_CLOSURE=STAGE_ONLY_DEPS_NOT_PACKAGED' | tee -a "$result"
+  grep '^WPE_STAGE_ONLY_DEPENDENCIES=' "$closure" | head -n 40 || true
+  exit 14
+fi
+echo 'WPE_PRIVATE_RUNTIME_CLOSURE=PASS_SDK_STATIC_SONAMES_NOT_DEVICE_ABI' | tee -a "$result"
 {
   echo 'WPE_SUBPROCESS_BUILD=PASS_REAL_AARCH64'
   echo 'WPE_PRIVATE_RUNTIME_STAGE=PASS_STATIC_GATES'
