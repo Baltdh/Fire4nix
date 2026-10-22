@@ -67,7 +67,7 @@ jobs:
           Nunca execute o binario x86_64 dos backups antigos no R36H ARM64.
           O pacote CONTEM o executavel ARM64, homepage, scripts e instalador.
           Copie Fire4Nix-Direto.sh para roms/ports/ para iniciar a partir do menu Ports.
-          Versao 1.03 ignora instalacoes incompletas, procurando WPE com tres subprocessos.
+          Ports exige WPEWebProcess e WPENetworkProcess; so omite WPEGPUProcess com BUILD-REPORT.txt verificado.
           O diagnostico --safe registra Fontconfig, MIME, bwrap, colisao de libs e GLIBC.
           Fire4Nix-Investigar-139.sh --safe NAO executa WebKit.
           Fire4Nix-Investigar-139.sh --trace roda somente preflight ABI com LD_DEBUG.
