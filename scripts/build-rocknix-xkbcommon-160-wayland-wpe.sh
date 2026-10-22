@@ -90,8 +90,8 @@ endian = 'little'
 sys_root = '$sysroot'
 pkg_config_libdir = ['$stage/usr/lib/pkgconfig', '$sysroot/usr/lib/pkgconfig']
 [built-in options]
-c_args = ['-mcpu=cortex-a35', '-I$stage/usr/include']
-cpp_args = ['-mcpu=cortex-a35', '-I$stage/usr/include']
+c_args = ['-mcpu=cortex-a35', '-I$stage/usr/include', '-I$stage/usr/include/libxml2']
+cpp_args = ['-mcpu=cortex-a35', '-I$stage/usr/include', '-I$stage/usr/include/libxml2']
 c_link_args = ['-L$stage/usr/lib', '-Wl,-rpath-link,$stage/usr/lib']
 cpp_link_args = ['-L$stage/usr/lib', '-Wl,-rpath-link,$stage/usr/lib']
 EOF
