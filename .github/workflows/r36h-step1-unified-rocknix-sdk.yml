@@ -189,6 +189,13 @@ jobs:
             2>&1 | tee stage1-reports/pkgconfig-readiness.txt
           grep -Fxq 'TARGET_PC_TOTAL=22' stage1-reports/pkgconfig-readiness.txt
           cat stage1-reports/pkgconfig-readiness.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Record SHA256 manifest of consolidated real target SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ( cd stage1-combined && find usr -type f -print0 | sort -z | xargs -0 sha256sum ) > stage1-reports/SHA256SUMS.txt
+          test "$(wc -l < stage1-reports/SHA256SUMS.txt)" -gt 150
+          echo "SDK_SHA256_MANIFEST=PASS" >> "$GITHUB_STEP_SUMMARY"
       - name: Archive private target stage only (NOT a browser)
         if: always()
         uses: actions/upload-artifact@v4
@@ -198,5 +205,5 @@ jobs:
             stage1-reports/
             stage1-combined/usr/lib/
             stage1-combined/usr/include/
-          retention-days: 7
+          retention-days: 30
           if-no-files-found: warn
