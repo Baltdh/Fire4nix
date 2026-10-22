@@ -242,6 +242,12 @@ if ! pkg-config --exists 'libxslt >= 1.1.13';then
   echo 'ERROR: target LibXslt development metadata unavailable' >&2
   exit 23
 fi
+if grep -Eq 'Could NOT find Unifdef|UNIFDEF_EXECUTABLE.*NOTFOUND' "$work/report/cmake.log"; then
+  echo 'UNIFDEF_HOST_TOOL=BLOCKED' | tee -a "$work/report/status.txt"
+  echo 'ERROR: WPE still cannot locate native host unifdef' >&2
+  exit 25
+fi
+echo 'UNIFDEF_HOST_TOOL=FOUND_NATIVE_BUILD_PROGRAM' | tee -a "$work/report/status.txt"
 echo 'NO_FIRMWARE_WRITES=YES' >> "$work/report/status.txt"
 echo 'WPE_CONFIGURE_PROBE=RECORDED_NO_DRM_GBM_LIBXSLT_WEBP_XKB_WAYLAND_SOUP3_GCRYPT_GPGERROR_HARFBUZZ_ICU_EPOXY_EGL_TARGET_SDK' >> "$work/report/status.txt"
 cat "$work/report/status.txt"
