@@ -77,6 +77,11 @@ versions=[(int(major),int(minor)) for major,minor in re.findall(r'Name: GLIBC_(\
 assert all(version <= (2,41) for version in versions),versions
 print('WPEWEBKIT_TARGET_GLIBC=PASS_MAX_2_41')
 PY
+# Preserve the actual linked binary for the next private WebKit process stage.
+# Not installable: missing processes, resources, ABI/runtime checks and tests.
+mkdir -p "$root/wpe-link-output"
+cp -L "$chosen" "$root/wpe-link-output/libWPEWebKit-2.0.so.1"
+sha256sum "$root/wpe-link-output/libWPEWebKit-2.0.so.1" > "$report/webkit-library-sha256.txt"
 {
  echo 'WPEWEBKIT_ROCKNIX_LIBRARY_BUILD=PASS_REAL_AARCH64_LINKED'
  echo "WPEWEBKIT_LIBRARY_ELF=$chosen"
