@@ -188,6 +188,9 @@ jobs:
             sh scripts/audit-step1-pkgconfig.sh --inspect \
             2>&1 | tee stage1-reports/pkgconfig-readiness.txt
           grep -Fxq 'TARGET_PC_TOTAL=22' stage1-reports/pkgconfig-readiness.txt
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-reports/pkgconfig-readiness.txt
+          test -s stage1-combined/usr/share/pkgconfig/wayland-protocols.pc
+          test "$(find stage1-combined/usr/share/wayland-protocols -name '*.xml' -type f | wc -l)" -gt 20
           cat stage1-reports/pkgconfig-readiness.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Record SHA256 manifest of consolidated real target SDK
         shell: bash
@@ -205,5 +208,6 @@ jobs:
             stage1-reports/
             stage1-combined/usr/lib/
             stage1-combined/usr/include/
+            stage1-combined/usr/share/
           retention-days: 30
           if-no-files-found: warn
