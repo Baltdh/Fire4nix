@@ -52,7 +52,7 @@ TARGET_EXECUTED=no
 R36H_INSTALLABLE=no
 EOF
 export PKG_CONFIG_PATH=''
-export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$stage/usr/share/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
 export PKG_CONFIG_SYSROOT_DIR="$stage"
 for pc in libnghttp2 libpsl libsoup-3.0 libgcrypt gpg-error harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   pkg-config --modversion "$pc" | awk -v name="$pc" '{print "TARGET_PC_" name "=" $0}'
@@ -100,9 +100,179 @@ tar -xJf "$archive" -C "$work/source" --strip-components=1
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
-# Host wayland-protocols XML files are generator inputs; target Wayland
-# libraries/headers stay in the pinned ROCKNIX sysroot.
-host_protocols=/usr/share/wayland-protocols
+# Wayland protocol XML is architecture-independent input for the HOST scanner,
+# but must come from the pinned ROCKNIX 1.44 SDK rather than Ubuntu packages.
+# The SDK was audited in stage 1; never silently fall back to /usr/share.
+host_protocols="$stage/usr/share/wayland-protocols"
+protocol_pc="$stage/usr/share/pkgconfig/wayland-protocols.pc"
+test -s "$protocol_pc" || {
+ echo 'ERROR: missing pinned ROCKNIX wayland-protocols.pc' >&2; exit 26;
+}
+test "$(pkg-config --modversion wayland-protocols)" = '1.44' || {
+ echo 'ERROR: expected ROCKNIX Wayland Protocols 1.44, not host package' >&2; exit 26;
+}
+grep -Eq '^Version:[[:space:]]*1\\.44[[:space:]]*
+host_scanner=$(command -v wayland-scanner) || {
+ echo 'ERROR: host wayland-scanner missing' >&2; exit 26;
+}
+case "$host_scanner" in /usr/bin/wayland-scanner|/bin/wayland-scanner) ;; *) echo "ERROR: unapproved scanner $host_scanner" >&2; exit 26;; esac
+for xml in stable/xdg-shell/xdg-shell.xml unstable/text-input/text-input-unstable-v3.xml unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml;do
+ test -s "$host_protocols/$xml" || { echo "ERROR: missing host protocol $xml" >&2; exit 26; }
+done
+# Unifdef is a build-host code-preprocessing tool, never a target ELF.
+command -v unifdef >/dev/null || {
+  echo 'ERROR: missing host-side unifdef required by WPE CMake' >&2
+  exit 25
+}
+host_unifdef=$(command -v unifdef)
+case "$host_unifdef" in
+  /usr/bin/unifdef|/bin/unifdef) ;;
+  *) echo "ERROR: unexpected host unifdef location $host_unifdef" >&2; exit 25 ;;
+esac
+cmake -S "$work/source" -B "$work/configure" -G Ninja \
+ -DCMAKE_TOOLCHAIN_FILE="$work/probe-toolchain.cmake" \
+ -DHarfBuzz_LIBRARY:FILEPATH="$stage/usr/lib/libharfbuzz.so.0" \
+ -DHarfBuzz_INCLUDE_DIR:PATH="$stage/usr/include/harfbuzz" \
+ -DHarfBuzz_ICU_LIBRARY:FILEPATH="$stage/usr/lib/libharfbuzz-icu.so.0" \
+ -DHarfBuzz_ICU_INCLUDE_DIR:PATH="$stage/usr/include/harfbuzz" \
+ -DICU_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DICU_UC_LIBRARY:FILEPATH="$stage/usr/lib/libicuuc.so.74" \
+ -DICU_I18N_LIBRARY:FILEPATH="$stage/usr/lib/libicui18n.so.74" \
+ -DICU_DATA_LIBRARY:FILEPATH="$stage/usr/lib/libicudata.so.74" \
+ -DEpoxy_LIBRARY:FILEPATH="$stage/usr/lib/libepoxy.so.0" \
+ -DEpoxy_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DLibGcrypt_LIBRARY:FILEPATH="$stage/usr/lib/libgcrypt.so.20" \
+ -DLibGcrypt_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DLibGcrypt_GpgError_LIBRARY:FILEPATH="$stage/usr/lib/libgpg-error.so.0" \
+ -DLibGcrypt_GpgError_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DSoup3_LIBRARY:FILEPATH="$stage/usr/lib/libsoup-3.0.so.0" \
+ -DSoup3_INCLUDE_DIR:PATH="$stage/usr/include/libsoup-3.0" \
+ -DWebP_LIBRARY:FILEPATH="$stage/usr/lib/libwebp.so.7" \
+ -DWebP_DEMUX_LIBRARY:FILEPATH="$stage/usr/lib/libwebpdemux.so.2" \
+ -DWebP_MUX_LIBRARY:FILEPATH="$stage/usr/lib/libwebpmux.so.3" \
+ -DWebP_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DLIBXSLT_LIBRARY:FILEPATH="$stage/usr/lib/libxslt.so.1" \
+ -DLIBXSLT_INCLUDE_DIR:PATH="$stage/usr/include" \
+ -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH:BOOL=OFF \
+ -DUNIFDEF_EXECUTABLE:FILEPATH="$host_unifdef" \
+ -DWAYLAND_PROTOCOLS_DATADIR:PATH="$host_protocols" \
+ -DWAYLAND_SCANNER:FILEPATH="$host_scanner" \
+ -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+ -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
+ -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
+ -DUSE_LIBDRM=OFF -DUSE_GBM=OFF -DENABLE_GPU_PROCESS=OFF \
+ -DENABLE_WPE_LEGACY_API=OFF -DENABLE_INTROSPECTION=OFF \
+ -DENABLE_DOCUMENTATION=OFF -DENABLE_SPELLCHECK=OFF \
+ -DENABLE_GAMEPAD=OFF -DENABLE_BUBBLEWRAP_SANDBOX=OFF \
+ -DUSE_GSTREAMER=OFF -DUSE_GSTREAMER_GL=OFF \
+ -DENABLE_VIDEO=OFF -DENABLE_WEB_AUDIO=OFF \
+ -DENABLE_SPEECH_SYNTHESIS=OFF -DENABLE_WEB_CODECS=OFF \
+ -DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF \
+ -DENABLE_MEDIA_RECORDER=OFF -DUSE_AVIF=OFF \
+ -DUSE_JPEGXL=OFF -DUSE_WOFF2=OFF -DUSE_ATK=OFF \
+ -DUSE_LIBHYPHEN=OFF -DENABLE_JOURNALD_LOG=OFF \
+ -DUSE_LCMS=OFF -DUSE_LIBBACKTRACE=OFF \
+ -DUSE_SYSTEM_SYSPROF_CAPTURE=OFF -DUSE_SYSPROF_CAPTURE=OFF \
+ -DENABLE_AV1=OFF -DENABLE_WEBDRIVER=OFF \
+ > "$work/report/cmake.log" 2>&1
+rc=$?
+set -e
+echo "WPE_CMAKE_EXIT_CODE=$rc" >> "$work/report/status.txt"
+# Document an opt-in REDUCED profile: this is not a replacement for the
+# DRM/GBM-enabled ROCKNIX graphical build. It only isolates the requirements
+# for the WPEPlatform Wayland client in a first-HTML configuration.
+cache="$work/configure/CMakeCache.txt"
+for option in USE_LIBDRM USE_GBM ENABLE_GPU_PROCESS ENABLE_WPE_PLATFORM_DRM;do
+  grep -Eq "^$option:BOOL=OFF$" "$cache" || {
+    echo "ERROR: CMake did not retain $option=OFF; reduced-profile probe invalid" >&2
+    exit 24
+  }
+done
+if grep -q 'libdrm is required for USE_LIBDRM' "$work/report/cmake.log";then
+  echo 'ERROR: CMake still entered DRM-enabled path with explicit OFF profile' >&2
+  exit 24
+fi
+echo 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' | tee -a "$work/report/status.txt"
+if [ "$rc" -eq 0 ]; then
+  # Only label *configure* complete after confirming our media-free cache.
+  FIRE4NIX_WPE_BUILD_DIR="$work/configure" FIRE4NIX_MEDIA_PROFILE=minimal \
+    sh "$base/fire4nix/scripts/verify-unified-wpe-media-cache.sh" --check \
+    > "$work/report/media-gate.txt" 2>&1 || {
+      echo 'ERROR: CMake configured but media-free profile not verified' >&2
+      cat "$work/report/media-gate.txt"
+      exit 7
+    }
+  echo 'WPE_TARGET_CONFIGURE=CONFIGURED_REQUIRES_ABI_REVIEW' | tee -a "$work/report/status.txt"
+else
+  # Failing configure is an EXPECTED diagnostic, not a successful build.
+  # Preserve full log and classify the actual reason without hiding errors.
+  if ! grep -Eq 'CMake Error|Could NOT find|Could not find|Configuring incomplete|required package' "$work/report/cmake.log"; then
+    echo 'ERROR: unexpected CMake configure failure; read full logs' >&2
+    tail -n 90 "$work/report/cmake.log"
+    exit 8
+  fi
+  echo 'WPE_TARGET_CONFIGURE=BLOCKED_WITH_REAL_SDK' | tee -a "$work/report/status.txt"
+  grep -E -A 8 'CMake Error|Could NOT find|Could not find|required package' "$work/report/cmake.log" |
+    head -n 160 > "$work/report/first-errors.txt" || true
+  echo 'WPE_FIRST_CMAKE_BLOCKERS_BEGIN'
+  cat "$work/report/first-errors.txt"
+  echo 'WPE_FIRST_CMAKE_BLOCKERS_END'
+fi
+if grep -Eq 'CMake Error at .*FindHarfBuzz.cmake|Could NOT find HarfBuzz|_HarfBuzz_REQUIRED_LIBS_FOUND|Required version \(2\.7\.4\).*found version' "$work/report/cmake.log"; then
+  echo 'HARFBUZZ_ICU_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: WPE still cannot find genuine HarfBuzz after staged target build' >&2
+  exit 18
+fi
+echo 'HARFBUZZ_ICU_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if grep -Eq 'Could NOT find LibGcrypt|LibGcrypt_(GpgError_)?(LIBRARY|INCLUDE_DIR)' "$work/report/cmake.log"; then
+  echo 'LIBGCRYPT_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: LibGcrypt/GpgError are not resolved for WPE yet' >&2
+  exit 19
+fi
+echo 'LIBGCRYPT_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if grep -Eq 'Could NOT find Soup3|Soup3_(LIBRARY|INCLUDE_DIR)' "$work/report/cmake.log"; then
+  echo 'SOUP3_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: WPE still cannot find genuine Soup3 after staged target build' >&2
+  exit 20
+fi
+echo 'SOUP3_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if grep -Eq 'Could NOT find XkbCommon|XkbCommon_VERSION|XkbCommon_PKG_CONFIG_SPEC' "$work/report/cmake.log";then
+  echo 'XKBCOMMON_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: WPE still cannot detect genuine target XkbCommon package metadata' >&2
+  exit 21
+fi
+echo 'XKBCOMMON_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if ! pkg-config --exists 'xkbcommon >= 1.6.0' || ! pkg-config --exists 'wayland-client >= 1.23.1';then
+  echo 'ERROR: target XkbCommon/Wayland pkg-config requirements not satisfied' >&2
+  exit 21
+fi
+if grep -Eq 'Could NOT find WebP|WebP_(INCLUDE_DIR|LIBRARY|DEMUX_LIBRARY|MUX_LIBRARY)|_WebP_REQUIRED_LIBS_FOUND' "$work/report/cmake.log";then
+  echo 'WEBP_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: WPE still cannot resolve genuine WebP/demux/mux target libraries' >&2
+  exit 22
+fi
+echo 'WEBP_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if ! pkg-config --exists 'libwebp >= 1.6.0' || ! pkg-config --exists libwebpdemux || ! pkg-config --exists libwebpmux;then
+  echo 'ERROR: WebP target metadata/dependencies incomplete' >&2
+  exit 22
+fi
+if grep -Eq 'Could NOT find LibXslt|LIBXSLT_(LIBRARIES|INCLUDE_DIR)' "$work/report/cmake.log";then
+  echo 'LIBXSLT_FIRST_BLOCKER_CLEARED=NO' | tee -a "$work/report/status.txt"
+  echo 'ERROR: WPE cannot resolve genuine LibXslt target shared ELF/includes' >&2
+  exit 23
+fi
+echo 'LIBXSLT_FIRST_BLOCKER_CLEARED=YES' | tee -a "$work/report/status.txt"
+if ! pkg-config --exists 'libxslt >= 1.1.13';then
+  echo 'ERROR: target LibXslt development metadata unavailable' >&2
+  exit 23
+fi
+echo 'NO_FIRMWARE_WRITES=YES' >> "$work/report/status.txt"
+echo 'WPE_CONFIGURE_PROBE=UNIFIED_ROCKNIX_STAGE1_WAYLAND_NO_GSTREAMER' >> "$work/report/status.txt"
+cat "$work/report/status.txt"
+ "$protocol_pc" || {
+ echo 'ERROR: real protocol metadata does not match ROCKNIX recipe' >&2; exit 26;
+}
+echo 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' >> "$work/report/status.txt"
 host_scanner=$(command -v wayland-scanner) || {
  echo 'ERROR: host wayland-scanner missing' >&2; exit 26;
 }
