@@ -1,0 +1,68 @@
+name: Fire4Nix sanitize private ROCKNIX build-time RUNPATH overlay
+
+on:
+  push:
+    branches: ['fix/r36h-stage1-build-rpath-overlay-20261021']
+    paths:
+      - 'scripts/sanitize-rocknix-build-rpath.py'
+      - '.github/workflows/r36h-sanitize-sdk-build-rpath.yml'
+  pull_request:
+    paths:
+      - 'scripts/sanitize-rocknix-build-rpath.py'
+      - '.github/workflows/r36h-sanitize-sdk-build-rpath.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  private-overlay:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install static ELF editing and inspection tools on host
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends patchelf binutils python3
+          python3 -m py_compile scripts/sanitize-rocknix-build-rpath.py
+          command -v patchelf
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - name: Repair only six proven CI RUNPATHs in isolated copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+          python3 scripts/sanitize-rocknix-build-rpath.py \
+            --stage "$GITHUB_WORKSPACE/stage1-artifact/stage1-combined" \
+            --output "$GITHUB_WORKSPACE/isolated-elf-overlay" | tee overlay-console.txt
+          test "$(find isolated-elf-overlay/usr/lib -type f | wc -l)" -eq 6
+          python3 -c 'import json; assert len(json.load(open("isolated-elf-overlay/report.json"))) == 6'
+          {
+            echo '## ROCKNIX isolated ELF RUNPATH sanitizer'
+            cat overlay-console.txt
+            echo ''
+            echo 'Original SDK untouched. Only six known CI build RUNPATHs removed from copies.'
+            echo 'Not a browser install package; remaining libgcc_s closure still unresolved.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve six candidate development ELF copies and audit hashes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-RPATH-CLEAN-OVERLAY-NOT-INSTALLABLE
+          path: |
+            isolated-elf-overlay/
+            overlay-console.txt
+          retention-days: 14
+          if-no-files-found: warn
