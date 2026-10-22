@@ -147,6 +147,14 @@ jobs:
           github-token: ${{ github.token }}
           name: Fire4Nix-ROCKNIX-libxslt-1.1.43-TARGET-STAGE
           path: inputs/xslt
+      - name: Restore pinned Wayland Protocols 1.44 data-only artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39705416651
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Wayland-Protocols-1.44-TARGET-DATA-ONLY
+          path: inputs/protocols
       - name: Combine independently validated target SDK stages
         shell: bash
         run: |
@@ -166,7 +174,8 @@ jobs:
             inputs/soup-prereqs/soup-prereqs-target/stage \
             inputs/xkb/xkbcommon-target/stage \
             inputs/soup3/soup3-target/output \
-            inputs/xslt/libxslt-target/stage 2>&1 | tee stage1-reports/merge.txt
+            inputs/xslt/libxslt-target/stage \
+            inputs/protocols/wayland-protocols-target/stage 2>&1 | tee stage1-reports/merge.txt
           grep -Fx 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-reports/merge.txt
           grep -Fx 'STAGE_INSTALLABLE=no' stage1-reports/merge.txt
           cat stage1-reports/merge.txt >> "$GITHUB_STEP_SUMMARY"
