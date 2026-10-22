@@ -33,6 +33,41 @@ grep -q 'RESUMO PARA FOTO' "$T/screen.txt"
 grep -q 'WPE_version=2.54.1' "$T/screen.txt"
 grep -q 'WPEPlatform_preflight_exit=78' "$T/screen.txt"
 grep -q 'GRAPHICS_STATUS=NOT_VERIFIED_BY_PREFLIGHT' "$T/screen.txt"
+# Valid GPU-off build reports should not be shown as a missing required helper.
+rm "$T/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
+printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\n' > "$T/runtime/BUILD-REPORT.txt"
+FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/runtime" \
+  FIRE4NIX_DIAGNOSTIC_OUT="$T/gpu-off.txt" \
+  sh "$T/package/Diagnosticar-Fire4Nix.sh" --screen > "$T/gpu-off-screen.txt"
+grep -Fxq 'gpu_runtime_profile=disabled_verified_wayland' "$T/gpu-off.txt"
+grep -Fxq 'gpu_process_required=0' "$T/gpu-off.txt"
+grep -Fxq 'WPEGPUProcess=not_required_verified_wayland' "$T/gpu-off.txt"
+grep -Fq 'WPEGPUProcess=not_required_verified_wayland' "$T/gpu-off-screen.txt"
+grep -Fq 'gpu_process_required=0' "$T/gpu-off-screen.txt"
+# Unknown or contradictory report must fail closed in the diagnosis too.
+printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\nGPU_PROCESS_PROFILE=enabled_verified\n' \
+  > "$T/runtime/BUILD-REPORT.txt"
+FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/runtime" \
+  FIRE4NIX_DIAGNOSTIC_OUT="$T/conflict.txt" \
+  sh "$T/package/Diagnosticar-Fire4Nix.sh" --safe >/dev/null
+grep -Fxq 'gpu_runtime_profile=invalid_report_requires_gpu' "$T/conflict.txt"
+grep -Fxq 'gpu_process_required=1' "$T/conflict.txt"
+grep -Fxq 'WPEGPUProcess=missing' "$T/conflict.txt"
+rm "$T/runtime/BUILD-REPORT.txt"
+printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\n' > "$T/outside.txt"
+ln -s "$T/outside.txt" "$T/runtime/BUILD-REPORT.txt"
+FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/runtime" \
+  FIRE4NIX_DIAGNOSTIC_OUT="$T/link.txt" \
+  sh "$T/package/Diagnosticar-Fire4Nix.sh" --safe >/dev/null
+grep -Fxq 'gpu_runtime_profile=invalid_report_requires_gpu' "$T/link.txt"
+grep -Fxq 'WPEGPUProcess=missing' "$T/link.txt"
+rm "$T/runtime/BUILD-REPORT.txt"
+FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/runtime" \
+  FIRE4NIX_DIAGNOSTIC_OUT="$T/legacy.txt" \
+  sh "$T/package/Diagnosticar-Fire4Nix.sh" --safe >/dev/null
+grep -Fxq 'gpu_runtime_profile=legacy_requires_gpu' "$T/legacy.txt"
+grep -Fxq 'gpu_process_required=1' "$T/legacy.txt"
+grep -Fxq 'WPEGPUProcess=missing' "$T/legacy.txt"
 # When run directly from an extracted package on SD2, no local runtime
 # should be mistaken for a functioning graphics engine.
 FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/nonexistent" \
