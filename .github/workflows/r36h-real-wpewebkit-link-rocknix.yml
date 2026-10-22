@@ -1,0 +1,116 @@
+name: Fire4Nix ROCKNIX WPE 2.54.1 real library link
+on:
+  push:
+    branches: ['build/r36h-webkit-real-link-rocknix-20261022']
+    paths:
+      - '.github/workflows/r36h-real-wpewebkit-link-rocknix.yml'
+      - 'scripts/build-wpewebkit-rocknix-first.sh'
+      - 'scripts/verify-built-wpewebkit.py'
+      - 'native/tests/test_wpewebkit_build_elf.py'
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'scripts/verify-unified-wpe-media-cache.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  link-webkit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Run host-only syntax and ELF gate tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config python3 perl ruby gperf bison flex \
+            unifdef wayland-protocols libwayland-bin binutils file
+          bash -n fire4nix/scripts/build-wpewebkit-rocknix-first.sh
+          bash -n fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
+          sh -n fire4nix/scripts/verify-unified-wpe-media-cache.sh
+          python3 -m py_compile fire4nix/scripts/verify-built-wpewebkit.py
+          python3 fire4nix/native/tests/test_wpewebkit_build_elf.py
+          test -x /usr/bin/unifdef
+          test -x /usr/bin/wayland-scanner
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39706017583
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - name: Restore pinned ROCKNIX RK3326 AArch64 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar -tJf "$archive" > "$RUNNER_TEMP/webkit-sdk-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/webkit-sdk-members.txt"; then
+            echo 'ERROR: untrusted SDK archive path' >&2
+            exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+          grep -Fxq 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-artifact/stage1-reports/merge.txt
+      - name: Configure official WPE 2.54.1 Wayland build without GStreamer
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
+          grep -Fxq 'WPE_CMAKE_EXIT_CODE=0' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_TARGET_CONFIGURE=CONFIGURED_REQUIRES_ABI_REVIEW' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' wpe-unified-sdk-build/report/status.txt
+      - name: Build linked WPEWebKit with genuine ROCKNIX compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-wpewebkit-rocknix-first.sh
+          grep -Fxq 'WPE_WEBKIT_LINK=PASS_REAL_AARCH64_LIBRARY' \
+            wpe-unified-sdk-build/report/wpewebkit-link-result.txt
+          grep -Fxq 'WPE_LIBRARY_ELF_AUDIT=PASS_STATIC_AARCH64' \
+            wpe-unified-sdk-build/report/wpewebkit-elf-audit.txt
+      - name: Upload logs and link diagnostics (NOT INSTALLABLE)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-WPE2541-LINK-DIAGNOSTIC-NOT-INSTALLABLE
+          path: |
+            wpe-unified-sdk-build/report/
+            wpe-unified-sdk-build/configure/CMakeCache.txt
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload verified linked library ONLY (NOT INSTALLABLE)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE2541-AARCH64-LIBRARY-ONLY-NOT-INSTALLABLE
+          path: wpe-unified-sdk-build/linked-elf/
+          retention-days: 14
+          if-no-files-found: error
