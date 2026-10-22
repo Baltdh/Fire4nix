@@ -52,7 +52,7 @@ TARGET_EXECUTED=no
 R36H_INSTALLABLE=no
 EOF
 export PKG_CONFIG_PATH=''
-export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_LIBDIR="$stage/usr/lib/pkgconfig:$stage/usr/share/pkgconfig:$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
 export PKG_CONFIG_SYSROOT_DIR="$stage"
 for pc in libnghttp2 libpsl libsoup-3.0 libgcrypt gpg-error harfbuzz harfbuzz-icu icu-uc icu-i18n epoxy egl glesv2 cairo fontconfig freetype2 glib-2.0 gio-2.0 gobject-2.0 libjpeg libpng16 sqlite3; do
   pkg-config --modversion "$pc" | awk -v name="$pc" '{print "TARGET_PC_" name "=" $0}'
@@ -100,9 +100,21 @@ tar -xJf "$archive" -C "$work/source" --strip-components=1
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
-# Host wayland-protocols XML files are generator inputs; target Wayland
-# libraries/headers stay in the pinned ROCKNIX sysroot.
-host_protocols=/usr/share/wayland-protocols
+# Wayland protocol XML is architecture-independent input for the HOST scanner,
+# but must come from the pinned ROCKNIX 1.44 SDK rather than Ubuntu packages.
+# The SDK was audited in stage 1; never silently fall back to /usr/share.
+host_protocols="$stage/usr/share/wayland-protocols"
+protocol_pc="$stage/usr/share/pkgconfig/wayland-protocols.pc"
+test -s "$protocol_pc" || {
+ echo 'ERROR: missing pinned ROCKNIX wayland-protocols.pc' >&2; exit 26;
+}
+test "$(pkg-config --modversion wayland-protocols)" = '1.44' || {
+ echo 'ERROR: expected ROCKNIX Wayland Protocols 1.44, not host package' >&2; exit 26;
+}
+grep -Fq 'Version: 1.44' "$protocol_pc" || {
+ echo 'ERROR: protocol metadata does not match ROCKNIX 1.44' >&2; exit 26;
+}
+echo 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' >> "$work/report/status.txt"
 host_scanner=$(command -v wayland-scanner) || {
  echo 'ERROR: host wayland-scanner missing' >&2; exit 26;
 }
