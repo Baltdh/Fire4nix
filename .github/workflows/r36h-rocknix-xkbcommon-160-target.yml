@@ -1,0 +1,92 @@
+name: Fire4Nix genuine ROCKNIX libxkbcommon 1.6.0 Wayland WPE blocker
+
+on:
+  push:
+    branches: ['feat/r36h-xkbcommon-160-wpe-wayland-20261021']
+    paths:
+      - 'scripts/build-rocknix-xkbcommon-160-wayland-wpe.sh'
+      - '.github/workflows/r36h-rocknix-xkbcommon-160-target.yml'
+      - 'scripts/assemble-rocknix-fontconfig-stages.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  xkb-real-aarch64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Host code generators and ELF tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc g++ python3 python3-pip python3-packaging python3-setuptools \
+            ninja-build pkg-config bison flex cmake python3-pyelftools
+          python3 -m pip install --user 'meson==1.8.3'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          bash -n fire4nix/scripts/build-rocknix-xkbcommon-160-wayland-wpe.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39693569119
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-Wayland-1.23.1-NATIVE-SCANNER-AARCH64-TARGET-ONLY
+          path: wayland-artifact
+      - name: Restore unchanged genuine GCC and glibc 2.41 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar -tJf "$archive" > "$RUNNER_TEMP/sdk-wayland-xkb-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/sdk-wayland-xkb-members.txt"; then
+            echo 'ERROR: unsafe SDK checkpoint path' >&2; exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          echo 'XKBCOMMON_REAL_SDK=PASS_GLIBC_2_41' >> "$GITHUB_STEP_SUMMARY"
+      - name: Compile libxkbcommon and registry for ARM64, prove real Wayland linkage
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/build-rocknix-xkbcommon-160-wayland-wpe.sh 2>&1 | tee xkb-console.txt
+          grep -Fxq 'XKBCOMMON_BUILD=PASS_REAL_ROCKNIX_AARCH64' xkbcommon-target/reports/acceptance.txt
+          grep -Fxq 'XKB_WAYLAND_CONSUMER=PASS_REAL_AARCH64_FOUR_SONAMES' xkbcommon-target/reports/acceptance.txt
+      - name: Save build stage and ABI audit — not installable browser
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-XkbCommon-1.6.0-Wayland-WPE-TEST-ONLY
+          path: |
+            xkbcommon-target/reports/
+            xkbcommon-target/stage/usr/lib/
+            xkbcommon-target/stage/usr/include/
+            xkb-console.txt
+          retention-days: 14
+          if-no-files-found: warn
