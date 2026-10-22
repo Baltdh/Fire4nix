@@ -114,9 +114,25 @@ fi
 LIB="$ROOT/runtime/lib/libWPEWebKit-2.0.so.1"
 CHILD="$ROOT/runtime/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing local WPE WebKit runtime"
-for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+# Staging writes a one-line GPU profile. The old package format has no
+# marker, and therefore still requires a GPU process (fail-closed).
+GPU_PROFILE=required
+if [ -e "$ROOT/runtime/GPU-PROFILE.txt" ]; then
+    [ -f "$ROOT/runtime/GPU-PROFILE.txt" ] && [ ! -L "$ROOT/runtime/GPU-PROFILE.txt" ] ||
+        fail 127 "Unsafe runtime GPU profile"
+    case "$(cat "$ROOT/runtime/GPU-PROFILE.txt")" in
+        GPU_PROCESS=required) GPU_PROFILE=required ;;
+        GPU_PROCESS=disabled) GPU_PROFILE=disabled ;;
+        *) fail 127 "Invalid runtime GPU profile" ;;
+    esac
+fi
+for child in WPEWebProcess WPENetworkProcess; do
     [ -s "$CHILD/$child" ] || fail 127 "Missing WebKit subprocess: $child"
 done
+if [ "$GPU_PROFILE" = required ]; then
+    [ -s "$CHILD/WPEGPUProcess" ] || fail 127 "Missing WebKit subprocess: WPEGPUProcess"
+fi
+printf 'gpu_process_profile=%s\n' "$GPU_PROFILE" >> "$LOG"
 # A previous PortMaster/SD launch can leave incompatible system libraries on
 # LD_LIBRARY_PATH. Default to the selected Fire4Nix runtime only. Keep the
 # previous behavior behind an explicit opt-in for controlled comparisons.
