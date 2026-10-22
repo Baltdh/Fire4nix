@@ -136,6 +136,7 @@ cmake -S "$work/source" -B "$work/configure" -G Ninja \
  -DPORT=WPE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  -DENABLE_WPE_PLATFORM=ON -DENABLE_WPE_PLATFORM_WAYLAND=ON \
  -DENABLE_WPE_PLATFORM_HEADLESS=ON -DENABLE_WPE_PLATFORM_DRM=OFF \
+ -DUSE_LIBDRM=OFF -DUSE_GBM=OFF -DENABLE_GPU_PROCESS=OFF \
  -DENABLE_WPE_LEGACY_API=OFF -DENABLE_INTROSPECTION=OFF \
  -DENABLE_DOCUMENTATION=OFF -DENABLE_SPELLCHECK=OFF \
  -DENABLE_GAMEPAD=OFF -DENABLE_BUBBLEWRAP_SANDBOX=OFF \
@@ -153,6 +154,21 @@ cmake -S "$work/source" -B "$work/configure" -G Ninja \
 rc=$?
 set -e
 echo "WPE_CMAKE_EXIT_CODE=$rc" >> "$work/report/status.txt"
+# Document an opt-in REDUCED profile: this is not a replacement for the
+# DRM/GBM-enabled ROCKNIX graphical build. It only isolates the requirements
+# for the WPEPlatform Wayland client in a first-HTML configuration.
+cache="$work/configure/CMakeCache.txt"
+for option in USE_LIBDRM USE_GBM ENABLE_GPU_PROCESS ENABLE_WPE_PLATFORM_DRM;do
+  grep -Eq "^$option:BOOL=OFF$" "$cache" || {
+    echo "ERROR: CMake did not retain $option=OFF; reduced-profile probe invalid" >&2
+    exit 24
+  }
+done
+if grep -q 'libdrm is required for USE_LIBDRM' "$work/report/cmake.log";then
+  echo 'ERROR: CMake still entered DRM-enabled path with explicit OFF profile' >&2
+  exit 24
+fi
+echo 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' | tee -a "$work/report/status.txt"
 if [ "$rc" -eq 0 ]; then
   # Only label *configure* complete after confirming our media-free cache.
   FIRE4NIX_WPE_BUILD_DIR="$work/configure" FIRE4NIX_MEDIA_PROFILE=minimal \
@@ -227,5 +243,5 @@ if ! pkg-config --exists 'libxslt >= 1.1.13';then
   exit 23
 fi
 echo 'NO_FIRMWARE_WRITES=YES' >> "$work/report/status.txt"
-echo 'WPE_CONFIGURE_PROBE=RECORDED_LIBXSLT_WEBP_XKB_WAYLAND_SOUP3_GCRYPT_GPGERROR_HARFBUZZ_ICU_EPOXY_EGL_TARGET_SDK' >> "$work/report/status.txt"
+echo 'WPE_CONFIGURE_PROBE=RECORDED_NO_DRM_GBM_LIBXSLT_WEBP_XKB_WAYLAND_SOUP3_GCRYPT_GPGERROR_HARFBUZZ_ICU_EPOXY_EGL_TARGET_SDK' >> "$work/report/status.txt"
 cat "$work/report/status.txt"
