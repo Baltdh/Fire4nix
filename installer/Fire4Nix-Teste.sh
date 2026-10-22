@@ -74,7 +74,7 @@ exit_diagnostic=NA
     exit_diagnostic=$?
     echo "diagnostic_exit=$exit_diagnostic"
     if [ -f "$DIAG" ]; then
-      grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_version=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$DIAG" || true
+      grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_version=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$DIAG" || true
     fi
   else
     echo 'diagnostic_exit=127'
