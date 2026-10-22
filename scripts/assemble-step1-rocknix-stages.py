@@ -68,8 +68,8 @@ def readelf(path: Path) -> str:
     return out.stdout
 
 def main() -> None:
-    check(len(sys.argv)==13,
-          "usage: assemble-step1-rocknix-stages.py DEST EIGHT_JPEG FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY GCRYPT WAYLAND WEBP SOUP_PREREQS")
+    check(len(sys.argv)==16,
+          "usage: assemble-step1-rocknix-stages.py DEST EIGHT_JPEG FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY GCRYPT WAYLAND WEBP SOUP_PREREQS XKB SOUP3 LIBXSLT")
     dest,*sources=map(Path,sys.argv[1:])
     check(not dest.exists() and not dest.is_symlink(), f"output exists: {dest}")
     dest.mkdir(parents=True)
@@ -121,13 +121,18 @@ def main() -> None:
       'libwebpmux.so.3': 'WebP mux',
       'libnghttp2.so.14': 'nghttp2',
       'libpsl.so.5': 'libpsl',
+      'libxkbcommon.so.0': 'libxkbcommon 1.6.0',
+      'libxkbregistry.so.0': 'libxkbregistry 1.6.0',
+      'libsoup-3.0.so.0': 'libsoup3 3.6.5',
+      'libxslt.so.1': 'libxslt 1.1.43',
     }
     for filename,name in required_additional.items():
         candidate=dest/'usr/lib'/filename
         check(candidate.is_file(),f"missing target {name}: {candidate}")
         readelf(candidate)
     for pc in ('wayland-client','wayland-server','wayland-cursor',
-               'libwebp','libwebpdemux','libwebpmux','libnghttp2','libpsl'):
+               'libwebp','libwebpdemux','libwebpmux','libnghttp2','libpsl',
+               'xkbcommon','xkbregistry','libsoup-3.0','libxslt'):
         check((dest/'usr/lib/pkgconfig'/f'{pc}.pc').is_file(),
               f"missing target metadata {pc}.pc")
     check((dest/'usr/include/wayland-client.h').is_file(),
