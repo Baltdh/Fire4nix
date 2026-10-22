@@ -32,6 +32,27 @@ case "$GPU_PROFILE" in
   required|disabled) ;;
   *) echo 'ERROR: FIRE4NIX_WPE_GPU_PROCESS must be required or disabled' >&2; exit 2 ;;
 esac
+# The explicit GPU-off profile is permitted only when a real saved CMakeCache
+# shows that the same reduced Wayland build disabled GPUProcess. A user-set
+# environment variable alone must never authorize omitting a helper binary.
+if [ "$GPU_PROFILE" = disabled ]; then
+  CACHE=${FIRE4NIX_WPE_CMAKE_CACHE:-}
+  [ -n "$CACHE" ] && [ -f "$CACHE" ] && [ ! -L "$CACHE" ] && [ -s "$CACHE" ] || {
+    echo 'ERROR: GPU-disabled runtime requires an explicit WPE CMakeCache' >&2
+    exit 3
+  }
+  for requirement in \
+    'ENABLE_GPU_PROCESS:BOOL=OFF' \
+    'ENABLE_WPE_PLATFORM_WAYLAND:BOOL=ON' \
+    'USE_GSTREAMER:BOOL=OFF' \
+    'USE_GBM:BOOL=OFF' \
+    'USE_LIBDRM:BOOL=OFF'; do
+    grep -Fxq "$requirement" "$CACHE" || {
+      echo "ERROR: GPU-disabled runtime lacks CMake proof: $requirement" >&2
+      exit 3
+    }
+  done
+fi
 case "$TARGET_GLIBC_MAX" in 2.41|2.44) ;; *) echo 'ERROR: unsupported target glibc; audit the actual rootfs first' >&2; exit 2 ;; esac
 # Prevent accidental copying of the build host's /usr into a browser package.
 case "$INPUT" in
