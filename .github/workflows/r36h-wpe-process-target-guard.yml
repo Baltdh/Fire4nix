@@ -1,0 +1,34 @@
+name: Fire4Nix WPE two-process target and profile safety
+
+on:
+  push:
+    branches: ['build/r36h-wpe-subprocesses-after-link-20261022']
+    paths:
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'native/tests/test_wpe_subprocess_target_guard.sh'
+      - '.github/workflows/r36h-wpe-process-target-guard.yml'
+  pull_request:
+    paths:
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'native/tests/test_wpe_subprocess_target_guard.sh'
+      - '.github/workflows/r36h-wpe-process-target-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-wpe-process-guard:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate syntax and host build-tool availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ninja
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          bash -n native/tests/test_wpe_subprocess_target_guard.sh
+      - name: Reject missing WebKit processes and unverified GPU-on/media profiles
+        run: bash native/tests/test_wpe_subprocess_target_guard.sh
