@@ -1,8 +1,8 @@
-name: Fire4Nix real WPE 2.54.1 configure after LibXslt 1.1.43
+name: Fire4Nix WPE 2.54.1 reduced Wayland configure without DRM or GBM
 
 on:
   push:
-    branches: ['test/r36h-wpe2541-after-libxslt-20261021']
+    branches: ['test/r36h-wpe2541-minimal-wayland-no-drm-20261021']
     paths:
       - '.github/workflows/r36h-wpe2541-post-harfbuzz-configure.yml'
       - 'scripts/probe-wpe-post-harfbuzz-target-configure.sh'
@@ -194,10 +194,11 @@ jobs:
           grep -Fxq 'XKBCOMMON_FIRST_BLOCKER_CLEARED=YES' "$report"
           grep -Fxq 'WEBP_FIRST_BLOCKER_CLEARED=YES' "$report"
           grep -Fxq 'LIBXSLT_FIRST_BLOCKER_CLEARED=YES' "$report"
+          grep -Fxq 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' "$report"
           grep -Fxq 'WPE_WEBKIT_BUILT=no' "$report"
           grep -Fxq 'TARGET_EXECUTED=no' "$report"
           {
-            echo '## Genuine ROCKNIX WPE CMake after LibXslt 1.1.43'
+            echo '## Genuine ROCKNIX WPE CMake with minimal Wayland and DRM/GBM explicitly off'
             cat "$report"
             echo ''
             echo 'Successful diagnostic does NOT mean a complete WPE compile.'
@@ -210,7 +211,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-WPE2541-ROCKNIX-AFTER-LIBXSLT-CMAKE-DIAGNOSTIC
+          name: Fire4Nix-WPE2541-ROCKNIX-REDUCED-WAYLAND-NO-DRM-CMAKE-DIAGNOSTIC
           path: |
             wpe-post-harfbuzz-probe/report/
             wpe-post-harfbuzz-probe/configure/CMakeCache.txt
