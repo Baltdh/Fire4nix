@@ -57,6 +57,18 @@ caminhos removidos e os metadados ABI essenciais revalidados.
   filesystem do dispositivo. O resultado completo precisa incluir
   um snapshot autorizado de bibliotecas da mesma versão do ROCKNIX.
 
+## Localização comprovada da biblioteca de suporte GCC
+
+A [execução #39714391170](https://github.com/Baltdh/Fire4nix/actions/runs/39714391170)
+localizou `libgcc_s.so.1` no **toolchain genuíno ROCKNIX**,
+em `toolchain/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1`,
+fora da parte `sysroot/usr/lib` consultada inicialmente.
+`readelf` confirmou `Class: ELF64`, little-endian,
+`Machine: AArch64` e `SONAME: libgcc_s.so.1`.
+Ainda é necessário auditar requisitos de GLIBC/DT_NEEDED antes de
+incluir uma cópia no estágio privado. Não inferir automaticamente
+que o mesmo arquivo deva substituir a biblioteca do firmware.
+
 ## Próximas ações
 
 1. Inspecionar se `libgcc_s.so.1` está no toolchain ROCKNIX,
