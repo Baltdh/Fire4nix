@@ -1,0 +1,120 @@
+name: Fire4Nix ROCKNIX stage-1 static ELF dependency closure
+
+on:
+  push:
+    branches: ['audit/r36h-stage1-elf-needed-rocknix-20261021']
+    paths:
+      - 'scripts/audit-rocknix-sdk-elf-closure.py'
+      - 'native/tests/test_stage1_elf_needed_closure.py'
+      - '.github/workflows/r36h-stage1-needed-closure.yml'
+  pull_request:
+    paths:
+      - 'scripts/audit-rocknix-sdk-elf-closure.py'
+      - 'native/tests/test_stage1_elf_needed_closure.py'
+      - '.github/workflows/r36h-stage1-needed-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sdk-closure-diagnostic:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate static scanner and regression fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/audit-rocknix-sdk-elf-closure.py
+          python3 native/tests/test_stage1_elf_needed_closure.py
+          command -v readelf
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore pinned target sysroot in isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar -tJf "$archive" > "$RUNNER_TEMP/sdk-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/sdk-members.txt"; then
+            echo 'Unsafe SDK member path'; exit 4
+          fi
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+      - name: Audit real ARM64 dependency edges without running a target ELF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p elf-closure-report
+          python3 scripts/audit-rocknix-sdk-elf-closure.py \
+            --stage "$GITHUB_WORKSPACE/stage1-artifact/stage1-combined" \
+            --sysroot "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain/aarch64-rocknix-linux-gnu/sysroot" \
+            --report elf-closure-report/needed.txt | tee elf-closure-report/console.txt
+          # ZIP artifact materialization can copy SONAME symlinks as regular
+          # files; the audit counts actual ELF objects, not source CI's count.
+          count=$(sed -n 's/^STAGE_SHARED_ELFS=//p' elf-closure-report/needed.txt)
+          test "$count" -ge 150
+          test "$count" -le 300
+          grep -Fq 'MISSING_SONAME_UNIQUE=' elf-closure-report/needed.txt
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          find "$sdk" -name 'libgcc_s.so.1' -print > elf-closure-report/target-libgcc-candidates.txt
+          echo 'TARGET_LIBGCC_CANDIDATES_BEGIN'
+          cat elf-closure-report/target-libgcc-candidates.txt
+          echo 'TARGET_LIBGCC_CANDIDATES_END'
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            echo "TARGET_LIBGCC_SOURCE=$candidate"
+            readelf -h "$candidate" | grep -E 'Class:|Data:|Machine:'
+            readelf -d "$candidate" | grep -E 'SONAME|NEEDED' || true
+          done < elf-closure-report/target-libgcc-candidates.txt
+          {
+            echo ''
+            echo '## libgcc_s.so.1 candidates in the pinned ROCKNIX SDK'
+            cat elf-closure-report/target-libgcc-candidates.txt
+            echo 'Paths are diagnostic only; no host libraries are installed or copied.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -Eq '^ELF_CLOSURE_AUDIT=(INCOMPLETE_REQUIRES_REVIEW|SONAME_CANDIDATES_FOUND_ABI_NOT_PROVEN)$' elf-closure-report/needed.txt
+          {
+            echo '## ELF DT_NEEDED discovery — genuine ROCKNIX sysroot, no target execution'
+            grep -E '^(STAGE_SHARED_ELFS|RESOLVED_EDGES|MISSING_EDGES|INVALID_ELFS|NEWER_GLIBC_REFERENCES|UNSAFE_PATHS|ELF_CLOSURE_AUDIT|VALIDATION_LIMIT)=' elf-closure-report/needed.txt
+            echo ''
+            echo 'This is SDK-only SONAME discovery, NOT proof of R36H runtime or WebKit compilation.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save full static closure report, including incomplete findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-stage1-ELF-needed-closure-diagnostic
+          path: elf-closure-report/
+          retention-days: 14
+          if-no-files-found: warn
