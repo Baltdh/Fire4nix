@@ -1,6 +1,13 @@
 name: Fire4Nix verify genuine linked WPEWebKit ARM64 artifact
 
 on:
+  push:
+    branches: ['ci/r36h-audit-linked-wpe-build-artifact-20261022']
+    paths:
+      - '.github/workflows/r36h-verify-wpe-linked-artifact.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/r36h-verify-wpe-linked-artifact.yml'
   workflow_run:
     workflows:
       - 'Fire4Nix ROCKNIX WPE 2.54.1 real library link'
@@ -12,6 +19,17 @@ permissions:
   actions: read
 
 jobs:
+  regression-check:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate static WebKit ELF inspection before receiving build artifacts
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/verify-built-wpewebkit.py
+          python3 native/tests/test_wpewebkit_build_elf.py
   audit-actual-wpe-library:
     # workflow_run uses the default-branch workflow; never checkout the
     # triggering source branch or execute downloaded user-controlled content.
