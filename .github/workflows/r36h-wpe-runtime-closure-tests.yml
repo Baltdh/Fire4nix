@@ -4,11 +4,13 @@ on:
     branches: ['audit/r36h-wpe-real-runtime-dependency-closure-20261022']
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
       - '.github/workflows/r36h-wpe-runtime-closure-tests.yml'
   pull_request:
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
       - '.github/workflows/r36h-wpe-runtime-closure-tests.yml'
   workflow_dispatch:
@@ -26,6 +28,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          bash native/tests/test_wpe_subprocess_target_guard.sh
+          grep -Fq 'WPE_PRIVATE_RUNTIME_CLOSURE=PASS_SDK_STATIC_SONAMES_NOT_DEVICE_ABI' scripts/build-wpe2541-subprocesses-rocknix.sh
           python3 -m py_compile scripts/audit-wpe-runtime-closure.py
           python3 -m py_compile native/tests/test_wpe_runtime_elf_closure.py
           python3 native/tests/test_wpe_runtime_elf_closure.py
