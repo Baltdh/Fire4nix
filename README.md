@@ -1,5 +1,12 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+## Estado atual e critérios para terminar (22/10/2026)
+
+O SDK ROCKNIX real e seu overlay de desenvolvimento passaram a auditoria **estática** estrita de 465 referências `DT_NEEDED` na [PR #110](https://github.com/Baltdh/Fire4nix/pull/110), mas isso **não valida um navegador instalável**. Ainda faltam completar WebCore/WebKit WPE 2.54.1, verificar ABI e símbolos do runtime final, integrar o pacote, abrir a interface no R36H físico e comprovar HTTPS/controles. Acompanhar as compilações em [#102](https://github.com/Baltdh/Fire4nix/pull/102), [#106](https://github.com/Baltdh/Fire4nix/pull/106), [#107](https://github.com/Baltdh/Fire4nix/pull/107) e [#108](https://github.com/Baltdh/Fire4nix/pull/108); não presumir resultado de workflow em andamento.
+
+**Critérios detalhados e sequência de entrega:** [docs/R36H_RELEASE_GATES_2026-10-22.md](docs/R36H_RELEASE_GATES_2026-10-22.md). Enquanto G0–G7 não forem aprovados com o mesmo pacote, `R36H_INSTALLABLE=no`.
+
+
 ## Etapa 1 concluída — dependências AArch64 ROCKNIX consolidadas (21/10/2026)
 
 - **15 artefatos** do compilador ROCKNIX RK3326 reunidos em um SDK de desenvolvimento privado, com proteção contra arquivos conflitantes e bibliotecas estrangeiras.
