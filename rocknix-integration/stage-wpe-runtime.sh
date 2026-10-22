@@ -24,6 +24,14 @@ command -v readelf >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1 && co
 # The current physical R36H reports glibc 2.41, so reject newer symbols.
 # Explicit opt-in for other firmware only after independently auditing its rootfs.
 TARGET_GLIBC_MAX=${FIRE4NIX_TARGET_GLIBC_MAX:-2.41}
+# WPE built with ENABLE_GPU_PROCESS=OFF may have no WPEGPUProcess binary.
+# Fail closed unless a reduced runtime is explicitly requested. Never infer
+# GPU mode from a missing file or skip the Web/Network processes.
+GPU_PROFILE=${FIRE4NIX_WPE_GPU_PROCESS:-required}
+case "$GPU_PROFILE" in
+  required|disabled) ;;
+  *) echo 'ERROR: FIRE4NIX_WPE_GPU_PROCESS must be required or disabled' >&2; exit 2 ;;
+esac
 case "$TARGET_GLIBC_MAX" in 2.41|2.44) ;; *) echo 'ERROR: unsupported target glibc; audit the actual rootfs first' >&2; exit 2 ;; esac
 # Prevent accidental copying of the build host's /usr into a browser package.
 case "$INPUT" in
@@ -43,12 +51,23 @@ for p in "$INPUT/usr/libexec/wpe-webkit-2.0" "$INPUT/usr/lib/wpe-webkit-2.0"; do
   if [ -d "$p" ]; then CHILDROOT="$p"; break; fi
 done
 [ -n "$CHILDROOT" ] || { echo 'ERROR: staged WPE subprocess directory missing' >&2; exit 3; }
-for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+for p in WPEWebProcess WPENetworkProcess; do
   [ -s "$CHILDROOT/$p" ] || { echo "ERROR: missing staged $p" >&2; exit 3; }
 done
+if [ "$GPU_PROFILE" = required ]; then
+  [ -s "$CHILDROOT/WPEGPUProcess" ] || { echo 'ERROR: missing staged WPEGPUProcess' >&2; exit 3; }
+fi
 check_arm64() {
-  readelf -h "$1" 2>/dev/null | grep -q 'Machine:.*AArch64' || {
-    echo "ERROR: non-AArch64 or non-ELF file: $(basename "$1")" >&2
+  # Machine alone does not establish the ABI. Reject ELF32, big-endian and
+  # corrupt placeholders before any copy to an installable runtime.
+  header=$(readelf -h "$1" 2>/dev/null) || {
+    echo "ERROR: invalid ELF file: $(basename "$1")" >&2
+    return 1
+  }
+  printf '%s\n' "$header" | grep -Eq 'Class:[[:space:]]*ELF64' &&
+  printf '%s\n' "$header" | grep -Eq 'Data:.*little endian' &&
+  printf '%s\n' "$header" | grep -Eq 'Machine:.*AArch64' || {
+    echo "ERROR: wrong ELF class, endian or AArch64 machine: $(basename "$1")" >&2
     return 1
   }
 }
@@ -67,10 +86,14 @@ check_glibc_max() {
 }
 check_arm64 "$LIBROOT/libWPEWebKit-2.0.so.1" || exit 4
 check_glibc_max "$LIBROOT/libWPEWebKit-2.0.so.1" || exit 4
-for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+for p in WPEWebProcess WPENetworkProcess; do
   check_arm64 "$CHILDROOT/$p" || exit 4
   check_glibc_max "$CHILDROOT/$p" || exit 4
 done
+if [ "$GPU_PROFILE" = required ]; then
+  check_arm64 "$CHILDROOT/WPEGPUProcess" || exit 4
+  check_glibc_max "$CHILDROOT/WPEGPUProcess" || exit 4
+fi
 if ! readelf --dyn-syms -W "$LIBROOT/libWPEWebKit-2.0.so.1" | grep -q 'webkit_web_view_get_wpe_view'; then
   echo 'ERROR: library has no WPEPlatform webkit_web_view_get_wpe_view symbol' >&2
   exit 5
@@ -90,9 +113,13 @@ for lib in "$LIBROOT/"*.so "$LIBROOT/"*.so.*; do
   fi
   cp -a "$lib" "$TEMP/lib/"
 done
-for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+for p in WPEWebProcess WPENetworkProcess; do
   cp -a "$CHILDROOT/$p" "$TEMP/libexec/wpe-webkit-2.0/$p"
 done
+if [ "$GPU_PROFILE" = required ]; then
+  cp -a "$CHILDROOT/WPEGPUProcess" "$TEMP/libexec/wpe-webkit-2.0/WPEGPUProcess"
+fi
+printf 'GPU_PROCESS=%s\n' "$GPU_PROFILE" > "$TEMP/GPU-PROFILE.txt"
 # Reject broken GStreamer ELF before committing a runtime. The R36H rescue
 # package showed GST_CAT_DEFAULT as undefined in six gst* libraries, and
 # the target system's libgstreamer does not export it. This is a static guard;
@@ -130,16 +157,20 @@ done
   cd "$TEMP"
   for p in lib/libWPEWebKit-2.0.so.1 \
    libexec/wpe-webkit-2.0/WPEWebProcess \
-   libexec/wpe-webkit-2.0/WPENetworkProcess \
-   libexec/wpe-webkit-2.0/WPEGPUProcess; do
+   libexec/wpe-webkit-2.0/WPENetworkProcess; do
     sha256sum "$p"
   done > SHA256SUMS.txt
+  if [ "$GPU_PROFILE" = required ]; then
+    sha256sum libexec/wpe-webkit-2.0/WPEGPUProcess >> SHA256SUMS.txt
+  fi
+  sha256sum GPU-PROFILE.txt >> SHA256SUMS.txt
 )
 # Document unresolved target link dependencies without falsely asserting that
 # they are available; final validation requires the actual ROCKNIX rootfs.
 {
   echo 'Fire4Nix WPE runtime staged from ROCKNIX SDK DESTDIR.'
-  echo 'AArch64 ELF and WPEPlatform exported symbol checked.'
+  echo 'AArch64 ELF64 little-endian and WPEPlatform exported symbol checked.'
+  echo "GPU_PROCESS=$GPU_PROFILE"
   echo "Max allowed direct GLIBC requirement: GLIBC_$TARGET_GLIBC_MAX"
   echo 'Dynamic dependencies must still be validated against the exact target rootfs.'
   echo 'Graphical startup and Mali/Wayland have NOT been tested here.'
