@@ -88,6 +88,15 @@ jobs:
           grep -Fq 'MISSING_SONAME_UNIQUE=' elf-closure-report/needed.txt
           sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
           find "$sdk" -name 'libgcc_s.so.1' -print > elf-closure-report/target-libgcc-candidates.txt
+          echo 'TARGET_LIBGCC_CANDIDATES_BEGIN'
+          cat elf-closure-report/target-libgcc-candidates.txt
+          echo 'TARGET_LIBGCC_CANDIDATES_END'
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            echo "TARGET_LIBGCC_SOURCE=$candidate"
+            readelf -h "$candidate" | grep -E 'Class:|Data:|Machine:'
+            readelf -d "$candidate" | grep -E 'SONAME|NEEDED' || true
+          done < elf-closure-report/target-libgcc-candidates.txt
           {
             echo ''
             echo '## libgcc_s.so.1 candidates in the pinned ROCKNIX SDK'
