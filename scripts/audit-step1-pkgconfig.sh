@@ -7,7 +7,7 @@ case "$mode" in --inspect|--pc-ready) ;; --help)
   echo 'FIRE4NIX_STAGE1_ROOT=/absolute/sysroot sh audit-wpe-sysroot-pkgconfig.sh --inspect|--pc-ready'; exit 0;;
   *) echo 'ERROR: use --inspect or --pc-ready' >&2; exit 2;;
 esac
-root=${FIRE4NIX_ROCKNIX_SYSROOT:-}
+root=${FIRE4NIX_STAGE1_ROOT:-}
 case "$root" in /*) ;; *) echo 'ERROR: absolute target sysroot required' >&2; exit 4;; esac
 [ -d "$root" ] || { echo 'ERROR: sysroot directory missing' >&2; exit 4; }
 root=$(CDPATH= cd "$root" && pwd -P)
