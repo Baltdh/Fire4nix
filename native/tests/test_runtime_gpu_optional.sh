@@ -33,12 +33,40 @@ export PATH="$T/fakebin:$PATH"
 export FIRE4NIX_WPE_DESTDIR="$T/staged"
 export FIRE4NIX_REQUIRE_MEDIA_FREE=1
 export FIRE4NIX_WPE_GPU_PROCESS=disabled
+# The new packaging profile must come from a verified configure cache, not
+# only from an environment variable or the absence of WPEGPUProcess.
+cat > "$T/CMakeCache.txt" <<'CMAKE'
+ENABLE_GPU_PROCESS:BOOL=OFF
+ENABLE_WPE_PLATFORM_WAYLAND:BOOL=ON
+USE_GSTREAMER:BOOL=OFF
+USE_GBM:BOOL=OFF
+USE_LIBDRM:BOOL=OFF
+CMAKE
+export FIRE4NIX_WPE_CMAKE_CACHE="$T/CMakeCache.txt"
 FIRE4NIX_WPE_RUNTIME_OUT="$T/no-gpu" sh "$STAGER" --stage > "$T/no-gpu.log"
 grep -Fxq 'GPU_PROCESS=disabled' "$T/no-gpu/GPU-PROFILE.txt"
 test ! -e "$T/no-gpu/libexec/wpe-webkit-2.0/WPEGPUProcess"
 (cd "$T/no-gpu" && sha256sum -c SHA256SUMS.txt >/dev/null)
 grep -Fxq 'PROFILE=MEDIA_FREE VERIFIED' "$T/no-gpu/MEDIA-PROFILE.txt"
 
+# Reject a missing or invalid CMake cache even if disabled was requested.
+set +e
+FIRE4NIX_WPE_CMAKE_CACHE="$T/not-a-cache" FIRE4NIX_WPE_RUNTIME_OUT="$T/no-cache" \
+  sh "$STAGER" --stage > "$T/no-cache.log" 2>&1
+cache_rc=$?
+set -e
+test "$cache_rc" -eq 3
+test ! -e "$T/no-cache"
+grep -Fq 'requires an explicit WPE CMakeCache' "$T/no-cache.log"
+sed -i 's/ENABLE_GPU_PROCESS:BOOL=OFF/ENABLE_GPU_PROCESS:BOOL=ON/' "$T/CMakeCache.txt"
+set +e
+FIRE4NIX_WPE_RUNTIME_OUT="$T/gpu-on-cache" sh "$STAGER" --stage > "$T/gpu-on-cache.log" 2>&1
+cache_rc=$?
+set -e
+test "$cache_rc" -eq 3
+test ! -e "$T/gpu-on-cache"
+grep -Fq 'lacks CMake proof' "$T/gpu-on-cache.log"
+sed -i 's/ENABLE_GPU_PROCESS:BOOL=ON/ENABLE_GPU_PROCESS:BOOL=OFF/' "$T/CMakeCache.txt"
 # Old/default mode must not silently accept a missing GPU helper.
 set +e
 FIRE4NIX_WPE_GPU_PROCESS=required FIRE4NIX_WPE_RUNTIME_OUT="$T/required-missing" \
