@@ -23,16 +23,44 @@ fi
 [ -n "$ROMS" ] || { echo "ROM directory not found. Set FIRE4NIX_ROMS." >&2; exit 2; }
 # An install-once command should not duplicate a 174 MB+ runtime on repeated runs.
 DEST="$ROMS/ports/fire4nix-completo"
+# Conservative shared profile policy: only the staged ROCKNIX Wayland
+# GPU-off report may omit WPEGPUProcess. Invalid/ambiguous reports fail closed.
+runtime_gpu_requirement() {
+    GPU_PROCESS_REQUIRED=1
+    gpu_report="$1/BUILD-REPORT.txt"
+    if [ -e "$gpu_report" ] || [ -L "$gpu_report" ]; then
+        [ -f "$gpu_report" ] && [ ! -L "$gpu_report" ] || return 1
+        gpu_profile=$(sed -n 's/^GPU_PROCESS_PROFILE=//p' "$gpu_report") || return 1
+        case "$gpu_profile" in
+            disabled_verified_wayland) GPU_PROCESS_REQUIRED=0 ;;
+            required_unverified|enabled_verified|'') GPU_PROCESS_REQUIRED=1 ;;
+            *) return 1 ;;
+        esac
+    fi
+    return 0
+}
 # If the upgrade explicitly bundles a new WebKit runtime, do not suppress it
 # merely because the launcher, keyboard and native executable are unchanged.
 bundled_runtime_matches_installed() {
     [ ! -s "$SOURCE/runtime/lib/libWPEWebKit-2.0.so.1" ] && return 0
+    runtime_gpu_requirement "$SOURCE/runtime" || return 1
+    if [ -e "$SOURCE/runtime/BUILD-REPORT.txt" ] ||
+       [ -L "$SOURCE/runtime/BUILD-REPORT.txt" ]; then
+        cmp -s "$SOURCE/runtime/BUILD-REPORT.txt" \
+               "$DEST/runtime/BUILD-REPORT.txt" || return 1
+    elif [ -e "$DEST/runtime/BUILD-REPORT.txt" ] ||
+         [ -L "$DEST/runtime/BUILD-REPORT.txt" ]; then
+        return 1
+    fi
     for file in lib/libWPEWebKit-2.0.so.1 \
                 libexec/wpe-webkit-2.0/WPEWebProcess \
-                libexec/wpe-webkit-2.0/WPENetworkProcess \
-                libexec/wpe-webkit-2.0/WPEGPUProcess; do
+                libexec/wpe-webkit-2.0/WPENetworkProcess; do
         cmp -s "$SOURCE/runtime/$file" "$DEST/runtime/$file" || return 1
     done
+    if [ "$GPU_PROCESS_REQUIRED" -eq 1 ]; then
+        cmp -s "$SOURCE/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess" \
+               "$DEST/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess" || return 1
+    fi
 }
 if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
    [ -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
@@ -64,10 +92,18 @@ for path in "${FIRE4NIX_RUNTIME_SOURCE:-}" \
     /storage/games-external/roms/ports/fire4nix-completo/runtime; do
     [ -n "$path" ] && [ -s "$path/lib/libWPEWebKit-2.0.so.1" ] || continue
     SEEN_WPE=1
+    if ! runtime_gpu_requirement "$path"; then
+        echo "Skipping WebKit runtime with invalid GPU profile: $path"
+        continue
+    fi
     complete=1
-    for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+    for child in WPEWebProcess WPENetworkProcess; do
         [ -s "$path/libexec/wpe-webkit-2.0/$child" ] || complete=0
     done
+    if [ "$GPU_PROCESS_REQUIRED" -eq 1 ] &&
+       [ ! -s "$path/libexec/wpe-webkit-2.0/WPEGPUProcess" ]; then
+        complete=0
+    fi
     if [ "$complete" -ne 1 ]; then
         echo "Skipping incomplete WebKit runtime: $path"
         continue
