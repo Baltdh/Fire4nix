@@ -35,6 +35,9 @@ fi
 {
   echo "Fire4Nix GStreamer static ABI audit v1"
   echo "mode=$MODE"
+  echo "expected_elf_machine=$EXPECTED_MACHINE"
+  echo "expected_elf_class=ELF64"
+  echo "expected_endianness=little"
   echo "libdir=$LIB"
   echo "webkit=$wpe"
   echo "device_arch=$(uname -m 2>/dev/null || echo unknown)"
@@ -58,6 +61,12 @@ fi
     fi
     if ! readelf -h "$f" 2>/dev/null | grep 'Machine:' | grep -Fq "$EXPECTED_MACHINE"; then
       echo "WRONG_ELF_MACHINE=$name"
+      broken=$((broken+1))
+      continue
+    fi
+    if ! readelf -h "$f" 2>/dev/null | grep -q 'Class:.*ELF64' ||
+       ! readelf -h "$f" 2>/dev/null | grep -q 'Data:.*little endian'; then
+      echo "WRONG_ELF_CLASS_OR_ENDIAN=$name"
       broken=$((broken+1))
       continue
     fi
@@ -88,6 +97,12 @@ fi
       broken=$((broken+1))
       continue
     fi
+    if ! readelf -h "$f" 2>/dev/null | grep -q 'Class:.*ELF64' ||
+       ! readelf -h "$f" 2>/dev/null | grep -q 'Data:.*little endian'; then
+      echo "WRONG_ELF_CLASS_OR_ENDIAN=$name"
+      broken=$((broken+1))
+      continue
+    fi
     if readelf -W --dyn-syms "$f" 2>/dev/null | grep -E 'UND[[:space:]]+GST_CAT_DEFAULT(@|[[:space:]]|$)' >/dev/null; then
       echo "UNRESOLVED_GST_CAT_DEFAULT=${f##*/}"
       broken=$((broken+1))
@@ -97,7 +112,7 @@ fi
   echo "gst_libraries_with_findings=$broken"
   if [ "$broken" -gt 0 ]; then
     echo 'status=BLOCK_GST_ABI'
-    echo 'reason=undefined_GST_CAT_DEFAULT_or_invalid_ELF'
+    echo 'reason=undefined_GST_CAT_DEFAULT_or_invalid_or_foreign_ELF'
     echo 'action=rebuild_GStreamer_consistently_or_rebuild_WPE_without_multimedia_dependencies'
   elif [ "$checked" -eq 0 ]; then
     echo 'status=NO_BUNDLED_GSTREAMER_FOUND'
