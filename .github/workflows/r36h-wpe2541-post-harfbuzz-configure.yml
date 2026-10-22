@@ -2,7 +2,7 @@ name: Fire4Nix WPE 2.54.1 reduced Wayland configure without DRM or GBM
 
 on:
   push:
-    branches: ['fix/r36h-wpe-unifdef-host-20261021']
+    branches: ['fix/r36h-wpe-wayland-protocols-host-20261021']
     paths:
       - '.github/workflows/r36h-wpe2541-post-harfbuzz-configure.yml'
       - 'scripts/probe-wpe-post-harfbuzz-target-configure.sh'
@@ -178,7 +178,10 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config python3 perl ruby gperf bison flex unifdef unifdef
+            cmake ninja-build pkg-config python3 perl ruby gperf bison flex unifdef wayland-protocols libwayland-bin unifdef
+          test -s /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml
+          test -s /usr/share/wayland-protocols/unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml
+          command -v wayland-scanner
           command -v unifdef
           test -x /usr/bin/unifdef
           python3 -m py_compile fire4nix/scripts/assemble-wpe-post-harfbuzz-stage.py
