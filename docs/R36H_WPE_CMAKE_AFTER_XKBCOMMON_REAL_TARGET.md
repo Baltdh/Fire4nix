@@ -68,3 +68,31 @@ ou em `/usr/lib`.
 
 **Revisar `WPE_TARGET_CONFIGURE`, `WPE_CMAKE_EXIT_CODE` e a primeira
 mensagem `CMake Error` antes de afirmar que o motor foi compilado.**
+
+## Resultado reproduzido
+
+A [execução 39697964367](https://github.com/Baltdh/Fire4nix/actions/runs/39697964367)
+terminou **SUCCESS** no commit `01fb6cebd43263b245644f01807e0ce81ab3aca8`.
+
+- `WPE_XKBCOMMON_WAYLAND_STAGE=PASS_REAL_ROCKNIX_AARCH64_COLLISION_SAFE`
+- `HARFBUZZ_ICU_FIRST_BLOCKER_CLEARED=YES`
+- `LIBGCRYPT_FIRST_BLOCKER_CLEARED=YES`
+- `SOUP3_FIRST_BLOCKER_CLEARED=YES`
+- `XKBCOMMON_FIRST_BLOCKER_CLEARED=YES`
+- **`WPE_CMAKE_EXIT_CODE=1`: configuração geral ainda bloqueada.**
+
+Primeiro erro seguinte:
+
+```
+Could NOT find WebP (missing: WebP_INCLUDE_DIR WebP_LIBRARY
+_WebP_REQUIRED_LIBS_FOUND)
+Source/cmake/FindWebP.cmake:158
+Source/cmake/OptionsWPE.cmake:25
+```
+
+A biblioteca libwebp 1.6.0 já foi compilada e auditada para
+AArch64 na [PR #69](https://github.com/Baltdh/Fire4nix/pull/69),
+[Actions 39683707451](https://github.com/Baltdh/Fire4nix/actions/runs/39683707451).
+O próximo teste deve incorporar o estágio já verificado ao CMake,
+incluindo **WebP, demux e mux**; não reconstruir com binários Ubuntu
+nem presumir que o WebKit inteiro está pronto.
