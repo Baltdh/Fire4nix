@@ -125,9 +125,38 @@ trap 'rm -f "$TMP"' 0
     echo 'WPE_library=missing'
     echo 'WPE_runtime_source=not_found_on_checked_SD_paths'
   fi
+  # Report whether GPUProcess is REQUIRED, not simply whether it exists.
+  # The launcher and installer accept GPU-off only with a verified local
+  # ROCKNIX Wayland profile; unknown/ambiguous reports never waive a process.
+  gpu_required=1
+  gpu_profile_state=legacy_requires_gpu
+  if [ -z "$RUNTIME" ]; then
+    gpu_profile_state=no_runtime
+  else
+    gpu_report="$RUNTIME/BUILD-REPORT.txt"
+    if [ -e "$gpu_report" ] || [ -L "$gpu_report" ]; then
+      if [ ! -f "$gpu_report" ] || [ -L "$gpu_report" ]; then
+        gpu_profile_state=invalid_report_requires_gpu
+      else
+        gpu_evidence=$(sed -n 's/^GPU_PROCESS_PROFILE=//p' "$gpu_report") || gpu_evidence=invalid
+        case "$gpu_evidence" in
+          disabled_verified_wayland)
+            gpu_required=0
+            gpu_profile_state=disabled_verified_wayland ;;
+          required_unverified|enabled_verified|'')
+            gpu_profile_state=requires_gpu ;;
+          *) gpu_profile_state=invalid_report_requires_gpu ;;
+        esac
+      fi
+    fi
+  fi
+  printf 'gpu_runtime_profile=%s\n' "$gpu_profile_state"
+  printf 'gpu_process_required=%s\n' "$gpu_required"
   for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
     if [ -n "$RUNTIME" ] && [ -s "$RUNTIME/libexec/wpe-webkit-2.0/$process" ]; then
       printf '%s=present\n' "$process"
+    elif [ "$process" = WPEGPUProcess ] && [ "$gpu_required" -eq 0 ]; then
+      echo 'WPEGPUProcess=not_required_verified_wayland'
     else
       printf '%s=missing\n' "$process"
     fi
@@ -262,7 +291,7 @@ trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
   echo '=== FIRE4NIX 1.03 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi
