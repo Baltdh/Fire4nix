@@ -1,0 +1,128 @@
+name: Fire4Nix ROCKNIX private ELF closure with vetted GCC support
+
+on:
+  push:
+    branches: ['fix/r36h-private-closure-libgcc-20261021']
+    paths:
+      - 'scripts/prepare-rocknix-private-closure-sdk.py'
+      - '.github/workflows/r36h-private-elf-closure.yml'
+  pull_request:
+    paths:
+      - 'scripts/prepare-rocknix-private-closure-sdk.py'
+      - '.github/workflows/r36h-private-elf-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  private-closure:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Validate static-only tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/prepare-rocknix-private-closure-sdk.py
+          python3 -m py_compile scripts/audit-rocknix-sdk-elf-closure.py
+          command -v readelf
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: original-stage
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39714252160
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-RPATH-CLEAN-OVERLAY-NOT-INSTALLABLE
+          path: fixed-elf-overlay
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore genuine immutable ROCKNIX RK3326 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar -tJf "$archive" > "$RUNNER_TEMP/sdk-closure-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/sdk-closure-members.txt"; then
+            echo 'ERROR: SDK archive contains path traversal'; exit 4
+          fi
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          test -s "$sdk/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1"
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' original-stage/stage1-reports/pkgconfig-readiness.txt
+      - name: Create isolated RPATH-clean SDK stage and add target GCC support
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p closure-report
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          python3 scripts/prepare-rocknix-private-closure-sdk.py \
+            --stage "$GITHUB_WORKSPACE/original-stage/stage1-combined" \
+            --overlay "$GITHUB_WORKSPACE/fixed-elf-overlay/isolated-elf-overlay" \
+            --support "$sdk/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1" \
+            --out "$GITHUB_WORKSPACE/private-closure-stage" \
+            | tee closure-report/assembly.txt
+          grep -Fxq 'ROCKNIX_TARGET_LIBGCC=PASS_ELF64_AARCH64_GLIBC_MAX_2_41' closure-report/assembly.txt
+      - name: Demand strict DT_NEEDED closure of all staged ARM64 objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          sysroot="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain/aarch64-rocknix-linux-gnu/sysroot"
+          python3 scripts/audit-rocknix-sdk-elf-closure.py \
+            --stage "$GITHUB_WORKSPACE/private-closure-stage" \
+            --sysroot "$sysroot" \
+            --strict --report closure-report/strict-needed.txt \
+            | tee closure-report/console.txt
+          grep -Fxq 'MISSING_EDGES=0' closure-report/strict-needed.txt
+          grep -Fxq 'NEWER_GLIBC_REFERENCES=0' closure-report/strict-needed.txt
+          grep -Fxq 'UNSAFE_PATHS=0' closure-report/strict-needed.txt
+          grep -Fxq 'ELF_CLOSURE_AUDIT=SONAME_CANDIDATES_FOUND_ABI_NOT_PROVEN' closure-report/strict-needed.txt
+          {
+            echo '## Private SDK ELF closure (NOT firmware or browser runtime)'
+            cat closure-report/assembly.txt
+            grep -E '^(STAGE_SHARED_ELFS|RESOLVED_EDGES|MISSING_EDGES|UNSAFE_PATHS|ELF_CLOSURE_AUDIT|VALIDATION_LIMIT)=' closure-report/strict-needed.txt
+            echo 'SONAME availability only; dynamic symbol compatibility and physical R36H execution are not proven.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve reports and vetted seven-file development overlay only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-7-ELF-CLOSURE-OVERLAY-NOT-INSTALLABLE
+          path: |
+            closure-report/
+            private-closure-stage/usr/lib/libgcc_s.so.1
+            private-closure-stage/usr/lib/libfontconfig.so
+            private-closure-stage/usr/lib/libfontconfig.so.1
+            private-closure-stage/usr/lib/libfontconfig.so.1.16.1
+            private-closure-stage/usr/lib/libgcrypt.so
+            private-closure-stage/usr/lib/libgcrypt.so.20
+            private-closure-stage/usr/lib/libgcrypt.so.20.5.1
+          retention-days: 14
+          if-no-files-found: warn
