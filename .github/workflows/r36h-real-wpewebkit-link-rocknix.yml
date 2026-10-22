@@ -47,16 +47,16 @@ jobs:
           test -x /usr/bin/wayland-scanner
       - uses: actions/download-artifact@v4
         with:
-          repository: \${{ github.repository }}
+          repository: ${{ github.repository }}
           run-id: 39525819979
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
           name: ROCKNIX-RK3326-toolchain-HOST-ONLY
-          path: \${{ runner.temp }}/sdk-download
+          path: ${{ runner.temp }}/sdk-download
       - uses: actions/download-artifact@v4
         with:
-          repository: \${{ github.repository }}
+          repository: ${{ github.repository }}
           run-id: 39706017583
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
           name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
           path: stage1-artifact
       - name: Restore pinned ROCKNIX RK3326 AArch64 compiler
