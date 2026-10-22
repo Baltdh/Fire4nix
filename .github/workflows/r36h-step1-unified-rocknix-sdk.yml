@@ -131,7 +131,7 @@ jobs:
             inputs/wayland/wayland-target/stage \
             inputs/webp/eight-rocknix-stage \
             inputs/soup-prereqs/soup-prereqs-target/stage \
-            2>&1 | tee stage1-reports/merge.txt
+            | tee stage1-reports/merge.txt
           grep -Fx 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-reports/merge.txt
           grep -Fx 'STAGE_INSTALLABLE=no' stage1-reports/merge.txt
           cat stage1-reports/merge.txt >> "$GITHUB_STEP_SUMMARY"
