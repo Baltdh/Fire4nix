@@ -111,7 +111,10 @@ test -s "$protocol_pc" || {
 test "$(pkg-config --modversion wayland-protocols)" = '1.44' || {
  echo 'ERROR: expected ROCKNIX Wayland Protocols 1.44, not host package' >&2; exit 26;
 }
-grep -Eq '^Version:[[:space:]]*1\\.44[[:space:]]*
+grep -Fq 'Version: 1.44' "$protocol_pc" || {
+ echo 'ERROR: protocol metadata does not match ROCKNIX 1.44' >&2; exit 26;
+}
+echo 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' >> "$work/report/status.txt"
 host_scanner=$(command -v wayland-scanner) || {
  echo 'ERROR: host wayland-scanner missing' >&2; exit 26;
 }
