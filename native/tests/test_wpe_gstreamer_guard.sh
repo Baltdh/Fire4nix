@@ -30,6 +30,16 @@ grep -q '^status=STATIC_GST_SYMBOL_CHECK_PASS$' "$T/clean.txt"
 ln -s libgstvideo-1.0.so.0 "$T/rt/lib/libgstvideo-1.0.so"
 FIRE4NIX_GST_REPORT="$T/symlink.txt" sh "$AUDITOR" --strict "$T/rt" > /dev/null
 grep -q '^gst_libraries_checked=1$' "$T/symlink.txt"
+# An ELF32 file that advertises the right machine is not valid for the R36H.
+cp "$LIB" "$T/rt/lib/libclass-test.so.1"
+printf '\001' | dd of="$T/rt/lib/libclass-test.so.1" bs=1 seek=4 conv=notrunc 2>/dev/null
+set +e
+FIRE4NIX_GST_REPORT="$T/wrong-class.txt" sh "$AUDITOR" --strict "$T/rt" > /dev/null
+rc=$?
+set -e
+test "$rc" -eq 6
+grep -Fq 'WRONG_ELF_CLASS_OR_ENDIAN=libclass-test.so.1' "$T/wrong-class.txt"
+rm -f "$T/rt/lib/libclass-test.so.1"
 # Reject the wrong ELF machine even when all exported symbols are valid.
 set +e
 FIRE4NIX_GST_EXPECTED_MACHINE='Wrong-architecture-test' FIRE4NIX_GST_REPORT="$T/invalid-override.txt" sh "$AUDITOR" --strict "$T/rt" >/dev/null 2>&1
