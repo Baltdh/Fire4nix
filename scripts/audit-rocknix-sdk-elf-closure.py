@@ -110,6 +110,8 @@ def audit(stage: Path, sysroot: Path) -> dict:
         "RESOLVED_FROM_STAGE": sum(v.endswith(":STAGE") for v in matched),
         "RESOLVED_FROM_SYSROOT": sum(v.endswith(":SYSROOT") for v in matched),
         "MISSING_EDGES": len(missing),
+        "MISSING_SONAME_UNIQUE": len(set(line.rsplit(":", 1)[-1] for line in missing)),
+        "MISSING_SONAME_NAMES": sorted(set(line.rsplit(":", 1)[-1] for line in missing)),
         "INVALID_ELFS": len(invalid),
         "NEWER_GLIBC_REFERENCES": len(too_new),
         "UNSAFE_PATHS": len(unsafe_rpath) + len(escaped_stage) + len(escaped_system),
@@ -142,7 +144,8 @@ def main() -> int:
                                   if broken == 0 else "INCOMPLETE_REQUIRES_REVIEW")
     keys = ("STAGE_SHARED_ELFS", "INDEXED_STAGE_ALIASES",
             "INDEXED_SYSROOT_ALIASES", "RESOLVED_EDGES", "RESOLVED_FROM_STAGE",
-            "RESOLVED_FROM_SYSROOT", "MISSING_EDGES", "INVALID_ELFS",
+            "RESOLVED_FROM_SYSROOT", "MISSING_EDGES", "MISSING_SONAME_UNIQUE",
+            "MISSING_SONAME_NAMES", "INVALID_ELFS",
             "NEWER_GLIBC_REFERENCES", "UNSAFE_PATHS", "ELF_CLOSURE_AUDIT",
             "VALIDATION_LIMIT", "MISSING_NEEDED", "INVALID_ELF",
             "TOO_NEW_GLIBC", "UNSAFE_RPATH_OR_NEEDED", "ESCAPED_SYMLINK")
