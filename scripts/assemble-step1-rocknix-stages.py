@@ -142,11 +142,11 @@ def main() -> None:
         if not p.is_file():
             continue
         header=readelf(p)
-        check(bool(re.search(r"Data:\\s+2's complement, little endian",header)),
+        check(bool(re.search(r"Data:\s+2's complement, little endian",header)),
               f"target is not little-endian: {p}")
         version=subprocess.run(['readelf','-V',str(p)],capture_output=True,text=True,check=False)
         check(version.returncode==0,f"cannot read ELF symbol versions: {p}")
-        for maj,minr in re.findall(r'Name: GLIBC_(\\d+)\\.(\\d+)',version.stdout):
+        for maj,minr in re.findall(r'Name: GLIBC_(\d+)\.(\d+)',version.stdout):
             check((int(maj),int(minr))<=required_glibc,
                   f"requires GLIBC_{maj}.{minr} newer than R36H 2.41: {p}")
         inspected+=1
