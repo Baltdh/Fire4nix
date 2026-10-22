@@ -4,7 +4,7 @@ on:
   push:
     branches: ['build/r36h-webcore-real-rocknix-20261022']
     paths:
-      - '.github/workflows/r36h-real-javascriptcore-rocknix.yml'
+      - '.github/workflows/r36h-real-webcore-rocknix.yml'
       - 'scripts/prepare-unified-rocknix-wpe2541.sh'
       - 'scripts/verify-unified-wpe-media-cache.sh'
       - 'scripts/build-webcore-rocknix-first.sh'
@@ -15,7 +15,7 @@ permissions:
   actions: read
 
 jobs:
-  real-javascriptcore:
+  real-webcore:
     runs-on: ubuntu-22.04
     timeout-minutes: 105
     steps:
