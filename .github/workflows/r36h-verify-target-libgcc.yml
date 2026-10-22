@@ -17,6 +17,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -28,15 +34,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/build.ROCKNIX-RK3326.aarch64"
-          tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C "$GITHUB_WORKSPACE/build.ROCKNIX-RK3326.aarch64"
-          test -x build.ROCKNIX-RK3326.aarch64/toolchain/bin/aarch64-rocknix-linux-gnu-gcc
+          mkdir -p "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64"
+          tar --no-same-owner --no-same-permissions -xJf "$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz" -C "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64"
+          test -x rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain/bin/aarch64-rocknix-linux-gnu-gcc
       - name: Verify only real AArch64 libgcc and stage it separately
         shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/stage-verified-rocknix-libgcc.py
-          python3 scripts/stage-verified-rocknix-libgcc.py             --toolchain "$GITHUB_WORKSPACE/build.ROCKNIX-RK3326.aarch64/toolchain"             --output "$GITHUB_WORKSPACE/target-libgcc-stage" | tee "$GITHUB_WORKSPACE/libgcc-report.txt"
+          python3 scripts/stage-verified-rocknix-libgcc.py             --toolchain "$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"             --output "$GITHUB_WORKSPACE/target-libgcc-stage" | tee "$GITHUB_WORKSPACE/libgcc-report.txt"
           grep -Fxq 'TARGET_LIBGCC_STAGE=PASS_ISOLATED_ARM64_ELF' libgcc-report.txt
           cat libgcc-report.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Save verified diagnostic manifest; no R36H install
