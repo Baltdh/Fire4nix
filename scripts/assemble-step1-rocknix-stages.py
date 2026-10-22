@@ -21,9 +21,14 @@ def digest(path: Path) -> bytes:
 
 def copy_source(source: Path, dest: Path) -> int:
     count=0
-    for sub in ("usr/lib", "usr/include"):
+    # The final source is architecture-independent Wayland Protocols XML. All
+    # other inputs contain actual ARM64 ELF and target headers; never pull in
+    # a host /usr/share tree under that pretext.
+    protocol_only=(source/"usr/share/pkgconfig/wayland-protocols.pc").is_file()
+    subdirs=("usr/share",) if protocol_only else ("usr/lib", "usr/include")
+    for sub in subdirs:
         src = source/sub
-        check(src.is_dir(), f"source tree is not a private usr/lib or usr/include: {src}")
+        check(src.is_dir(), f"source tree missing expected private stage: {src}")
         for obj in sorted(src.rglob("*")):
             p = dest/obj.relative_to(source)
             if obj.is_symlink():
@@ -68,8 +73,8 @@ def readelf(path: Path) -> str:
     return out.stdout
 
 def main() -> None:
-    check(len(sys.argv)==16,
-          "usage: assemble-step1-rocknix-stages.py DEST EIGHT_JPEG FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY GCRYPT WAYLAND WEBP SOUP_PREREQS XKB SOUP3 LIBXSLT")
+    check(len(sys.argv)==17,
+          "usage: assemble-step1-rocknix-stages.py DEST EIGHT_JPEG FONT CAIRO ICU HARFBUZZ_ICU GLVND EPOXY GCRYPT WAYLAND WEBP SOUP_PREREQS XKB SOUP3 LIBXSLT WAYLAND_PROTOCOLS")
     dest,*sources=map(Path,sys.argv[1:])
     check(not dest.exists() and not dest.is_symlink(), f"output exists: {dest}")
     dest.mkdir(parents=True)
@@ -137,6 +142,10 @@ def main() -> None:
               f"missing target metadata {pc}.pc")
     check((dest/'usr/include/wayland-client.h').is_file(),
           'missing target Wayland header')
+    check((dest/'usr/share/pkgconfig/wayland-protocols.pc').is_file(),
+          'missing target Wayland Protocols metadata')
+    check(len(list((dest/'usr/share/wayland-protocols').rglob('*.xml')))>20,
+          'missing original Wayland Protocols XML files')
     # Verify complete lib*.so* collection, including duplicate symlink targets.
     inspected=0
     required_glibc=(2,41)
