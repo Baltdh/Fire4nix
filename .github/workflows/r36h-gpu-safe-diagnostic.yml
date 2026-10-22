@@ -1,0 +1,38 @@
+name: Fire4Nix R36H verified GPU-off diagnostic
+on:
+  push:
+    branches: ['fix/r36h-gpu-off-safe-diagnostic-20261022']
+    paths:
+      - 'installer/Diagnosticar-Fire4Nix.sh'
+      - 'installer/Fire4Nix-Teste.sh'
+      - 'native/tests/test_runtime_diagnostic.sh'
+      - '.github/workflows/r36h-gpu-safe-diagnostic.yml'
+  pull_request:
+    paths:
+      - 'installer/Diagnosticar-Fire4Nix.sh'
+      - 'installer/Fire4Nix-Teste.sh'
+      - 'native/tests/test_runtime_diagnostic.sh'
+      - '.github/workflows/r36h-gpu-safe-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-gpu-safe-report:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify R36H photo report and safe diagnosis for GPU-off WPE runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n installer/Diagnosticar-Fire4Nix.sh
+          sh -n installer/Fire4Nix-Teste.sh
+          sh -n native/tests/test_runtime_diagnostic.sh
+          sh native/tests/test_runtime_diagnostic.sh
+          sh native/tests/test_runtime_prereqs.sh
+          echo 'GPU_OFF_REPORT=PASS_HOST_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_WEBKIT_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
