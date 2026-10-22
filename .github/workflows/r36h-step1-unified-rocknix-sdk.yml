@@ -5,12 +5,14 @@ on:
     paths:
       - 'scripts/assemble-step1-rocknix-stages.py'
       - 'native/tests/test_step1_assembler.py'
+      - 'scripts/audit-step1-pkgconfig.sh'
       - '.github/workflows/r36h-step1-unified-rocknix-sdk.yml'
   push:
     branches: ['feat/r36h-step1-unified-rocknix-sdk-20261021']
     paths:
       - 'scripts/assemble-step1-rocknix-stages.py'
       - 'native/tests/test_step1_assembler.py'
+      - 'scripts/audit-step1-pkgconfig.sh'
       - '.github/workflows/r36h-step1-unified-rocknix-sdk.yml'
   workflow_dispatch:
 
@@ -168,6 +170,16 @@ jobs:
           grep -Fx 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-reports/merge.txt
           grep -Fx 'STAGE_INSTALLABLE=no' stage1-reports/merge.txt
           cat stage1-reports/merge.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Audit 22 WPE minimum pkg-config dependencies (target SDK only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n scripts/audit-step1-pkgconfig.sh
+          FIRE4NIX_STAGE1_ROOT="$GITHUB_WORKSPACE/stage1-combined" \
+            sh scripts/audit-step1-pkgconfig.sh --inspect \
+            2>&1 | tee stage1-reports/pkgconfig-readiness.txt
+          grep -Fxq 'TARGET_PC_TOTAL=22' stage1-reports/pkgconfig-readiness.txt
+          cat stage1-reports/pkgconfig-readiness.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Archive private target stage only (NOT a browser)
         if: always()
         uses: actions/upload-artifact@v4
