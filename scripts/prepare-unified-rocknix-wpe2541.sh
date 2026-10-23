@@ -98,6 +98,15 @@ tar -xJf "$archive" -C "$work/source" --strip-components=1
 [[ -s "$work/source/CMakeLists.txt" && -s "$work/source/Source/cmake/OptionsWPE.cmake" ]] ||
   { echo 'ERROR: official WPE tree incomplete' >&2; exit 6; }
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
+# The official 2.54.1 tarball uses DRM_FORMAT_XRGB8888 in WPE snapshots
+# even when USE_LIBDRM=OFF omits drm_fourcc.h. Patch the unpacked working
+# copy only; reject unexpected upstream source drift and archive changes.
+python3 "$base/fire4nix/scripts/patch-wpe2541-drm-fourcc.py" \
+  --source-root "$work/source" \
+  --report "$work/report/wpe2541-fourcc-patch.txt"
+grep -Fxq 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' \
+  "$work/report/wpe2541-fourcc-patch.txt"
+echo 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' >> "$work/report/status.txt"
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
 # Wayland protocol XML is architecture-independent input for the HOST scanner,

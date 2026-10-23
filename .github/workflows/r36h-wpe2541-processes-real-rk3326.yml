@@ -1,6 +1,15 @@
 name: Fire4Nix WPE WebProcess and NetworkProcess ROCKNIX real ARM64
 
 on:
+  # User-requested genuine cross-build, isolated from main and manual test flows.
+  # Pushing this branch triggers one WPEWebKit + subprocess build, not mocks.
+  push:
+    branches: ['build/r36h-webkit2541-fix-fourcc-all-processes-20261022']
+    paths:
+      - 'scripts/patch-wpe2541-drm-fourcc.py'
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'native/tests/test_wpe2541_fourcc_patch.py'
+      - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
   workflow_dispatch:
 
 permissions:
@@ -8,7 +17,24 @@ permissions:
   actions: read
 
 jobs:
+  verify-fourcc-source-patch:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify the upstream WPE snapshot constant fix without downloading a toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/patch-wpe2541-drm-fourcc.py native/tests/test_wpe2541_fourcc_patch.py
+          python3 native/tests/test_wpe2541_fourcc_patch.py
+          bash -n scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          echo 'WPE_2541_FOURCC_SOURCE_PATCH=PASS_HOST_ONLY' >> "$GITHUB_STEP_SUMMARY"
   real-wpe-processes:
+    needs: verify-fourcc-source-patch
     runs-on: ubuntu-22.04
     timeout-minutes: 250
     steps:
@@ -77,6 +103,8 @@ jobs:
           grep -Fxq 'WPE_TARGET_CONFIGURE=CONFIGURED_REQUIRES_ABI_REVIEW' wpe-unified-sdk-build/report/status.txt
           grep -Fxq 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' wpe-unified-sdk-build/report/status.txt
           grep -Fxq 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_SOURCE_PATCH_DRM_GBM_ENABLED=no' wpe-unified-sdk-build/report/wpe2541-fourcc-patch.txt
           echo 'WPE_CONFIGURED_FOR_TWO_WPE_PROCESSES=PASS_REAL_ROCKNIX_AARCH64' >> "$GITHUB_STEP_SUMMARY"
       - name: Build native ROCKNIX WPEWebProcess and WPENetworkProcess and stage offline runtime
         shell: bash
@@ -87,7 +115,48 @@ jobs:
           bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh --build
           grep -Fxq 'WPE_SUBPROCESS_BUILD=PASS_REAL_AARCH64' \
             wpe-unified-sdk-build/report/wpe-subprocesses-result.txt
-      - name: Preserve CMake, compiler logs and reproducibility evidence only
+      - name: Audit a genuinely linked WebKit library and both processes, if they exist
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=wpe-unified-sdk-build/compiled-target-evidence
+          mkdir -p "$out" wpe-unified-sdk-build/report
+          report="$out/README-NOT-INSTALLABLE.txt"
+          printf 'Fire4Nix WPE 2.54.1 - uninstalled compiled ELF audit only\nTARGET_EXECUTED=no\nR36H_INSTALLABLE=no\n' > "$report"
+          build=wpe-unified-sdk-build/configure
+          if [ ! -d "$build" ]; then
+            echo 'COMPILED_WPE_ELF=NO_BUILD_DIRECTORY' >> "$report"
+            exit 0
+          fi
+          mapfile -d '' -t candidates < <(find "$build" -type f -name 'libWPEWebKit-2.0.so*' -print0)
+          if [ "${#candidates[@]}" -eq 1 ]; then
+            cp "${candidates[0]}" "$out/libWPEWebKit-2.0.so.1"
+            if python3 fire4nix/scripts/verify-built-wpewebkit.py \
+                --library "$out/libWPEWebKit-2.0.so.1" \
+                --report "$out/webkit-elf-audit.txt"; then
+              echo 'COMPILED_WPE_ELF=PASS_STATIC_ELF64_AARCH64' >> "$report"
+            else
+              echo 'COMPILED_WPE_ELF=REJECTED_STATIC_ELF_AUDIT' >> "$report"
+              rm -f "$out/libWPEWebKit-2.0.so.1"
+            fi
+          else
+            echo "COMPILED_WPE_ELF=NOT_UNIQUE_OR_UNLINKED count=${#candidates[@]}" >> "$report"
+          fi
+          for name in WPEWebProcess WPENetworkProcess; do
+            mapfile -d '' -t candidates < <(find "$build" -type f -name "$name" -print0)
+            if [ "${#candidates[@]}" -eq 1 ] \
+              && readelf -h "${candidates[0]}" | grep -Eq 'Class:.*ELF64' \
+              && readelf -h "${candidates[0]}" | grep -Eq 'Machine:.*AArch64'; then
+              cp "${candidates[0]}" "$out/$name"
+              echo "COMPILED_${name}=PASS_STATIC_ELF64_AARCH64" >> "$report"
+            else
+              echo "COMPILED_${name}=MISSING_OR_INVALID_ELF" >> "$report"
+            fi
+          done
+          (cd "$out" && find . -maxdepth 1 -type f -print0 | xargs -0 -r sha256sum) > "$out/SHA256SUMS.txt"
+          cat "$report"
+      - name: Preserve CMake, compiler logs and uninstalled compiled ELF evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -96,5 +165,6 @@ jobs:
             wpe-unified-sdk-build/report/
             wpe-unified-sdk-build/configure/CMakeCache.txt
             wpe-unified-sdk-build/private-wpe-runtime/
+            wpe-unified-sdk-build/compiled-target-evidence/
           retention-days: 14
           if-no-files-found: warn
