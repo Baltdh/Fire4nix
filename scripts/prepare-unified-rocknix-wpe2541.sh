@@ -79,8 +79,13 @@ done | tee "$work/report/target-package-versions.txt"
 cat > "$work/probe-toolchain.cmake" <<EOF
 include("$sdk/fire4nix-toolchain.cmake")
 list(PREPEND CMAKE_FIND_ROOT_PATH "$stage")
-string(APPEND CMAKE_C_FLAGS_INIT " -I$stage/usr/include")
-string(APPEND CMAKE_CXX_FLAGS_INIT " -I$stage/usr/include")
+# Genuine ROCKNIX GCC 15 emits __aarch64_ldadd*/cas*/swp* helpers by
+# default. The pinned compiler does not link those helper symbols:
+# Actions #39893504589 proved -moutline fails, -mno-outline links.
+# Force base ARMv8.0 load/store-exclusive atomics in ALL C/C++ objects,
+# including WebKit, ANGLE, JSC, WebProcess and NetworkProcess.
+string(APPEND CMAKE_C_FLAGS_INIT " -I$stage/usr/include -mno-outline-atomics")
+string(APPEND CMAKE_CXX_FLAGS_INIT " -I$stage/usr/include -mno-outline-atomics")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib")
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
@@ -97,6 +102,14 @@ echo "0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9  $archive
 tar -xJf "$archive" -C "$work/source" --strip-components=1
 [[ -s "$work/source/CMakeLists.txt" && -s "$work/source/Source/cmake/OptionsWPE.cmake" ]] ||
   { echo 'ERROR: official WPE tree incomplete' >&2; exit 6; }
+# Correct upstream snapshot fourcc reference only in the extracted copy:
+# libdrm is disabled, but WPE 2.54.1 expects DRM_FORMAT_XRGB8888.
+python3 "$base/fire4nix/scripts/patch-wpe2541-drm-fourcc.py" \
+  --source-root "$work/source" \
+  --report "$work/report/wpe2541-fourcc-patch.txt"
+grep -Fxq 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' \
+  "$work/report/wpe2541-fourcc-patch.txt"
+echo 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' >> "$work/report/status.txt"
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
@@ -185,6 +198,15 @@ echo "WPE_CMAKE_EXIT_CODE=$rc" >> "$work/report/status.txt"
 # DRM/GBM-enabled ROCKNIX graphical build. It only isolates the requirements
 # for the WPEPlatform Wayland client in a first-HTML configuration.
 cache="$work/configure/CMakeCache.txt"
+# Release gate: changes to the global compile flags can silently reenable
+# compiler outlined atomics and reproduce hundreds of undefined symbols.
+for language in C CXX; do
+  grep -E "^CMAKE_${language}_FLAGS:STRING=.*-mno-outline-atomics([[:space:]]|$)" "$cache" > /dev/null || {
+    echo "ERROR: CMake did not propagate -mno-outline-atomics to $language" >&2
+    exit 28
+  }
+done
+echo 'WPE_ROCKNIX_GCC15_ATOMICS=NO_OUTLINE_VERIFIED_CMAKE_CACHE' >> "$work/report/status.txt"
 for option in USE_LIBDRM USE_GBM ENABLE_GPU_PROCESS ENABLE_WPE_PLATFORM_DRM;do
   grep -Eq "^$option:BOOL=OFF$" "$cache" || {
     echo "ERROR: CMake did not retain $option=OFF; reduced-profile probe invalid" >&2
