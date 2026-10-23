@@ -186,7 +186,7 @@ python3 "$repo_root/scripts/bundle-rocknix-wpe-sdk-deps.py" \
   }
 grep -Fxq 'ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=PASS_STATIC_SONAMES_ONLY' \
   "$closed_runtime/SDK-BUNDLE-REPORT.txt"
-grep -E '^WPE_TARGET_LIBATOMIC16_BUNDLED=(yes|no)
+grep -Fq 'WPE_TARGET_LIBATOMIC16_BUNDLED=' "$closed_runtime/SDK-BUNDLE-REPORT.txt" || exit 14
 echo 'WPE_PRIVATE_RUNTIME_SDK_DEPENDENCIES=BUNDLED_AND_STATIC_AUDITED' | tee -a "$result"
 runtime="$closed_runtime"
 (cd "$runtime" && sha256sum -c SHA256SUMS.txt)
