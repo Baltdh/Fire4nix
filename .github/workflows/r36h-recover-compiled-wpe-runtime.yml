@@ -64,9 +64,10 @@ jobs:
           set -euo pipefail
           mkdir -p reports sdk native-086 delivery
           grep -Fxq 'WPE_SUBPROCESS_CMAKE_EXIT=0' downloaded/report/wpe-subprocesses-result.txt
-          grep -Fxq 'WPE_PROCESS_VERIFIED=WPEWebProcess' downloaded/report/wpe-subprocesses-result.txt
-          grep -Fxq 'WPE_PROCESS_VERIFIED=WPENetworkProcess' downloaded/report/wpe-subprocesses-result.txt
-          grep -Fxq 'WPE_INSTALLED_ASSET_BUILD=PASS_MODULE_AND_INSPECTOR_RESOURCES_REAL' downloaded/report/wpe-subprocesses-result.txt
+          # Process verification messages are console-only in the producer.
+          # Verify the persisted stage evidence here; re-audit the actual ELFs below.
+          grep -Fxq 'WPE_INSTALLED_ASSETS_PROFILE=strict' downloaded/private-wpe-runtime/BUILD-REPORT.txt
+          grep -Fxq 'WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked' downloaded/private-wpe-runtime/BUILD-REPORT.txt
           grep -Fxq 'ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=BLOCKED:TARGET_LIBATOMIC_MISSING_EXPORT:__atomic_load_16' downloaded/report/wpe-sdk-dependency-bundle.log
           grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
           archive=sdk-download/rocknix-toolchain-host-only.tar.xz
