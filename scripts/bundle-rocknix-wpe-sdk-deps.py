@@ -93,6 +93,23 @@ def audited_toolchain_libatomic(mod, toolchain: Path) -> Path:
     return file
 
 
+def audited_toolchain_libgcc(mod, toolchain: Path) -> Path:
+    """Use GCC15's genuine target libgcc_s, never a host or stage alias."""
+    if not toolchain.is_dir() or toolchain.is_symlink() or toolchain.resolve() == Path("/"):
+        raise ValueError("INVALID_TARGET_COMPILER_ROOT")
+    file = toolchain / "aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1"
+    validated_stage_elf(mod, "libgcc_s.so.1", file, toolchain)
+    symbols = mod.readelf("--dyn-syms", file)
+    if not any(
+        re.search(r"\b_Unwind_Resume(?:@@GCC_[0-9.]+)?(?:\s|$)", row)
+        and not re.search(r"\bUND\b", row)
+        and re.search(r"\b(?:GLOBAL|WEAK)\b", row)
+        for row in symbols.splitlines()
+    ):
+        raise ValueError("TARGET_LIBGCC_MISSING_UNWIND_RESUME")
+    return file
+
+
 def ensure_safe_paths(runtime: Path, sysroot: Path, stage: Path, output: Path) -> None:
     for p in (runtime, sysroot, stage):
         if not p.is_dir() or p.is_symlink() or p.resolve() == Path("/"):
@@ -148,6 +165,18 @@ def bundle(runtime: Path, sysroot: Path, stage: Path, output: Path, mod=None,
                     "PINNED_GCC15_TARGET_LIB64/libatomic.so.1", sha256(dest))
                 # Recompute the complete ELF closure against the copied file,
                 # rather than trusting a compiler SDK outside the runtime.
+                continue
+            if "libgcc_s.so.1" in missing and toolchain is not None:
+                if "libgcc_s.so.1" in copied or len(copied) >= MAX_LIBRARIES:
+                    raise ValueError("REPEATED_OR_TOO_MANY_TOOLCHAIN_LIBGCC")
+                src = audited_toolchain_libgcc(mod, toolchain)
+                dest = working / "lib/libgcc_s.so.1"
+                if dest.exists() or dest.is_symlink():
+                    raise ValueError("REFUSE_TO_OVERWRITE_RUNTIME_LIBGCC")
+                shutil.copyfile(src.resolve(strict=True), dest)
+                shutil.copymode(src.resolve(strict=True), dest)
+                copied["libgcc_s.so.1"] = (
+                    "PINNED_GCC15_TARGET_LIB64/libgcc_s.so.1", sha256(dest))
                 continue
             if result["WPE_ABI_FINDINGS"] or result["WPE_MISSING_SONAMES"]:
                 raise ValueError(
@@ -205,6 +234,8 @@ def bundle(runtime: Path, sysroot: Path, stage: Path, output: Path, mod=None,
             "TARGET_EXECUTED=no",
             "WPE_TARGET_LIBATOMIC16_BUNDLED=" + (
                 "yes" if "libatomic.so.1" in copied else "no"),
+            "WPE_TARGET_LIBGCC_BUNDLED=" + (
+                "yes" if "libgcc_s.so.1" in copied else "no"),
         ]
         for name in sorted(copied):
             origin, digest = copied[name]
