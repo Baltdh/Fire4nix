@@ -31,8 +31,8 @@ status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib" "$T/observed"
-grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs/"*.log
-grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs/"*.log
+grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs/Fire4Nix-"*-log-*
+grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs/Fire4Nix-"*-log-*
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
   echo 'FAIL: inherited foreign runtime leaked into isolated mode' >&2; exit 1
 fi
@@ -45,7 +45,7 @@ status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/foreign" "$T/observed"
-grep -q 'library_path_mode=compat_inherited' "$T/logs/"*.log
+grep -q 'library_path_mode=compat_inherited' "$T/logs/Fire4Nix-"*-log-*
 : > "$T/observed"
 # Two separate probes must never share a loader debug output prefix.
 for invocation in 1 2; do
