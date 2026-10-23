@@ -15,7 +15,8 @@ done
 cat > "$APP/bin/fire4nix-native-aarch64" <<'MOCK'
 #!/bin/sh
 printf 'observed_lib_path=%s\n' "$LD_LIBRARY_PATH" >> "$MOCK_RESULT"
-printf 'observed_debug=%s\n' "$LD_DEBUG" >> "$MOCK_RESULT"
+printf 'observed_debug=%s\n' "${LD_DEBUG:-}" >> "$MOCK_RESULT"
+printf 'observed_debug_output=%s\n' "${LD_DEBUG_OUTPUT:-}" >> "$MOCK_RESULT"
 printf '[FIRE4NIX-NATIVE] dlopen libWPEWebKit-2.0.so.1\n'
 printf '[FIRE4NIX-NATIVE] dlopen success\n'
 printf '[FIRE4NIX-ABI] wpe_version=2.54.1\n'
@@ -45,6 +46,28 @@ set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/foreign" "$T/observed"
 grep -q 'library_path_mode=compat_inherited' "$T/logs/"*.log
+: > "$T/observed"
+# Two separate probes must never share a loader debug output prefix.
+for invocation in 1 2; do
+  : > "$T/observed"
+  set +e
+  MOCK_RESULT="$T/observed" FIRE4NIX_LOADER_DEBUG=1 FIRE4NIX_GAMEPAD=0 \
+    FIRE4NIX_LOG_DIR="$T/logs" sh "$APP/Fire4Nix-Iniciar.sh" --check-library >/dev/null 2>&1
+  status=$?
+  set -e
+  test "$status" -eq 139
+  trace=$(sed -n 's/^observed_debug_output=//p' "$T/observed" | tail -n 1)
+  printf '%s\n' "$trace" | grep -Eq "^$T/logs/Fire4Nix-LD-[0-9]{8}-[0-9]{6}-[0-9]+$" || {
+    echo "FAIL: loader debug trace prefix lacks process ID: $trace" >&2; exit 1;
+  }
+  if [ "$invocation" -eq 1 ]; then
+    first_trace=$trace
+  else
+    test "$first_trace" != "$trace" || {
+      echo 'FAIL: consecutive loader traces overwrite the same prefix' >&2; exit 1;
+    }
+  fi
+done
 : > "$T/observed"
 FIRE4NIX_ROOT="$APP" FIRE4NIX_INVEST_REPORT_DIR="$T/reports" \
   sh "$HERE/installer/Fire4Nix-Investigar-139.sh" --safe > "$T/safe.txt"
@@ -93,4 +116,4 @@ grep -q "^native_preflight_exit=139$" "$T/split-trace.txt"
 grep -q "^crash_boundary=after_dlopen$" "$T/split-trace.txt"
 grep -Fxq "selected_runtime=$T/remote-tools" "$T/split-trace.txt"
 if grep -q "outdated-launcher-was-invoked" "$T/split-trace.txt"; then exit 1; fi
-echo 'PASS: isolated/compat library path, split native/runtime, no firmware edits, offline reports'
+echo 'PASS: isolated/compat library path, unique loader traces, split native/runtime, no firmware edits, offline reports'
