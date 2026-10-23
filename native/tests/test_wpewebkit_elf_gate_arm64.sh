@@ -50,7 +50,8 @@ int webkit_web_view_get_wpe_view(void) { return gcc15_helper(1); }
 EOF
 cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 "$tmp/outlined.c" \
  -o "$tmp/libWPEWebKit-2.0.so.1"
-readelf --dyn-syms "$tmp/libWPEWebKit-2.0.so.1" | grep -q '__aarch64_ldadd4'
+readelf --wide --dyn-syms "$tmp/libWPEWebKit-2.0.so.1" > "$tmp/outlined-symbols.txt"
+grep -Fq '__aarch64_ldadd4_relax' "$tmp/outlined-symbols.txt"
 if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
  --report "$tmp/outlined-fail.txt" >/dev/null; then
  echo 'FAIL: undefined GCC15 AArch64 outlined atomic accepted' >&2; exit 1
