@@ -120,7 +120,15 @@ for path in "${FIRE4NIX_RUNTIME_SOURCE:-}" \
         continue
     fi
     echo "Checking WebKit WPEPlatform compatibility: $path"
-    if LD_LIBRARY_PATH="$path/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    # The installed launcher uses an isolated private runtime by default.
+    # Inheriting PortMaster/previous-browser library paths here could reject
+    # a valid candidate or incorrectly accept a host-contaminated one.
+    if [ "${FIRE4NIX_INHERIT_LIBRARY_PATH:-0}" = 1 ]; then
+        candidate_library_path="$path/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    else
+        candidate_library_path="$path/lib"
+    fi
+    if LD_LIBRARY_PATH="$candidate_library_path" \
        WEBKIT_EXEC_PATH="$path/libexec/wpe-webkit-2.0" \
        "$SOURCE/bin/fire4nix-native-aarch64" --check-platform >/dev/null 2>&1; then
         SRC_RUNTIME="$path"
