@@ -25,6 +25,12 @@ NAMES = ("lib/libWPEWebKit-2.0.so.1",
          "lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so")
 ASSETS = ("share/wpe-webkit-2.0/inspector.gresource",
           "BUILD-REPORT.txt", "SDK-BUNDLE-REPORT.txt", "SHA256SUMS.txt")
+# GCC15 outlined atomics can survive in shared objects as undefined dynamic
+# symbols. ROCKNIX RK3326 test ZIPs must not rely on unknown external LSE
+# atomic helper providers even if ELF headers and SONAMEs otherwise pass.
+UNDEFINED_OUTLINED_ATOMICS = re.compile(
+    r"\b__aarch64_(?:cas|swp|ldadd|ldclr|ldset|ldeor)(?:p?[0-9])\w*(?:@|\b)")
+
 
 
 def get_readelf(flag: str, file: Path) -> str:
@@ -55,6 +61,13 @@ def elf_check(file: Path) -> None:
     symbols = get_readelf("--dyn-syms", file)
     if re.search(r"\bUND\s+GST_CAT_DEFAULT(?:@|\s|$)", symbols):
         raise ValueError("GST_CAT_DEFAULT_UNDEFINED")
+    for row in symbols.splitlines():
+        if re.search(r"\bUND\b", row):
+            helper = UNDEFINED_OUTLINED_ATOMICS.search(row)
+            if helper:
+                raise ValueError("UNDEFINED_GCC15_OUTLINED_ATOMIC:" +
+                                 file.name + ":" + helper.group(0).rstrip("@"))
+
     if file.name == "libWPEWebKit-2.0.so.1":
         if not re.search(r"\(SONAME\).*?\[libWPEWebKit-2\.0\.so\.1\]", dynamic):
             raise ValueError("WPE_SONAME_MISMATCH")
