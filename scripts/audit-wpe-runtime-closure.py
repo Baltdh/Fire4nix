@@ -94,6 +94,66 @@ def gpu_process_requirement(runtime: Path) -> tuple[bool, str]:
     raise ValueError("UNKNOWN_GPU_PROFILE")
 
 
+
+def injected_bundle_requirement(runtime: Path) -> tuple[bool, str]:
+    """Fail closed on incomplete WPE 2.54 installed assets.
+
+    The injected bundle is dlopen-loaded, so it may have no inbound DT_NEEDED
+    edge from WebKit or subprocess ELFs. It must be an explicit audit root.
+    """
+    module = runtime / "lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+    inspector = runtime / "share/wpe-webkit-2.0/inspector.gresource"
+    report = runtime / "BUILD-REPORT.txt"
+    if not report.exists() and not report.is_symlink():
+        if module.exists() or module.is_symlink() or inspector.exists() or inspector.is_symlink():
+            raise ValueError("UNDECLARED_INSTALLED_WPE_ASSETS")
+        return False, "legacy_assets_not_recorded"
+    if report.is_symlink() or not safe_file(report, runtime):
+        raise ValueError("INVALID_BUILD_REPORT")
+    lines = report.read_text(encoding="utf-8").splitlines()
+    profiles = [line.partition("=")[2] for line in lines
+                if line.startswith("WPE_INSTALLED_ASSETS_PROFILE=")]
+    states = [line.partition("=")[2] for line in lines
+              if line.startswith("WPE_INSTALLED_ASSETS_STATUS=")]
+    if not profiles and not states:
+        if module.exists() or module.is_symlink() or inspector.exists() or inspector.is_symlink():
+            raise ValueError("UNDECLARED_INSTALLED_WPE_ASSETS")
+        return False, "legacy_assets_not_recorded"
+    if len(profiles) != 1 or len(states) != 1:
+        raise ValueError("AMBIGUOUS_INSTALLED_WPE_ASSETS")
+    profile, state = profiles[0], states[0]
+    if profile not in ("strict", "optional") or state not in (
+            "not_installed", "copied_and_static_elf_checked"):
+        raise ValueError("INVALID_WPE_ASSET_PROFILE_OR_STATE")
+    if state == "not_installed":
+        if profile == "strict":
+            raise ValueError("STRICT_WPE_ASSETS_MISSING")
+        if module.exists() or module.is_symlink() or inspector.exists() or inspector.is_symlink():
+            raise ValueError("WPE_ASSETS_PRESENT_BUT_UNDECLARED")
+        return False, "optional_assets_not_installed"
+    # These files must not be accepted via links to host/device paths.
+    if module.is_symlink() or inspector.is_symlink() or not safe_file(module, runtime) \
+            or not safe_file(inspector, runtime):
+        raise ValueError("MISSING_UNSAFE_WPE_MODULE_OR_RESOURCE")
+    if module.stat().st_size == 0 or inspector.stat().st_size == 0:
+        raise ValueError("EMPTY_WPE_MODULE_OR_RESOURCE")
+    for dirname in ("lib/wpe-webkit-2.0/injected-bundle", "share/wpe-webkit-2.0"):
+        tree = runtime / dirname
+        if tree.is_symlink() or not tree.is_dir():
+            raise ValueError("UNSAFE_WPE_ASSET_DIRECTORY")
+        if tree.parent.is_symlink():
+            raise ValueError("UNSAFE_WPE_ASSET_PARENT")
+        for asset in tree.rglob("*"):
+            if asset.is_symlink():
+                raise ValueError("UNSAFE_WPE_ASSET_CONTENT")
+            if asset.is_file():
+                if not safe_file(asset, runtime):
+                    raise ValueError("ESCAPING_WPE_ASSET_CONTENT")
+            elif not asset.is_dir():
+                raise ValueError("SPECIAL_WPE_ASSET_CONTENT")
+    return True, "strict_assets_audited" if profile == "strict" else "optional_assets_audited"
+
+
 def check_rpath(paths: list[str]) -> list[str]:
     errors: list[str] = []
     for entries in paths:
@@ -123,7 +183,12 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
     if not (runtime / "lib").is_dir() or not (runtime / "libexec/wpe-webkit-2.0").is_dir():
         raise ValueError("MISSING_RUNTIME_LAYOUT")
     gpu_required, profile = gpu_process_requirement(runtime)
+    injected_required, assets_status = injected_bundle_requirement(runtime)
     root_files = [runtime / "lib/libWPEWebKit-2.0.so.1"]
+    if injected_required:
+        # WPEInjectedBundle is dynamically loaded and has no guaranteed
+        # inbound DT_NEEDED edge. Audit its complete dependency graph.
+        root_files.append(runtime / "lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so")
     root_files.extend(runtime / f"libexec/wpe-webkit-2.0/{name}" for name in PROCESSES)
     if gpu_required:
         root_files.append(runtime / "libexec/wpe-webkit-2.0/WPEGPUProcess")
@@ -166,7 +231,7 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
         # executables with DT_NEEDED must identify a valid target ELF loader.
         # AArch64 headers and NEEDED sonames alone cannot prove that execve()
         # can locate the correct loader on the physical ROCKNIX rootfs.
-        if path in root_files and path.name != "libWPEWebKit-2.0.so.1":
+        if path in root_files and path.name in (*PROCESSES, "WPEGPUProcess"):
             try:
                 phdrs = elf("-l", path)
             except ValueError as err:
@@ -224,6 +289,8 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
         "WPE_RUNTIME_CLOSURE": status,
         "WPE_REQUIRED_PROCESSES": ",".join(PROCESSES + (("WPEGPUProcess",) if gpu_required else ())),
         "WPE_GPU_PROFILE": profile,
+        "WPE_INSTALLED_ASSETS_AUDIT": assets_status,
+        "WPE_INJECTED_BUNDLE_ELF_AUDITED": "yes" if injected_required else "no",
         "WPE_SCANNED_ELFS": len(scanned),
         "WPE_NEEDED_EDGES": edge_count,
         "WPE_GLIBC_REFERENCES": symbols,

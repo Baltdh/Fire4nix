@@ -76,6 +76,77 @@ class RuntimeClosureTests(unittest.TestCase):
         self.assertEqual(r["WPE_PT_INTERP_PROVEN_ON_R36H"], "no")
         self.assertEqual(r["R36H_INSTALLABLE"], "no")
 
+    def enable_injected_assets(self):
+        module_path = self.runtime / "lib/wpe-webkit-2.0/injected-bundle"
+        module_path.mkdir(parents=True)
+        resource_dir = self.runtime / "share/wpe-webkit-2.0"
+        resource_dir.mkdir(parents=True)
+        self.create(module_path / "libWPEInjectedBundle.so")
+        (resource_dir / "inspector.gresource").write_bytes(b"inspector-fixture")
+        (self.runtime / "BUILD-REPORT.txt").write_text(
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\n")
+        self.dynamics["libWPEInjectedBundle.so"] = (
+            "0x01 (NEEDED) Shared library: [libc.so.6]\n")
+
+    def test_explicit_strict_injected_module_is_a_closure_root(self):
+        self.enable_injected_assets()
+        result = self.run_audit()
+        self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "SDK_STATIC_CANDIDATES_ONLY")
+        self.assertEqual(result["WPE_INJECTED_BUNDLE_ELF_AUDITED"], "yes")
+        self.assertEqual(result["WPE_INSTALLED_ASSETS_AUDIT"], "strict_assets_audited")
+        self.assertEqual(result["WPE_SCANNED_ELFS"], 5)
+        self.assertEqual(result["R36H_INSTALLABLE"], "no")
+
+    def test_missing_injected_bundle_blocks_strict_runtime(self):
+        self.enable_injected_assets()
+        (self.runtime / "lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so").unlink()
+        with self.assertRaisesRegex(ValueError, "MISSING_UNSAFE_WPE_MODULE_OR_RESOURCE"):
+            self.run_audit()
+
+    def test_missing_inspector_resource_blocks_strict_runtime(self):
+        self.enable_injected_assets()
+        (self.runtime / "share/wpe-webkit-2.0/inspector.gresource").unlink()
+        with self.assertRaisesRegex(ValueError, "MISSING_UNSAFE_WPE_MODULE_OR_RESOURCE"):
+            self.run_audit()
+
+    def test_strict_injected_bundle_hidden_dependency_blocks(self):
+        self.enable_injected_assets()
+        self.create(self.stage / "usr/lib/libhidden.so.1")
+        self.dynamics["libWPEInjectedBundle.so"] += (
+            "0x01 (NEEDED) Shared library: [libhidden.so.1]\n")
+        result = self.run_audit()
+        self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
+        self.assertIn("libWPEInjectedBundle.so:libhidden.so.1",
+                      result["WPE_STAGE_ONLY_DEPENDENCIES"])
+
+    def test_injected_bundle_too_new_glibc_blocks(self):
+        self.enable_injected_assets()
+        self.versions["libWPEInjectedBundle.so"] = "Name: GLIBC_2.44\n"
+        self.assertIn("NEWER_GLIBC:libWPEInjectedBundle.so:2.44",
+                      self.run_audit()["WPE_ABI_FINDINGS"])
+
+    def test_wpe_resource_symlink_escape_blocks(self):
+        self.enable_injected_assets()
+        (self.runtime / "share/wpe-webkit-2.0/external.txt").symlink_to("/etc/passwd")
+        with self.assertRaisesRegex(ValueError, "UNSAFE_WPE_ASSET_CONTENT"):
+            self.run_audit()
+
+    def test_invalid_strict_asset_report_blocks(self):
+        self.enable_injected_assets()
+        (self.runtime / "BUILD-REPORT.txt").write_text(
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_STATUS=not_installed\n")
+        with self.assertRaisesRegex(ValueError, "STRICT_WPE_ASSETS_MISSING"):
+            self.run_audit()
+
+    def test_legacy_runtime_with_no_assets_stays_explicitly_unverified(self):
+        result = self.run_audit()
+        self.assertEqual(result["WPE_INJECTED_BUNDLE_ELF_AUDITED"], "no")
+        self.assertEqual(result["WPE_INSTALLED_ASSETS_AUDIT"], "legacy_assets_not_recorded")
+
     def test_missing_transitive_soname_is_blocked(self):
         self.dynamics["libc.so.6"] = "0x01 (NEEDED) Shared library: [libmissing.so.99]\n"
         self.assertIn("libc.so.6:libmissing.so.99", self.run_audit()["WPE_MISSING_SONAMES"])
