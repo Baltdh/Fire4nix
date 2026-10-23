@@ -77,12 +77,25 @@ def ensure_tree(root: Path) -> list[Path]:
         raise ValueError("TOO_MANY_INPUT_ENTRIES")
     total = 0
     regular = []
+    root_abs = root.resolve(strict=True)
     for entry in entries:
         if entry.is_symlink():
-            raise ValueError("SYMLINK_IN_PACKAGE:" + str(entry.relative_to(root)))
-        if entry.is_dir():
+            # WPE/CMake routinely installs libfoo.so -> libfoo.so.1 aliases.
+            # Make an independent REGULAR ZIP entry, never archive the symlink.
+            # Only a relative single-file alias wholly inside this runtime is
+            # safe. Absolute, escaping, dangling and directory links are fatal.
+            target = os.readlink(entry)
+            if os.path.isabs(target) or ".." in PurePosixPath(target).parts:
+                raise ValueError("ESCAPING_RUNTIME_SYMLINK:" + str(entry.relative_to(root)))
+            try:
+                resolved = entry.resolve(strict=True)
+            except (OSError, RuntimeError):
+                raise ValueError("BROKEN_RUNTIME_SYMLINK:" + str(entry.relative_to(root)))
+            if not resolved.is_relative_to(root_abs) or not resolved.is_file():
+                raise ValueError("INVALID_RUNTIME_SYMLINK_TARGET:" + str(entry.relative_to(root)))
+        elif entry.is_dir():
             continue
-        if not entry.is_file():
+        elif not entry.is_file():
             raise ValueError("SPECIAL_FILE_IN_PACKAGE")
         total += entry.stat().st_size
         if total > MAX_BYTES:
