@@ -84,11 +84,11 @@ class RuntimeClosureTests(unittest.TestCase):
         self.create(module_path / "libWPEInjectedBundle.so")
         (resource_dir / "inspector.gresource").write_bytes(b"inspector-fixture")
         (self.runtime / "BUILD-REPORT.txt").write_text(
-            "GPU_PROCESS_PROFILE=disabled_verified_wayland\\n"
-            "WPE_INSTALLED_ASSETS_PROFILE=strict\\n"
-            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\\n")
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\n")
         self.dynamics["libWPEInjectedBundle.so"] = (
-            "0x01 (NEEDED) Shared library: [libc.so.6]\\n")
+            "0x01 (NEEDED) Shared library: [libc.so.6]\n")
 
     def test_explicit_strict_injected_module_is_a_closure_root(self):
         self.enable_injected_assets()
@@ -115,7 +115,7 @@ class RuntimeClosureTests(unittest.TestCase):
         self.enable_injected_assets()
         self.create(self.stage / "usr/lib/libhidden.so.1")
         self.dynamics["libWPEInjectedBundle.so"] += (
-            "0x01 (NEEDED) Shared library: [libhidden.so.1]\\n")
+            "0x01 (NEEDED) Shared library: [libhidden.so.1]\n")
         result = self.run_audit()
         self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
         self.assertIn("libWPEInjectedBundle.so:libhidden.so.1",
@@ -123,7 +123,7 @@ class RuntimeClosureTests(unittest.TestCase):
 
     def test_injected_bundle_too_new_glibc_blocks(self):
         self.enable_injected_assets()
-        self.versions["libWPEInjectedBundle.so"] = "Name: GLIBC_2.44\\n"
+        self.versions["libWPEInjectedBundle.so"] = "Name: GLIBC_2.44\n"
         self.assertIn("NEWER_GLIBC:libWPEInjectedBundle.so:2.44",
                       self.run_audit()["WPE_ABI_FINDINGS"])
 
@@ -136,9 +136,9 @@ class RuntimeClosureTests(unittest.TestCase):
     def test_invalid_strict_asset_report_blocks(self):
         self.enable_injected_assets()
         (self.runtime / "BUILD-REPORT.txt").write_text(
-            "GPU_PROCESS_PROFILE=disabled_verified_wayland\\n"
-            "WPE_INSTALLED_ASSETS_PROFILE=strict\\n"
-            "WPE_INSTALLED_ASSETS_STATUS=not_installed\\n")
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_STATUS=not_installed\n")
         with self.assertRaisesRegex(ValueError, "STRICT_WPE_ASSETS_MISSING"):
             self.run_audit()
 
