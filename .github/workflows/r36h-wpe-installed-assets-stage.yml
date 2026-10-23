@@ -1,0 +1,43 @@
+name: Fire4Nix WPE installed assets ARM64 runtime staging
+
+on:
+  push:
+    branches: ['fix/r36h-stage-wpe-injected-bundle-and-resources-20261022']
+    paths:
+      - 'rocknix-integration/stage-wpe-runtime.sh'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'native/tests/test_wpe_runtime_installed_assets.sh'
+      - '.github/workflows/r36h-wpe-installed-assets-stage.yml'
+  pull_request:
+    paths:
+      - 'rocknix-integration/stage-wpe-runtime.sh'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'native/tests/test_wpe_runtime_installed_assets.sh'
+      - '.github/workflows/r36h-wpe-installed-assets-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-assets-guard:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate shell syntax and native ELF tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          command -v readelf
+          command -v cc
+          sh -n rocknix-integration/stage-wpe-runtime.sh
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          sh -n native/tests/test_wpe_runtime_installed_assets.sh
+      - name: Verify WPE resource and module copying with ARM64 ELF fixtures
+        run: sh native/tests/test_wpe_runtime_installed_assets.sh
+      - name: Keep previous GPU-off staging regressions green
+        run: sh native/tests/test_wpe_runtime_gpu_profile.sh

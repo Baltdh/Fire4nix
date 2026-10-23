@@ -117,6 +117,53 @@ done
 for p in $PROCESSES; do
   cp -a "$CHILDROOT/$p" "$TEMP/libexec/wpe-webkit-2.0/$p"
 done
+# WPE 2.54.1 installs an injected bundle module separately from the main
+# library and installs inspector.gresource in its versioned data directory.
+# These files were previously dropped from our private runtime even when
+# CMake --install had successfully produced them.
+# 'strict' must be used for any candidate prepared for an R36H device.
+ASSET_POLICY=${FIRE4NIX_WPE_ASSETS_PROFILE:-optional}
+case "$ASSET_POLICY" in optional|strict) ;; *)
+  echo 'ERROR: WPE assets profile must be optional or strict' >&2; exit 5 ;;
+esac
+DATA_SOURCE="$INPUT/usr/share/wpe-webkit-2.0"
+INJECTED_SOURCE="$LIBROOT/wpe-webkit-2.0/injected-bundle"
+ASSET_STATUS=not_installed
+if [ -d "$DATA_SOURCE" ] || [ -d "$INJECTED_SOURCE" ]; then
+  [ -d "$DATA_SOURCE" ] && [ -d "$INJECTED_SOURCE" ] || {
+    echo 'ERROR: partial WPE install: data or injected bundle directory missing' >&2
+    exit 5
+  }
+  [ ! -L "$DATA_SOURCE" ] && [ ! -L "$INJECTED_SOURCE" ] || {
+    echo 'ERROR: WPE asset root cannot be a symbolic link' >&2; exit 5;
+  }
+  for source_assets in "$DATA_SOURCE" "$INJECTED_SOURCE"; do
+    if find "$source_assets" ! -type f ! -type d -print -quit | grep -q .; then
+      echo 'ERROR: WPE assets include links or non-regular files' >&2; exit 5
+    fi
+  done
+  [ -s "$DATA_SOURCE/inspector.gresource" ] || {
+    echo 'ERROR: WPE inspector resource missing or empty' >&2; exit 5
+  }
+  [ -s "$INJECTED_SOURCE/libWPEInjectedBundle.so" ] || {
+    echo 'ERROR: WPE injected bundle ELF missing' >&2; exit 5
+  }
+  check_arm64 "$INJECTED_SOURCE/libWPEInjectedBundle.so" || exit 5
+  check_glibc_max "$INJECTED_SOURCE/libWPEInjectedBundle.so" || exit 5
+  if readelf -d "$INJECTED_SOURCE/libWPEInjectedBundle.so" 2>/dev/null |
+    grep -E 'Shared library: \[libgst[^]]*\]' >/dev/null; then
+    echo 'ERROR: injected WPE bundle depends on GStreamer in minimal profile' >&2
+    exit 5
+  fi
+  mkdir -p "$TEMP/share" "$TEMP/lib/wpe-webkit-2.0"
+  cp -a "$DATA_SOURCE" "$TEMP/share/wpe-webkit-2.0"
+  cp -a "$INJECTED_SOURCE" "$TEMP/lib/wpe-webkit-2.0/injected-bundle"
+  ASSET_STATUS=copied_and_static_elf_checked
+elif [ "$ASSET_POLICY" = strict ]; then
+  echo 'ERROR: complete WPE installed assets required in strict mode' >&2
+  exit 5
+fi
+
 # Reject broken GStreamer ELF before committing a runtime. The R36H rescue
 # package showed GST_CAT_DEFAULT as undefined in six gst* libraries, and
 # the target system's libgstreamer does not export it. This is a static guard;
@@ -133,7 +180,7 @@ fi
 # Validate DT_NEEDED of all staged ELF, not just presence of libgst files.
 # Profiles/flags can be ignored by a misconfigured SDK or stale build dir.
 if [ "${FIRE4NIX_REQUIRE_MEDIA_FREE:-0}" = 1 ]; then
-  for media_elf in "$TEMP/lib/"*.so "$TEMP/lib/"*.so.* "$TEMP/libexec/wpe-webkit-2.0/"*; do
+  for media_elf in "$TEMP/lib/"*.so "$TEMP/lib/"*.so.* "$TEMP/lib/wpe-webkit-2.0/injected-bundle/"*.so "$TEMP/libexec/wpe-webkit-2.0/"*; do
     [ -f "$media_elf" ] || continue
     [ -L "$media_elf" ] && continue
     if readelf -d "$media_elf" 2>/dev/null | grep -E 'Shared library: \[libgst[^]]*\]' >/dev/null; then
@@ -156,6 +203,10 @@ done
   for p in $PROCESSES; do
     sha256sum "libexec/wpe-webkit-2.0/$p"
   done >> SHA256SUMS.txt
+  if [ "$ASSET_STATUS" = copied_and_static_elf_checked ]; then
+    find share/wpe-webkit-2.0 lib/wpe-webkit-2.0/injected-bundle \
+      -type f -exec sha256sum {} + >> SHA256SUMS.txt
+  fi
 )
 # Document unresolved target link dependencies without falsely asserting that
 # they are available; final validation requires the actual ROCKNIX rootfs.
@@ -164,6 +215,9 @@ done
   echo 'AArch64 ELF and WPEPlatform exported symbol checked.'
   echo "Max allowed direct GLIBC requirement: GLIBC_$TARGET_GLIBC_MAX"
   echo "GPU_PROCESS_PROFILE=$GPU_PROFILE"
+  echo "WPE_INSTALLED_ASSETS_PROFILE=$ASSET_POLICY"
+  echo "WPE_INSTALLED_ASSETS_STATUS=$ASSET_STATUS"
+  echo 'Inspector/injected paths copied as installed; absolute build-time data paths may still require relocation verification.'
   echo 'Dynamic dependencies must still be validated against the exact target rootfs.'
   echo 'Graphical startup and Mali/Wayland have NOT been tested here.'
   for p in "$TEMP/lib/libWPEWebKit-2.0.so.1" "$TEMP/libexec/wpe-webkit-2.0/WPEWebProcess"; do

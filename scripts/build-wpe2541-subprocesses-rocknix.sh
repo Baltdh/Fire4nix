@@ -130,6 +130,7 @@ FIRE4NIX_WPE_DESTDIR="$dest" \
 FIRE4NIX_WPE_RUNTIME_OUT="$runtime" \
 FIRE4NIX_WPE_CMAKE_CACHE="$cache" \
 FIRE4NIX_REQUIRE_MEDIA_FREE=1 \
+FIRE4NIX_WPE_ASSETS_PROFILE=strict \
 FIRE4NIX_TARGET_GLIBC_MAX=2.41 \
 sh "$repo_root/rocknix-integration/stage-wpe-runtime.sh" --stage \
  > "$report/wpe-subprocesses-stage.log" 2>&1 || {
@@ -143,6 +144,10 @@ for p in WPEWebProcess WPENetworkProcess; do
 done
 test ! -e "$runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
 grep -Fxq 'GPU_PROCESS_PROFILE=disabled_verified_wayland' "$runtime/BUILD-REPORT.txt"
+grep -Fxq 'WPE_INSTALLED_ASSETS_PROFILE=strict' "$runtime/BUILD-REPORT.txt"
+grep -Fxq 'WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked' "$runtime/BUILD-REPORT.txt"
+test -s "$runtime/share/wpe-webkit-2.0/inspector.gresource"
+test -s "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
 (cd "$runtime" && sha256sum -c SHA256SUMS.txt)
 # A correct AArch64 library may still depend on libraries available only in
 # the temporary compilation SDK overlay, not on the physical console.
