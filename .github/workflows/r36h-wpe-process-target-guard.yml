@@ -2,7 +2,7 @@ name: Fire4Nix WPE two-process target and profile safety
 
 on:
   push:
-    branches: ['build/r36h-wpe-subprocesses-after-link-20261022', 'fix/r36h-wpe-process-build-explicit-dispatch-20261022']
+    branches: ['build/r36h-wpe-subprocesses-after-link-20261022', 'fix/r36h-wpe-process-build-explicit-dispatch-20261022', 'build/r36h-wpe-injected-module-inspector-targets-20261023']
     paths:
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_subprocess_target_guard.sh'
