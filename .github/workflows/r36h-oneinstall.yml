@@ -61,6 +61,10 @@ jobs:
           cp scripts/Install-Fire4Nix-Once.sh out/Instalar-Fire4Nix-Uma-Vez.sh
           printf '#!/bin/sh\nD=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2\nexec sh "$D/Fire4Nix-Iniciar.sh" --open "$@"\n' > out/Fire4Nix/Fire4Nix.sh
           cp installer/www/inicio.html out/Fire4Nix/www/inicio.html
+          # PR #148: ship the actual offline 640x480 HTML/CSS/JS
+          # first-frame test; otherwise the on-device visual kit refuses.
+          cp installer/www/primeiro-teste.html out/Fire4Nix/www/primeiro-teste.html
+          test -s out/Fire4Nix/www/primeiro-teste.html
           cp installer/config/fire4nix.gptk out/Fire4Nix/config/fire4nix.gptk
           cat > out/LEIA-ME.txt <<'README'
           Fire4Nix 1.07 R36H - localiza ELF e WebKit em cartoes/pastas diferentes.
@@ -173,6 +177,9 @@ jobs:
           sh native/tests/test_segv_stage_diagnostic.sh
           sh -n out/Diagnosticar-Fire4Nix.sh
           sh -n out/Fire4Nix/Diagnosticar-Fire4Nix.sh
+          grep -Fq 'JS OK' out/Fire4Nix/www/primeiro-teste.html
+          grep -Fq 'PENDENTE' out/Fire4Nix/www/primeiro-teste.html
+          grep -Fq '3 cores' out/Fire4Nix/www/primeiro-teste.html
           grep -q 'ArrowDown' out/Fire4Nix/www/inicio.html
           grep -q 'keyboardToggle' out/Fire4Nix/www/inicio.html
           grep -q 'Espaço' out/Fire4Nix/www/inicio.html
