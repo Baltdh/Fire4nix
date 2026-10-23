@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
-      CCACHE_DIR: ${{ runner.temp }}/wpe-ccache-probe
+      CCACHE_DIR: ${{ github.workspace }}/.ccache-wpe-probe
     steps:
       - uses: actions/checkout@v4
         with:
