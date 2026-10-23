@@ -1,0 +1,37 @@
+name: Fire4Nix private WPE injected bundle and inspector launch paths
+
+on:
+  push:
+    branches: ['fix/r36h-wpe-installed-assets-launcher-paths-20261023']
+    paths:
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/tests/test_launcher_wpe_assets_paths.sh'
+      - '.github/workflows/r36h-wpe-launcher-assets-paths.yml'
+  pull_request:
+    paths:
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/tests/test_launcher_wpe_assets_paths.sh'
+      - '.github/workflows/r36h-wpe-launcher-assets-paths.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-relocatable-wpe-assets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify SD root-relative WPE asset environment and fail-closed profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n installer/Fire4Nix-Iniciar.sh
+          bash -n native/tests/test_launcher_wpe_assets_paths.sh
+          bash native/tests/test_launcher_wpe_assets_paths.sh
+          echo 'WPE_PRIVATE_ASSET_LAUNCH_PATHS=PASS_HOST_MOCK' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_WEBKIT_REAL_AARCH64_RUNTIME_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
