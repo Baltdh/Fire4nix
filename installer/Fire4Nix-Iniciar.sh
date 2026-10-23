@@ -157,6 +157,52 @@ for lib in libc.so.6 ld-linux-aarch64.so.1 libwayland-client.so.0 \
     fi
 done
 export WEBKIT_EXEC_PATH="$CHILD"
+# WPE 2.54.1 looks for its dlopen-loaded injected bundle and GResource via
+# these exact variables. A private SD-card runtime must not inherit values
+# from another WebKit installation or fall back to build-time /usr paths.
+INJECTED_DIR="$ROOT/runtime/lib/wpe-webkit-2.0/injected-bundle"
+INJECTED_SO="$INJECTED_DIR/libWPEInjectedBundle.so"
+INSPECTOR_RESOURCE="$ROOT/runtime/share/wpe-webkit-2.0/inspector.gresource"
+ASSET_PROFILE=legacy_optional
+ASSET_STATUS=unreported
+if [ -f "$GPU_REPORT" ]; then
+    declared_profile=$(sed -n 's/^WPE_INSTALLED_ASSETS_PROFILE=//p' "$GPU_REPORT")
+    declared_status=$(sed -n 's/^WPE_INSTALLED_ASSETS_STATUS=//p' "$GPU_REPORT")
+    case "$declared_profile" in
+        '') ;;
+        optional|strict) ASSET_PROFILE=$declared_profile ;;
+        *) fail 127 "Invalid or conflicting WPE installed-assets profile" ;;
+    esac
+    case "$declared_status" in
+        '') ;;
+        not_installed|copied_and_static_elf_checked) ASSET_STATUS=$declared_status ;;
+        *) fail 127 "Invalid or conflicting WPE installed-assets status" ;;
+    esac
+fi
+if [ "$ASSET_PROFILE" = strict ] &&
+   [ "$ASSET_STATUS" != copied_and_static_elf_checked ]; then
+    fail 127 "Strict WPE runtime assets were not verified during staging"
+fi
+if [ -e "$INJECTED_DIR" ] || [ -L "$INJECTED_DIR" ] ||
+   [ -e "$INJECTED_SO" ] || [ -L "$INJECTED_SO" ] ||
+   [ -e "$INSPECTOR_RESOURCE" ] || [ -L "$INSPECTOR_RESOURCE" ]; then
+    [ -d "$INJECTED_DIR" ] && [ ! -L "$INJECTED_DIR" ] &&
+    [ -s "$INJECTED_SO" ] && [ -f "$INJECTED_SO" ] && [ ! -L "$INJECTED_SO" ] &&
+    [ -s "$INSPECTOR_RESOURCE" ] && [ -f "$INSPECTOR_RESOURCE" ] &&
+    [ ! -L "$INSPECTOR_RESOURCE" ] ||
+        fail 127 "WPE injected-bundle or inspector resource missing/unsafe"
+    [ "$ASSET_STATUS" != not_installed ] ||
+        fail 127 "WPE installed-assets report conflicts with packaged files"
+    export WEBKIT_INJECTED_BUNDLE_PATH="$INJECTED_DIR"
+    export WEBKIT_INSPECTOR_RESOURCES_PATH="$INSPECTOR_RESOURCE"
+    printf 'wpe_installed_assets=private_verified_path profile=%s\n' "$ASSET_PROFILE" >> "$LOG"
+else
+    [ "$ASSET_PROFILE" != strict ] &&
+    [ "$ASSET_STATUS" != copied_and_static_elf_checked ] ||
+        fail 127 "WPE runtime reported installed assets but files are absent"
+    unset WEBKIT_INJECTED_BUNDLE_PATH WEBKIT_INSPECTOR_RESOURCES_PATH
+    printf 'wpe_installed_assets=legacy_absent\n' >> "$LOG"
+fi
 export WPE_PLATFORM=wayland
 unset WPE_DISPLAY
 if [ "$MODE" = --headless ]; then
