@@ -1,10 +1,11 @@
 name: Fire4Nix WPE runtime recursive ELF closure audit
 on:
   push:
-    branches: ['test/r36h-real-elf-closure-stage-only-block-20261022', 'audit/r36h-wpe-subprocess-interpreter-20261023']
+    branches: ['test/r36h-real-elf-closure-stage-only-block-20261022', 'audit/r36h-wpe-subprocess-interpreter-20261023', 'fix/r36h-wpe-libatomic16-linker-path-20261023']
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
       - 'scripts/bundle-rocknix-wpe-sdk-deps.py'
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
       - 'native/tests/test_wpe_closure_real_aarch64.sh'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
       - 'scripts/bundle-rocknix-wpe-sdk-deps.py'
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
       - 'native/tests/test_wpe_closure_real_aarch64.sh'
@@ -36,6 +38,8 @@ jobs:
           bash native/tests/test_wpe_subprocess_target_guard.sh
           grep -Fq 'WPE_PRIVATE_RUNTIME_CLOSURE=PASS_SDK_STATIC_SONAMES_NOT_DEVICE_ABI' scripts/build-wpe2541-subprocesses-rocknix.sh
           python3 -m py_compile scripts/audit-wpe-runtime-closure.py
+          bash -n scripts/prepare-unified-rocknix-wpe2541.sh
+          grep -Fq 'WPE_ROCKNIX_LIBATOMIC16=PASS_PINNED_GCC_TARGET_LIB64' scripts/prepare-unified-rocknix-wpe2541.sh
           python3 -m py_compile scripts/bundle-rocknix-wpe-sdk-deps.py
           python3 scripts/bundle-rocknix-wpe-sdk-deps.py --help > /dev/null
           python3 -m py_compile native/tests/test_wpe_runtime_elf_closure.py
