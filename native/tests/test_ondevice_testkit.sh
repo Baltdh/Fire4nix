@@ -37,6 +37,12 @@ mkdir -p "$T/roms/ports/fire4nix-completo/runtime/lib" \
  "$T/roms/ports/fire4nix-completo/www"
 printf dummy > "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
 printf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
+# The installed-runtime selector requires a launcher file as well as WPE.
+cat > "$T/roms/ports/fire4nix-completo/Fire4Nix-Iniciar.sh" <<'BROWSER'
+#!/bin/sh
+printf 'TEST_OFFLINE_PAGE=%s\n' "$2"
+exit 70
+BROWSER
 # PR #148 requires the dedicated offline HTML/CSS/JS page. First verify a
 # missing page is classified distinctly from a WPE rendering failure.
 set +e
@@ -49,11 +55,7 @@ grep -Fq 'visual_test=BLOCKED_MISSING_OFFLINE_TEST_PAGE' "$T/reports/Fire4Nix-Ul
 test ! -e "$T/roms/ports/fire4nix-completo/www/primeiro-teste.html"
 # The test file is a simple fixture, NOT a WebKit render validation.
 printf 'test-html-css-js-offline\n' > "$T/roms/ports/fire4nix-completo/www/primeiro-teste.html"
-cat > "$T/roms/ports/fire4nix-completo/Fire4Nix-Iniciar.sh" <<'BROWSER'
-#!/bin/sh
-printf 'TEST_OFFLINE_PAGE=%s\n' "$2"
-exit 70
-BROWSER
+
 set +e
 FIRE4NIX_ROMS="$T/roms" FIRE4NIX_TEST_REPORT_DIR="$T/reports" \
   sh "$T/roms/ports/Fire4Nix-Grafico-101.sh" > "$T/visual-failed.log"
