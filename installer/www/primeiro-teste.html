@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fire4Nix | Primeiro teste offline</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;padding:15px;background:#101827;color:#f1f6ff;min-width:0;max-width:640px}
+h1{margin:0;font-size:24px;line-height:1.2}
+small{font-size:11px;color:#bbcce5}
+p{font-size:13px;line-height:1.35;color:#cad6eb}
+.panel{background:#22334d;border:2px solid #668cc2;border-radius:10px;padding:10px 12px;margin-top:10px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.label{font-size:14px;font-weight:700}
+.state{display:inline-block;min-width:135px;text-align:center;border:1px solid #9db2cf;border-radius:6px;padding:7px 9px;font-size:14px;font-weight:700;color:#f9d889}
+.pass{color:#aaf3bb;border-color:#78d691}
+.fail{color:#ffaaa6;border-color:#ed8686}
+.demo{display:flex;gap:8px;align-items:center;margin-top:12px}
+.swatch{width:64px;height:42px;border-radius:6px;background:#3773b8;border:2px solid #b6d2ff}
+.swatch:nth-child(2){background:#da774e}
+.swatch:nth-child(3){background:#68a670}
+button,a{display:inline-block;background:#82c1ff;color:#112038;border:0;border-radius:6px;padding:10px 12px;font-size:14px;font-weight:700;text-decoration:none}
+button:focus-visible,a:focus-visible{outline:3px solid #ffe3a7}
+#details{font-size:12px;word-break:break-word}
+footer{font-size:11px;margin-top:11px;color:#b9c8df}
+@media(max-width:450px){body{padding:10px}h1{font-size:21px}.state{min-width:110px}.swatch{width:48px}}
+</style>
+</head>
+<body>
+<header><h1>Fire4Nix · R36H</h1><small>PRIMEIRO TESTE · 640 × 480 · OFFLINE</small></header>
+<p>Se este texto e os três blocos coloridos aparecerem, HTML e CSS foram renderizados. O resultado de JavaScript é independente.</p>
+<section class="panel" aria-label="Diagnóstico de renderização">
+<div class="row"><span class="label">HTML + CSS</span><span id="css-state" class="state pass">VISÍVEL?</span></div>
+<div class="demo" aria-hidden="true"><span class="swatch"></span><span class="swatch"></span><span class="swatch"></span><span>3 cores</span></div>
+</section>
+<section class="panel" aria-label="Diagnóstico de JavaScript">
+<div class="row"><span class="label">JavaScript / DOM</span><span id="js-state" class="state">PENDENTE</span></div>
+<p id="details">Aguardando execução do script local.</p>
+<div class="row"><button id="test-button" type="button">Testar botão</button><span id="click-count">Cliques: 0</span></div>
+</section>
+<footer>
+Sem fontes remotas, rede, imagens externas ou vídeos. O status VISÍVEL? é confirmação manual; um código de saída 0 não comprova imagem no R36H.
+</footer>
+<script>
+(function(){
+"use strict";
+var status=document.getElementById("js-state");
+var details=document.getElementById("details");
+var button=document.getElementById("test-button");
+var count=document.getElementById("click-count");
+var clicks=0;
+try{
+  var probe=document.createElement("span");
+  probe.textContent="DOM_OK";
+  if(probe.textContent!=="DOM_OK"){throw new Error("DOM textContent");}
+  status.textContent="JS OK";
+  status.className="state pass";
+  details.textContent="JavaScript executado localmente; DOM atualizado. Sem internet.";
+  button.addEventListener("click",function(){
+    clicks+=1;
+    count.textContent="Cliques: "+clicks;
+    details.textContent="Evento de clique processado: "+clicks;
+  });
+}catch(error){
+  status.textContent="JS FALHOU";
+  status.className="state fail";
+  details.textContent="Erro local: "+String(error&&error.message||error);
+}
+})();
+</script>
+</body>
+</html>
