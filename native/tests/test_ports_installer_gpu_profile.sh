@@ -4,7 +4,11 @@
 set -eu
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
 T=$(mktemp -d)
-trap 'rm -rf "$T"' 0
+trap 'status=$?; if [ "$status" -ne 0 ]; then
+  echo "Installer mock regression failed (exit $status)" >&2
+  if [ -f "$T/install.log" ]; then cat "$T/install.log" >&2; fi
+fi
+rm -rf "$T"' 0
 P="$T/ports with spaces"
 APP="$P/Fire4Nix"
 CHILD="$APP/runtime/libexec/wpe-webkit-2.0"
