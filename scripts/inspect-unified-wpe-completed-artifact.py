@@ -76,7 +76,9 @@ def read_build_status(root: Path) -> dict[str, str]:
     for line in file.read_text(encoding="utf-8", errors="replace").splitlines():
         if re.fullmatch(r"[A-Z0-9_]+=[A-Za-z0-9_,.-]+", line):
             key, value = line.split("=", 1)
-            if key in status and status[key] != value:
+            # The build report intentionally advances START -> BLOCKED/PASS.
+            # All other duplicated contradictory fields remain suspicious.
+            if key in status and status[key] != value and key != "WPE_SUBPROCESS_BUILD":
                 raise ValueError("CONFLICTING_BUILD_RESULT:" + key)
             status[key] = value
     return status
