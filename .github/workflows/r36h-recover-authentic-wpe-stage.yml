@@ -1,0 +1,168 @@
+name: Fire4Nix recover real compiled WPE from authenticated failed stage
+
+on:
+  push:
+    branches: ['rescue/r36h-reuse-staged-wpe-atomic16-20261023']
+    paths:
+      - '.github/workflows/r36h-recover-authentic-wpe-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  replay-real-wpe-stage:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - name: Regression tests for staging and GCC15 symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 fire4nix/native/tests/test_recover_preclosed_wpe_stage.py
+          python3 fire4nix/native/tests/test_wpe_libatomic16_wide_exports.py
+          python3 -m py_compile fire4nix/scripts/bundle-rocknix-wpe-sdk-deps.py
+          python3 -m py_compile fire4nix/scripts/audit-wpe-runtime-closure.py
+      - name: Authenticate exact source run and status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {data: run} = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner, repo: context.repo.repo, run_id: 39929101615
+            })
+            if (run.head_repository?.full_name !== context.repo.owner + '/' + context.repo.repo
+                || run.name !== 'Fire4Nix unified WPE2541 ROCKNIX GCC15 libatomic full link'
+                || run.event !== 'push'
+                || run.head_branch !== 'build/r36h-unified-wpe2541-gcc15-libatomic-real-20261023'
+                || run.head_sha !== 'f666dd2cee4ed5a3973338e3018f04eb4a8e84d1'
+                || run.conclusion !== 'failure') {
+              throw new Error('Untrusted source run')
+            }
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39929101615
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-WPE2541-UNIFIED-GCC15-LIBATOMIC-REAL-STATIC-STAGE
+          path: previous
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - name: Restore pinned target toolchain and validate SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends binutils python3 unzip
+          tarball="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$tarball"
+          tar -tJf "$tarball" > "$RUNNER_TEMP/sdk-list.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/sdk-list.txt"; then
+            echo 'ERROR: unsafe SDK archive member' >&2; exit 4
+          fi
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$tarball" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+          grep -Fxq 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-artifact/stage1-reports/merge.txt
+          mkdir -p recovery delivery
+      - name: Recover original real ELF stage using original checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 fire4nix/scripts/recover-preclosed-wpe-stage.py \
+            --download-root previous --output recovery/private-wpe-runtime \
+            2>&1 | tee recovery/recovery-report.txt
+          (cd recovery/private-wpe-runtime && sha256sum -c SHA256SUMS.txt)
+          echo 'WPE_BUILD_SOURCE_RUN=39929101615' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRE_CLOSED_WPE_RECOVERY=SHA256_VERIFIED' >> "$GITHUB_STEP_SUMMARY"
+      - name: Complete genuine ROCKNIX ELF recursive dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          sysroot="$sdk/aarch64-rocknix-linux-gnu/sysroot"
+          stage="$GITHUB_WORKSPACE/stage1-artifact/stage1-combined"
+          closed="$GITHUB_WORKSPACE/recovery/private-wpe-runtime-sdk-closed"
+          python3 fire4nix/scripts/bundle-rocknix-wpe-sdk-deps.py \
+            --runtime "$GITHUB_WORKSPACE/recovery/private-wpe-runtime" \
+            --sysroot "$sysroot" --sdk-stage "$stage" \
+            --target-toolchain "$sdk" --output "$closed" \
+            2>&1 | tee recovery/bundle-report.txt
+          grep -Fxq 'ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=PASS_STATIC_SONAMES_ONLY' "$closed/SDK-BUNDLE-REPORT.txt"
+          grep -Fxq 'WPE_TARGET_LIBATOMIC16_BUNDLED=yes' "$closed/SDK-BUNDLE-REPORT.txt"
+          (cd "$closed" && sha256sum -c SHA256SUMS.txt)
+          python3 fire4nix/scripts/audit-wpe-runtime-closure.py \
+            --runtime "$closed" --sysroot "$sysroot" --sdk-stage "$stage" \
+            --report recovery/strict-elf-closure.txt --strict
+          grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' recovery/strict-elf-closure.txt
+          grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' recovery/strict-elf-closure.txt
+          grep -Fxq 'WPE_MISSING_SONAMES_COUNT=0' recovery/strict-elf-closure.txt
+          grep -Fxq 'WPE_ABI_FINDINGS_COUNT=0' recovery/strict-elf-closure.txt
+          grep -Fxq 'WPE_INJECTED_BUNDLE_ELF_AUDITED=yes' recovery/strict-elf-closure.txt
+          echo 'WPE_RUNTIME_CLOSURE=PASS_STATIC_NOT_DEVICE_VALIDATED' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39880058319
+          github-token: ${{ github.token }}
+          name: Fire4Nix-0.86-R36H-ARM64-Native-Test
+          path: ${{ runner.temp }}/native-download
+      - name: Package genuine ELF ARM64 experimental R36H offline candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-086"
+          unzip -q "$RUNNER_TEMP/native-download/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" \
+            -d "$RUNNER_TEMP/native-086"
+          native="$RUNNER_TEMP/native-086/fire4nix-native-086-aarch64"
+          test "$(sha256sum "$native" | cut -d' ' -f1)" = \
+            4295f354873519802fc5817a1ee6d194489d1cc824fcd8e2cb65569d0fa0f1f4
+          python3 fire4nix/scripts/package-first-r36h-ports-candidate.py \
+            --runtime "$GITHUB_WORKSPACE/recovery/private-wpe-runtime-sdk-closed" \
+            --native "$native" --installer fire4nix/installer \
+            --output delivery/Fire4Nix-R36H-PRIMEIRO-TESTE-RECUPERADO.zip
+          sha256sum delivery/*.zip > delivery/SHA256SUMS.txt
+          {
+            echo 'WPE_SOURCE_RUN=39929101615'
+            echo 'WPE_SOURCE_SHA=f666dd2cee4ed5a3973338e3018f04eb4a8e84d1'
+            echo 'ABI_PROOF=STATIC_AARCH64_ELF_CLOSURE_ONLY'
+            echo 'R36H_HARDWARE_TESTED=no'
+            echo 'R36H_INSTALLABLE_VERIFIED=no'
+          } > delivery/STATUS.txt
+          cat delivery/STATUS.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish only completed static first-test candidate
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-EXPERIMENTAL-WPE-REPLAY-FIRST-TEST
+          path: delivery/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Save diagnostics if any closure step fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE-REPLAY-STATIC-AUDIT-REPORT
+          path: recovery/*.txt
+          if-no-files-found: warn
+          retention-days: 14
