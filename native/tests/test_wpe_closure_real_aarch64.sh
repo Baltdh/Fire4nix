@@ -201,6 +201,81 @@ set -e
 test "$bad_rc" -eq 6
 test ! -e "$tmp/untrusted-sdk-runtime"
 grep -Eq 'UNSAFE_STAGE_ELF_RPATH|STATIC_CLOSURE_ERRORS' "$tmp/rejected-sdk.log"
+
+# libatomic.so.1 is a GCC15 target runtime located in the pinned toolchain's
+# aarch64-rocknix-linux-gnu/lib64 rather than inside the stage-1 overlay.
+# Construct a synthetic AArch64 SONAME fixture with both 16-byte exports.
+compiler="$tmp/gcc15-target-fixture"
+mkdir -p "$compiler/aarch64-rocknix-linux-gnu/lib64"
+cat > "$tmp/atomic16.c" <<'EOF'
+int synthetic_load16(void) __asm__("__atomic_load_16");
+int synthetic_store16(void) __asm__("__atomic_store_16");
+int synthetic_load16(void) { return 1; }
+int synthetic_store16(void) { return 2; }
+int synthetic_atomic_dependency(void) { return synthetic_load16(); }
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libatomic.so.1 \
+ "$tmp/atomic16.c" -o "$compiler/aarch64-rocknix-linux-gnu/lib64/libatomic.so.1"
+# Restore the stage library so its historical negative RUNPATH test does not
+# interfere with these independent target-compiler dependency checks.
+cc -shared -fPIC -nostdlib -Wl,-soname,liboverlay.so.1 \
+ "$tmp/overlay.c" -o "$stage/usr/lib/liboverlay.so.1"
+cat > "$tmp/webkit-with-libatomic.c" <<'EOF'
+extern int step_symbol(void);
+extern int synthetic_atomic_dependency(void);
+int webkit_web_view_get_wpe_view(void) {
+ return step_symbol() + synthetic_atomic_dependency();
+}
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEWebKit-2.0.so.1 \
+ "$tmp/webkit-with-libatomic.c" -Wl,--no-as-needed \
+ -L"$sysroot/usr/lib" -l:libstep.so.1 \
+ -L"$compiler/aarch64-rocknix-linux-gnu/lib64" -l:libatomic.so.1 \
+ -o "$runtime/lib/libWPEWebKit-2.0.so.1"
+readelf -d "$runtime/lib/libWPEWebKit-2.0.so.1" |
+ grep -Fq 'Shared library: [libatomic.so.1]'
+# Without an explicitly trusted target compiler, missing libatomic must stay
+# blocked rather than pulling a similarly named host Ubuntu library.
+set +e
+python3 "$bundler" --runtime "$runtime" --sysroot "$sysroot" \
+ --sdk-stage "$stage" --output "$tmp/no-toolchain-runtime" \
+ > "$tmp/no-toolchain.log" 2>&1
+no_toolchain_rc=$?
+set -e
+test "$no_toolchain_rc" -eq 6
+test ! -e "$tmp/no-toolchain-runtime"
+grep -Fq 'libatomic.so.1' "$tmp/no-toolchain.log"
+# This copies BOTH SDK-stage overlay liboverlay and target compiler libatomic.
+python3 "$bundler" --runtime "$runtime" --sysroot "$sysroot" \
+ --sdk-stage "$stage" --target-toolchain "$compiler" \
+ --output "$tmp/atomic-bundled-runtime" > "$tmp/atomic-bundle.log"
+test -s "$tmp/atomic-bundled-runtime/lib/libatomic.so.1"
+cmp "$tmp/atomic-bundled-runtime/lib/libatomic.so.1" \
+ "$compiler/aarch64-rocknix-linux-gnu/lib64/libatomic.so.1"
+grep -Fxq 'WPE_TARGET_LIBATOMIC16_BUNDLED=yes' \
+ "$tmp/atomic-bundled-runtime/SDK-BUNDLE-REPORT.txt"
+grep -Fxq 'ROCKNIX_SDK_BUNDLED_LIBRARIES=2' \
+ "$tmp/atomic-bundled-runtime/SDK-BUNDLE-REPORT.txt"
+(cd "$tmp/atomic-bundled-runtime" && sha256sum -c SHA256SUMS.txt >/dev/null)
+python3 "$auditor" --runtime "$tmp/atomic-bundled-runtime" \
+ --sysroot "$sysroot" --sdk-stage "$stage" --strict > "$tmp/atomic-closed.txt"
+grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$tmp/atomic-closed.txt"
+grep -Fxq 'WPE_MISSING_SONAMES_COUNT=0' "$tmp/atomic-closed.txt"
+# Reject a malicious host/CI absolute runtime path in the target compiler lib.
+cc -shared -fPIC -nostdlib -Wl,-soname,libatomic.so.1 \
+ -Wl,-rpath,/home/runner/work/malicious \
+ "$tmp/atomic16.c" -o "$compiler/aarch64-rocknix-linux-gnu/lib64/libatomic.so.1"
+set +e
+python3 "$bundler" --runtime "$runtime" --sysroot "$sysroot" \
+ --sdk-stage "$stage" --target-toolchain "$compiler" \
+ --output "$tmp/atomic-host-rpath-refused" > "$tmp/atomic-host-rpath.log" 2>&1
+untrusted_atomic_rc=$?
+set -e
+test "$untrusted_atomic_rc" -eq 6
+test ! -e "$tmp/atomic-host-rpath-refused"
+grep -Fq 'UNSAFE_STAGE_ELF_RPATH:libatomic.so.1' "$tmp/atomic-host-rpath.log"
+echo 'WPE_GCC15_LIBATOMIC16_RUNTIME=PASS_REAL_AARCH64_FIXTURE_CLOSURE'
+
 echo 'WPE_PRIVATE_SDK_BUNDLE_FIXTURES=PASS_REAL_AARCH64_CLOSED_NO_HOST_LIBS'
 
 echo 'WPE_REAL_AARCH64_ELF_FIXTURES=PASS_STATIC_RUNTIME_STAGE_ONLY_BLOCKS'
