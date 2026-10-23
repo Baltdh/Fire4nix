@@ -119,6 +119,43 @@ class RealWPEEvidenceTests(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("MISSING_WPE_PLATFORM_ENTRYPOINT", content)
 
+
+    def test_unresolved_gcc15_outlined_atomics_block_shared_webkit(self):
+        def unresolved(flag, path):
+            value = self.fake_read(flag, path)
+            if flag == "--dyn-syms" and path.name == "libWPEWebKit-2.0.so.1":
+                return value + "\\n 12: 0 0 FUNC GLOBAL DEFAULT UND __aarch64_ldadd4_acq_rel"
+            return value
+        content, passed = m.evidence(self.root, "success", unresolved)
+        self.assertFalse(passed)
+        self.assertIn("UNDEFINED_GCC15_OUTLINED_ATOMIC:__aarch64_ldadd4_acq_rel",
+                      content)
+
+    def test_outlined_atomics_block_real_web_and_network_processes(self):
+        for name, helper in (("WPEWebProcess", "__aarch64_cas4_acq_rel"),
+                             ("WPENetworkProcess", "__aarch64_swp4_acq_rel")):
+            with self.subTest(name=name):
+                def unresolved(flag, path):
+                    value = self.fake_read(flag, path)
+                    if flag == "--dyn-syms" and path.name == name:
+                        return value + "\\n 12: 0 0 FUNC GLOBAL DEFAULT UND " + helper
+                    return value
+                content, passed = m.evidence(self.root, "success", unresolved)
+                self.assertFalse(passed)
+                self.assertIn(name + ":UNDEFINED_GCC15_OUTLINED_ATOMIC:" + helper, content)
+
+    def test_defined_aarch64_helper_and_lse_probe_are_not_undefined(self):
+        def defined(flag, path):
+            value = self.fake_read(flag, path)
+            if flag == "--dyn-syms" and path.name == "WPEWebProcess":
+                return (value
+                        + "\\n 12: 0 0 FUNC GLOBAL DEFAULT 14 __aarch64_ldadd4_acq_rel"
+                        + "\\n 13: 0 0 FUNC GLOBAL DEFAULT UND __aarch64_have_lse_atomics")
+            return value
+        content, passed = m.evidence(self.root, "success", defined)
+        self.assertTrue(passed)
+        self.assertNotIn("UNDEFINED_GCC15_OUTLINED_ATOMIC", content)
+
     def test_gstreamer_symbol_forbidden(self):
         def bad_gst(flag, path):
             if flag == "--dyn-syms":
