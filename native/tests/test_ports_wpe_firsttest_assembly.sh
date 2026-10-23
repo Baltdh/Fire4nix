@@ -73,6 +73,14 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     assert len(names)==len(z.namelist())
     assert z.getinfo('Fire4Nix-Direto.sh').external_attr >> 16 & 0o111
     assert z.getinfo('Fire4Nix/bin/fire4nix-native-aarch64').external_attr >> 16 & 0o111
+    # WebKit subprocesses must remain executable after GitHub artifact
+    # extraction and the final Ports ZIP build, not just the main launcher.
+    for name in ('WPEWebProcess', 'WPENetworkProcess'):
+        info=z.getinfo('Fire4Nix/runtime/libexec/wpe-webkit-2.0/'+name)
+        assert (info.external_attr >> 16 & 0o170000) == 0o100000
+        assert (info.external_attr >> 16 & 0o111) == 0o111, name
+    assert (z.getinfo('Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1').external_attr >> 16 & 0o111) == 0
+
 print('PORTS_EXPERIMENTAL_ZIP_STRUCTURE=PASS_REAL_ELF_ARM64_FIXTURES')
 PY
 # Extract the candidate into a path with spaces and install its diagnostic
