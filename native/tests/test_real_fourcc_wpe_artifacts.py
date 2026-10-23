@@ -124,7 +124,7 @@ class RealWPEEvidenceTests(unittest.TestCase):
         def unresolved(flag, path):
             value = self.fake_read(flag, path)
             if flag == "--dyn-syms" and path.name == "libWPEWebKit-2.0.so.1":
-                return value + "\\n 12: 0 0 FUNC GLOBAL DEFAULT UND __aarch64_ldadd4_acq_rel"
+                return value + "\n 12: 0 0 FUNC GLOBAL DEFAULT UND __aarch64_ldadd4_acq_rel"
             return value
         content, passed = m.evidence(self.root, "success", unresolved)
         self.assertFalse(passed)
@@ -138,7 +138,7 @@ class RealWPEEvidenceTests(unittest.TestCase):
                 def unresolved(flag, path):
                     value = self.fake_read(flag, path)
                     if flag == "--dyn-syms" and path.name == name:
-                        return value + "\\n 12: 0 0 FUNC GLOBAL DEFAULT UND " + helper
+                        return value + "\n 12: 0 0 FUNC GLOBAL DEFAULT UND " + helper
                     return value
                 content, passed = m.evidence(self.root, "success", unresolved)
                 self.assertFalse(passed)
@@ -149,8 +149,8 @@ class RealWPEEvidenceTests(unittest.TestCase):
             value = self.fake_read(flag, path)
             if flag == "--dyn-syms" and path.name == "WPEWebProcess":
                 return (value
-                        + "\\n 12: 0 0 FUNC GLOBAL DEFAULT 14 __aarch64_ldadd4_acq_rel"
-                        + "\\n 13: 0 0 FUNC GLOBAL DEFAULT UND __aarch64_have_lse_atomics")
+                        + "\n 12: 0 0 FUNC GLOBAL DEFAULT 14 __aarch64_ldadd4_acq_rel"
+                        + "\n 13: 0 0 FUNC GLOBAL DEFAULT UND __aarch64_have_lse_atomics")
             return value
         content, passed = m.evidence(self.root, "success", defined)
         self.assertTrue(passed)
