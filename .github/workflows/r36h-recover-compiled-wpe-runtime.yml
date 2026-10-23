@@ -89,6 +89,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y patchelf
+          python3 native/tests/test_portable_sdk_rpaths.py
           python3 native/tests/test_rocknix_audit_sysroot.py
           python3 scripts/prepare-rocknix-audit-sysroot.py \
             --source sdk/toolchain/aarch64-rocknix-linux-gnu/sysroot \
@@ -98,6 +101,10 @@ jobs:
             --overlay fixed-elf-overlay/isolated-elf-overlay \
             --support sdk/toolchain/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1 \
             --out private-closure-stage | tee reports/sdk-overlay.txt
+          python3 scripts/prepare-portable-sdk-rpaths.py \
+            --source private-closure-stage --output portable-closure-stage \
+            | tee reports/sdk-portable-rpaths.txt
+          cp portable-closure-stage/PORTABLE-RPATH-REPORT.json reports/
       - name: Recover original SHA256-proven aliases and close dependencies
         shell: bash
         run: |
@@ -112,13 +119,13 @@ jobs:
           python3 scripts/bundle-rocknix-wpe-sdk-deps.py \
             --runtime raw-runtime \
             --sysroot audit-sysroot \
-            --sdk-stage private-closure-stage \
+            --sdk-stage portable-closure-stage \
             --target-toolchain sdk/toolchain \
             --output closed-runtime | tee reports/sdk-bundle.txt
           python3 scripts/audit-wpe-runtime-closure.py \
             --runtime closed-runtime \
             --sysroot audit-sysroot \
-            --sdk-stage private-closure-stage --strict | tee reports/closure.txt
+            --sdk-stage portable-closure-stage --strict | tee reports/closure.txt
           (cd closed-runtime && sha256sum -c SHA256SUMS.txt)
           grep -Fxq 'WPE_TARGET_LIBATOMIC16_BUNDLED=yes' closed-runtime/SDK-BUNDLE-REPORT.txt
       - name: Package experimental offline candidate after every static gate
