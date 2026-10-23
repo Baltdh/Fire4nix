@@ -2,15 +2,19 @@ name: Fire4Nix audit actual fourcc WebKit and process artifacts
 
 on:
   push:
-    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022']
+    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022', 'ci/r36h-wpe-real-build-failure-diagnostics-20261023']
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
+      - 'scripts/diagnose-real-wpe-build-failure.py'
+      - 'native/tests/test_diagnose_real_wpe_build_failure.py'
       - 'native/tests/test_real_fourcc_wpe_artifacts.py'
       - 'native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh'
       - '.github/workflows/r36h-follow-real-fourcc-wpe-processes.yml'
   pull_request:
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
+      - 'scripts/diagnose-real-wpe-build-failure.py'
+      - 'native/tests/test_diagnose_real_wpe_build_failure.py'
       - 'native/tests/test_real_fourcc_wpe_artifacts.py'
       - 'native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh'
       - '.github/workflows/r36h-follow-real-fourcc-wpe-processes.yml'
@@ -41,6 +45,8 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/audit-real-fourcc-wpe-artifacts.py
           python3 native/tests/test_real_fourcc_wpe_artifacts.py
+          python3 -m py_compile scripts/diagnose-real-wpe-build-failure.py
+          python3 native/tests/test_diagnose_real_wpe_build_failure.py
           bash -n native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh
       - name: Real ARM64 WebKit and Web/Network ELF artifact acceptance and rejection
         if: matrix.os == 'ubuntu-24.04-arm'
@@ -93,6 +99,19 @@ jobs:
             cat audit/provenance.txt
             cat audit/linked-wpe-and-processes.txt
             echo 'Full transitive loader and R36H graphics remain unverified.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnose the first real WPE compiler or linker failure
+        if: always() && github.event_name == 'workflow_run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit downloaded
+          python3 scripts/diagnose-real-wpe-build-failure.py \
+            --artifact downloaded \
+            --report audit/build-failure-diagnostic.txt
+          {
+            echo '## WPE real compiler/linker failure classification'
+            cat audit/build-failure-diagnostic.txt
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload audit report, never rebundle binary fixture or browser
         if: always()
