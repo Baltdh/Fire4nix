@@ -64,6 +64,22 @@ def validated_stage_elf(mod, soname: str, source: Path, stage: Path) -> None:
             raise ValueError("GSTREAMER_STAGE_NEEDED:" + soname)
 
 
+def libatomic_exported(symbol_table: str, required: str) -> bool:
+    """Accept only defined, globally bound, default-versioned dynamic exports."""
+    if required not in ("__atomic_load_16", "__atomic_store_16"):
+        return False
+    for row in symbol_table.splitlines():
+        match = re.match(
+            r"^\\s*\\d+:\\s+\\S+\\s+\\d+\\s+\\S+\\s+(?:GLOBAL|WEAK)"
+            r"\\s+\\S+\\s+(\\S+)\\s+(\\S+)", row)
+        if not match:
+            continue
+        index, symbol = match.groups()
+        if index != "UND" and symbol in (required, required + "@@LIBATOMIC_1.0"):
+            return True
+    return False
+
+
 def audited_toolchain_libatomic(mod, toolchain: Path) -> Path:
     """Permit only the 16-byte atomic ABI library of the pinned ROCKNIX SDK."""
     if not toolchain.is_dir() or toolchain.is_symlink() or toolchain.resolve() == Path("/"):
@@ -72,8 +88,7 @@ def audited_toolchain_libatomic(mod, toolchain: Path) -> Path:
     validated_stage_elf(mod, "libatomic.so.1", file, toolchain)
     symbols = mod.readelf("--dyn-syms", file)
     for required in ("__atomic_load_16", "__atomic_store_16"):
-        if not any(required in line and not re.search(r"\bUND\b", line)
-                   for line in symbols.splitlines()):
+        if not libatomic_exported(symbols, required):
             raise ValueError("TARGET_LIBATOMIC_MISSING_EXPORT:" + required)
     return file
 
