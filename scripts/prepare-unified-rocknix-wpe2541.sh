@@ -88,13 +88,13 @@ case "$atomic_path" in "$sdk"/aarch64-rocknix-linux-gnu/lib64/*) ;; *)
 esac
 atomic_dir=$(dirname "$atomic_path")
 readelf -h "$atomic_path" | grep -Eq 'Machine:[[:space:]]+AArch64' || exit 32
-readelf -d "$atomic_path" | grep -Eq 'SONAME.*\\[libatomic.so.1\\]' || exit 32
+readelf -d "$atomic_path" | grep -Fq '[libatomic.so.1]' || exit 32
 readelf --wide --dyn-syms "$atomic_path" | grep -Fq '__atomic_load_16' || exit 32
 readelf --wide --dyn-syms "$atomic_path" | grep -Fq '__atomic_store_16' || exit 32
 python3 - "$atomic_path" <<'PY'
 import re, subprocess, sys
 out=subprocess.check_output(["readelf","--wide","-V",sys.argv[1]],text=True)
-if any((int(a),int(b))>(2,41) for a,b in re.findall(r"Name:\\s*GLIBC_(\\d+)\\.(\\d+)",out)):
+if any((int(a),int(b))>(2,41) for a,b in re.findall(r"Name:\s*GLIBC_(\d+)\.(\d+)",out)):
     raise SystemExit("ERROR: ROCKNIX libatomic requires GLIBC newer than 2.41")
 PY
 echo 'WPE_ROCKNIX_LIBATOMIC16=PASS_PINNED_GCC_TARGET_LIB64' >> "$work/report/status.txt"
