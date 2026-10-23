@@ -1,0 +1,33 @@
+name: R36H Mali EGL GLES2 read-only diagnostic host regression
+
+on:
+  push:
+    branches: ['diagnostic/r36h-egl-gles-context-probe-20261023']
+    paths:
+      - 'diagnostics/Fire4Nix-EGL-R36H.py'
+      - 'native/tests/test_r36h_egl_probe.py'
+      - '.github/workflows/r36h-egl-gles-device-probe.yml'
+  pull_request:
+    paths:
+      - 'diagnostics/Fire4Nix-EGL-R36H.py'
+      - 'native/tests/test_r36h_egl_probe.py'
+      - '.github/workflows/r36h-egl-gles-device-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  host-mocked-egl-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test probe without EGL/Mali device access
+        run: |
+          set -euo pipefail
+          python3 -m py_compile diagnostics/Fire4Nix-EGL-R36H.py native/tests/test_r36h_egl_probe.py
+          python3 native/tests/test_r36h_egl_probe.py
+          echo 'R36H_EGL_CONTEXT_PROBE=PASS_HOST_MOCK_ONLY_NO_DEVICE_ACCESS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WEBKIT_FIRST_FRAME_VERIFIED=no' >> "$GITHUB_STEP_SUMMARY"
