@@ -231,7 +231,7 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
         # executables with DT_NEEDED must identify a valid target ELF loader.
         # AArch64 headers and NEEDED sonames alone cannot prove that execve()
         # can locate the correct loader on the physical ROCKNIX rootfs.
-        if path in root_files and path.name != "libWPEWebKit-2.0.so.1":
+        if path in root_files and path.name in (*PROCESSES, "WPEGPUProcess"):
             try:
                 phdrs = elf("-l", path)
             except ValueError as err:
