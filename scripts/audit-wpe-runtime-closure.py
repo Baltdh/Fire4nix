@@ -37,8 +37,8 @@ HOST_PATH_SEGMENTS = ("/home/", "/tmp/", "/opt/", "/workspace/", "/runner/")
 
 
 def readelf(flag: str, path: Path) -> str:
-    # Versioned GCC exports are otherwise abbreviated (e.g. __at[...]@@...).
-    # All downstream checks must see complete symbol names and ELF paths.
+    # Keep dynamic symbol names and ELF metadata complete, including versioned
+    # libatomic exports which GNU readelf otherwise abbreviates.
     cmd = ["readelf", "--wide", flag, str(path)]
     try:
         return subprocess.run(cmd, capture_output=True, check=True,

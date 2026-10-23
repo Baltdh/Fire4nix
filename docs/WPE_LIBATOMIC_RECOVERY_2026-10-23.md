@@ -48,3 +48,22 @@ continuam proibidos. O alias privado `lib -> usr/lib` serve somente à análise;
 não prova o layout nem o carregador do R36H. Os originais não são modificados.
 Seis testes cobrem preservação da origem, links de host/escape/alvo ausente,
 saída existente e sobreposição de diretórios. Total local: 167 testes aprovados.
+
+## Fechamento real e portabilidade do pacote
+
+A execução 39995227995 passou o fechamento estrito: 43 ELFs, 187 arestas de
+ dependências, zero SONAMEs ausentes, zero dependências exclusivas do estágio
+ e zero achados ABI. Incluiu 35 bibliotecas do SDK e validou todos os hashes.
+O empacotador detectou em seguida `NON_PORTABLE_RPATH:libjpeg.so.8`: caminhos
+padrão do sistema aceitos no SDK não são aceitos no pacote relocável.
+
+`prepare-portable-sdk-rpaths.py` remove somente RPATH/RUNPATH compostos pelos
+quatro diretórios padrão (`/lib`, `/lib64`, `/usr/lib`, `/usr/lib64`) em uma
+nova cópia privada do estágio. Mantém caminhos relativos a `$ORIGIN`, rejeita
+caminhos inesperados e verifica SONAME, NEEDED e GLIBC após cada alteração.
+Registra hashes anteriores/posteriores. O fechamento e o empacotamento rodam
+novamente depois da transformação, sem alterar o motor WPE original.
+
+Integra também a verificação exata de exportações libatomic da main (#175).
+Validação integrada local: 176 testes Python aprovados. A nova recuperação
+real está em execução; o teste físico no R36H continua pendente.
