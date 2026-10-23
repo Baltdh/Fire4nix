@@ -34,17 +34,20 @@ for expected in 'ENABLE_WPE_PLATFORM_WAYLAND:BOOL=ON' \
     echo "ERROR: unexpected CMake option: $expected" >&2; exit 5;
   }
 done
-# WebKit 2.54.1 declares source CMake targets WebProcess and NetworkProcess,
-# and PlatformWPE changes their executable output names to WPE*Process.
+# WPE 2.54.1 declares its dlopen-loaded WPEInjectedBundle and
+# InspectorResources as separate CMake targets in PlatformWPE.cmake and
+# InspectorGResources.cmake. Building only the two process executables does
+# not guarantee either installed asset exists when cmake --install runs.
+# The profile uses WPEWebProcess and WPENetworkProcess, without GPUProcess.
 target_file=$(mktemp)
 trap 'rm -f "$target_file"' EXIT
 ninja -C "$build" -t targets all > "$target_file"
-for target in WebKit WebProcess NetworkProcess; do
+for target in WebKit WebProcess NetworkProcess WPEInjectedBundle InspectorResources; do
   grep -Eq "^$target:[[:space:]]" "$target_file" || {
     echo "ERROR: real WPE Ninja target missing: $target" >&2; exit 6;
   }
 done
-echo 'WPE_REQUIRED_TARGETS=WebKit,WebProcess,NetworkProcess'
+echo 'WPE_REQUIRED_TARGETS=WebKit,WebProcess,NetworkProcess,WPEInjectedBundle,InspectorResources'
 echo 'WPE_GPU_PROCESS=OFF_VERIFIED'
 if [[ "$mode" == "--check" ]]; then
   echo 'WPE_SUBPROCESS_TARGET_CHECK=PASS_STATIC'
@@ -71,7 +74,7 @@ result="$report/wpe-subprocesses-result.txt"
 echo 'WPE_SUBPROCESS_BUILD=START_REAL_ROCKNIX_AARCH64' | tee "$result"
 set +e
 timeout --signal=TERM --kill-after=20s 10800s \
- cmake --build "$build" --target WebProcess NetworkProcess --parallel 2 \
+ cmake --build "$build" --target WebProcess NetworkProcess WPEInjectedBundle InspectorResources --parallel 2 \
  > "$report/wpe-subprocesses-build.log" 2>&1
 rc=$?
 set -e
@@ -85,6 +88,23 @@ if (( rc != 0 )); then
   tail -n 60 "$report/wpe-subprocesses-build.log"
   exit 10
 fi
+# The upstream targets are independent. Their outputs are required by
+# our strict private stage, so verify existence before trying cmake --install.
+module_count=0
+while IFS= read -r -d '' item; do
+  if readelf -h "$item" 2>/dev/null | grep -Eq 'Machine:[[:space:]]+AArch64'; then
+    module_count=$((module_count+1))
+  fi
+done < <(find "$build" -type f -name 'libWPEInjectedBundle.so' -print0)
+[[ "$module_count" == 1 ]] || {
+  echo "ERROR: expected one authentic AArch64 WPEInjectedBundle, found $module_count" >&2
+  exit 11
+}
+[[ -s "$build/share/inspector.gresource" && ! -L "$build/share/inspector.gresource" ]] || {
+  echo 'ERROR: InspectorResources did not generate share/inspector.gresource' >&2
+  exit 11
+}
+echo 'WPE_INSTALLED_ASSET_BUILD=PASS_MODULE_AND_INSPECTOR_RESOURCES_REAL'
 for process in WPEWebProcess WPENetworkProcess; do
   found=""
   while IFS= read -r -d '' item; do
