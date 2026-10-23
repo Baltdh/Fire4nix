@@ -77,7 +77,7 @@ grep -q 'visual_smoke_exit=70' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 grep -q 'visual_test_page=primeiro-teste.html' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 grep -q 'visual_test_manual_checks=HTML_CSS_THREE_COLORS_AND_JS_OK' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 grep -q 'visual_test_result=FAILED_OR_TIMED_OUT' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
-grep -Fq 'TEST_MODE=--smoke' "$T/visual-failed.log"
+grep -Fq 'TEST_MODE=--smoke' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 # The new dedicated Ports entry MUST start a persistent interactive browser.
 # The fake launcher exits immediately with code 70; no pixels are asserted.
 set +e
@@ -86,8 +86,8 @@ FIRE4NIX_ROMS="$T/roms" FIRE4NIX_TEST_REPORT_DIR="$T/reports" \
 live_failed=$?
 set -e
 test "$live_failed" -eq 70
-grep -Fq 'TEST_MODE=--open' "$T/live-failed.log"
-grep -Fq 'primeiro-teste.html' "$T/live-failed.log"
+grep -Fq 'TEST_MODE=--open' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
+grep -Fq 'primeiro-teste.html' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 grep -Fq 'visual_test=STARTED_INTERACTIVE_OFFLINE_HTML' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 grep -Fq 'visual_live_exit=70' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 grep -Fq 'visual_test_result=INTERACTIVE_SESSION_FAILED_OR_EXITED' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
