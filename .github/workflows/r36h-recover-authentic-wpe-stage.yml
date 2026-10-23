@@ -5,6 +5,10 @@ on:
     branches: ['rescue/r36h-reuse-staged-wpe-atomic16-20261023']
     paths:
       - '.github/workflows/r36h-recover-authentic-wpe-stage.yml'
+      - 'scripts/materialize-wpe-artifact-sonames.py'
+      - 'scripts/recover-preclosed-wpe-stage.py'
+      - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_recover_preclosed_wpe_stage.py'
   workflow_dispatch:
 
 permissions:
