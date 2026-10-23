@@ -46,7 +46,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build pkg-config python3 perl ruby gperf bison flex \
-            unifdef wayland-protocols libwayland-bin binutils file ccache patchelf
+            unifdef wayland-protocols libwayland-bin binutils file ccache patchelf \
+            libglib2.0-bin
           bash -n fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
           bash -n fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh
           python3 -m unittest discover -s fire4nix/native/tests -p 'test_*.py'
@@ -56,6 +57,10 @@ jobs:
           sh -n fire4nix/scripts/verify-unified-wpe-media-cache.sh
           test -x /usr/bin/unifdef
           test -x /usr/bin/wayland-scanner
+          # WPE OptionsWPE.cmake calls FindGLibCompileResources at configure time.
+          # ubuntu-24.04 lacks the host generator unless libglib2.0-bin is installed.
+          test -x /usr/bin/glib-compile-resources
+          /usr/bin/glib-compile-resources --version > /dev/null
           test "$(command -v ccache)" = /usr/bin/ccache
           mkdir -p "$CCACHE_DIR"
       - name: Restore GCC15 cross-compiler object cache (never host libraries)
