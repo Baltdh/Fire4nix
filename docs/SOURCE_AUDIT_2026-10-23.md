@@ -64,8 +64,8 @@ no console.
 
 ## Pendências reais
 
-1. Confirmar resultado do novo workflow no GitHub; distinguir execução da
-   branch de outras compilações simultâneas.
+1. Auditoria no GitHub aprovada na branch e na integração da PR #169;
+   acompanhar novamente caso haja mudanças posteriores nos fontes.
 2. Continuar validando o pacote WPE real e seus subprocessos com o SDK e
    artefatos correspondentes. Testes sintéticos não substituem esse processo.
 3. Testar o mesmo ZIP no R36H físico: primeiro frame HTML/CSS/JS, controles,
@@ -79,3 +79,13 @@ no console.
 
 Nenhuma biblioteca, driver ou arquivo do console foi alterado. Esta auditoria
 não estabelece que todos os defeitos possíveis foram eliminados.
+
+## Confirmação posterior no GitHub
+
+A auditoria completa passou na [branch](https://github.com/Baltdh/Fire4nix/actions/runs/39927235351)
+e na [integração da PR #169](https://github.com/Baltdh/Fire4nix/actions/runs/39927269542).
+As 11 suítes shell passaram no runner, incluindo sockets do gamepad e targets
+Ninja que não puderam ser concluídos localmente. A combinação local com
+`d2d3e0c` (PR #168, recebida durante a auditoria) passou **151 testes Python**
+e o teste atualizado de isolamento do carregador; não houve conflito de merge.
+Isso continua sem comprovar o primeiro frame no hardware.
