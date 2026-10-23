@@ -1,7 +1,7 @@
 name: Fire4Nix WPE runtime recursive ELF closure audit
 on:
   push:
-    branches: ['test/r36h-real-elf-closure-stage-only-block-20261022']
+    branches: ['test/r36h-real-elf-closure-stage-only-block-20261022', 'audit/r36h-wpe-subprocess-interpreter-20261023']
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'

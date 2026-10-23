@@ -23,6 +23,12 @@ SONAME = re.compile(r"\(SONAME\).*?\[([^\]]+)\]")
 NEEDED = re.compile(r"\(NEEDED\).*?\[([^\]]+)\]")
 RPATH = re.compile(r"\((?:RPATH|RUNPATH)\).*?\[([^\]]*)\]")
 GLIBC = re.compile(r"\bName:\s*GLIBC_(\d+)\.(\d+)\b")
+INTERP = re.compile(r"\[Requesting program interpreter:\s*([^\]]+)\]")
+ROCKNIX_INTERPRETERS = frozenset((
+    "/lib/ld-linux-aarch64.so.1",
+    "/lib64/ld-linux-aarch64.so.1",
+    "/usr/lib/ld-linux-aarch64.so.1",
+))
 SEARCH_DIRS = ("lib", "lib64", "usr/lib", "usr/lib64",
                "usr/lib/aarch64-rocknix-linux-gnu")
 PROCESSES = ("WPEWebProcess", "WPENetworkProcess")
@@ -133,6 +139,7 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
     from_build_only: list[str] = []
     edge_count = 0
     symbols = 0
+    interpreter_checks = 0
     scanned: set[Path] = set()
     stack = deque(root_files)
     while stack:
@@ -155,6 +162,38 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
                 bad.append(f"INVALID_WPE_SONAME:{found}")
         if re.search(r"\(TEXTREL\)", dynamic):
             bad.append(f"TEXTREL:{path.name}")
+        # Shared objects have no program interpreter, but Web/Network helper
+        # executables with DT_NEEDED must identify a valid target ELF loader.
+        # AArch64 headers and NEEDED sonames alone cannot prove that execve()
+        # can locate the correct loader on the physical ROCKNIX rootfs.
+        if path in root_files and path.name != "libWPEWebKit-2.0.so.1":
+            try:
+                phdrs = elf("-l", path)
+            except ValueError as err:
+                bad.append(f"UNREADABLE_PT_INTERP:{path.name}:{err}")
+                phdrs = ""
+            interpreters = INTERP.findall(phdrs)
+            if len(interpreters) > 1:
+                bad.append(f"AMBIGUOUS_PT_INTERP:{path.name}")
+            elif not interpreters:
+                if NEEDED.findall(dynamic):
+                    bad.append(f"MISSING_DYNAMIC_PT_INTERP:{path.name}")
+            else:
+                interpreter_checks += 1
+                name = interpreters[0]
+                if name not in ROCKNIX_INTERPRETERS:
+                    bad.append(f"FOREIGN_PT_INTERP:{path.name}:{name}")
+                else:
+                    provider = sysroot / name.lstrip("/")
+                    if not safe_file(provider, sysroot):
+                        bad.append(f"MISSING_SYSROOT_PT_INTERP:{path.name}:{name}")
+                    else:
+                        try:
+                            loader_header = elf("-h", provider)
+                            if not aarch64(loader_header):
+                                bad.append(f"WRONG_ARCH_PT_INTERP:{path.name}:{name}")
+                        except ValueError as err:
+                            bad.append(f"UNREADABLE_PT_INTERP_ELF:{path.name}:{err}")
         for major, minor in GLIBC.findall(versions):
             symbols += 1
             if (int(major), int(minor)) > MAX_GLIBC:
@@ -188,6 +227,8 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
         "WPE_SCANNED_ELFS": len(scanned),
         "WPE_NEEDED_EDGES": edge_count,
         "WPE_GLIBC_REFERENCES": symbols,
+        "WPE_PT_INTERP_CHECKS": interpreter_checks,
+        "WPE_PT_INTERP_PROVEN_ON_R36H": "no",
         "WPE_MISSING_SONAMES": sorted(set(missing)),
         "WPE_STAGE_ONLY_DEPENDENCIES": sorted(set(from_build_only)),
         "WPE_ABI_FINDINGS": sorted(set(bad)),
