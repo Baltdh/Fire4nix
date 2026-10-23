@@ -65,6 +65,21 @@ class ResolveRealRuntimeDownloadTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "MISSING_OR_UNSAFE"):
             resolver.resolve(self.download)
 
+    def test_symlinked_required_parent_rejected(self):
+        for folder in ("lib", "libexec/wpe-webkit-2.0", "share/wpe-webkit-2.0"):
+            with self.subTest(folder=folder):
+                root = self.populate("private-wpe-runtime-sdk-closed")
+                original = root / folder
+                external = self.download / "external"
+                original.rename(external)
+                original.symlink_to(external, target_is_directory=True)
+                try:
+                    with self.assertRaisesRegex(ValueError, "MISSING_OR_UNSAFE"):
+                        resolver.resolve(self.download)
+                finally:
+                    original.unlink()
+                    external.rename(original)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

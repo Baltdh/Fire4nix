@@ -1,42 +1,86 @@
-name: Audit original Fire4Nix
+name: Audit current Fire4Nix sources
 on:
   push:
-    paths: ['.github/workflows/audit-fire4nix-sources.yml']
+    paths:
+      - 'source_r36h/**'
+      - 'scripts/**'
+      - 'installer/**'
+      - 'native/**'
+      - 'rocknix-integration/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '*.zip'
+  pull_request:
+    paths:
+      - 'source_r36h/**'
+      - 'scripts/**'
+      - 'installer/**'
+      - 'native/**'
+      - 'rocknix-integration/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '*.zip'
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect latest packaged WPE integration
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install host test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ make binutils ninja-build
+      - name: Check current source syntax and historical archive integrity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import ast
+          import json
+          from pathlib import Path
+          import subprocess
+          import zipfile
+          files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')[:-1]
+          counts = {'files': len(files), 'shell': 0, 'python': 0, 'json': 0, 'zip': 0}
+          for name in files:
+              path = Path(name)
+              if path.suffix == '.sh':
+                  shell = 'bash' if 'bash' in path.read_text().splitlines()[0] else 'sh'
+                  subprocess.run([shell, '-n', name], check=True)
+                  counts['shell'] += 1
+              elif path.suffix == '.py':
+                  ast.parse(path.read_text(), filename=name)
+                  counts['python'] += 1
+              elif path.suffix == '.json':
+                  json.loads(path.read_text())
+                  counts['json'] += 1
+              elif path.suffix == '.zip':
+                  with zipfile.ZipFile(path) as archive:
+                      bad = archive.testzip()
+                      if bad:
+                          raise RuntimeError(f'{name}: corrupt entry {bad}')
+                  counts['zip'] += 1
+          print(json.dumps(counts, indent=2))
+          PY
+      - name: Run all host Python and compiled tab/build regressions
+        run: python3 -m unittest discover -s native/tests -p 'test_*.py' -v
+      - name: Test offline JavaScript without claiming a hardware frame
+        run: node native/tests/test_first_r36h_offline_js.cjs
+      - name: Test launcher and diagnostic behavior with host fixtures
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p _sources
-          unzip -q -o Fire4Nix_consolidated_latest_real_backup_wpe_integration_cleaned_with_launcher.zip -d _sources
-          echo '--- exact first-level tree ---'
-          find _sources/Fire4Nix -maxdepth 2 -type d | sort
-          echo '--- all .sh in package ---'
-          find _sources/Fire4Nix -path '*third_party_reference*' -prune -o -type f -name '*.sh' -print | sort
-          echo '--- first-party files, no upstream references ---'
-          find _sources/Fire4Nix -path '*third_party_reference*' -prune -o -type f -print | sed -n '1,180p'
-          echo '--- WPE native binary and runtime inventory ---'
-          find _sources/Fire4Nix/bin _sources/Fire4Nix/runtime -maxdepth 4 -type f 2>/dev/null | sed -n '1,80p' || true
-          echo '--- launch-related source snippets ---'
-          grep -n -E -C 4 'fallback|native_binary|LD_LIBRARY_PATH|WEBKIT_EXEC_PATH|WPE_PLATFORM|cog|wpe-platform' _sources/Fire4Nix/scripts/fire4nix_env.sh | tail -160 || true
-      - name: Extract FIRST PARTY sources for review
-        shell: bash
-        run: |
-          mkdir -p review
-          for dir in scripts src config build tools www; do
-            if [ -d "_sources/Fire4Nix/$dir" ]; then cp -r "_sources/Fire4Nix/$dir" review/; fi
+          for name in isolated_loader launch_gamepad launcher_verified_gpu_profile \
+            launcher_wpe_assets_paths ports_installer_gpu_profile runtime_diagnostic \
+            runtime_prereqs segv_stage_diagnostic elf_guard wpe_gstreamer_guard \
+            wpe_subprocess_target_guard; do
+            bash "native/tests/test_${name}.sh"
           done
-          for f in _sources/Fire4Nix/*.sh _sources/Fire4Nix/README.md _sources/Fire4Nix/Makefile _sources/Fire4Nix/CMakeLists.txt; do
-            if [ -f "$f" ]; then cp "$f" review/; fi
-          done
-          find review -type f | sort | sed -n '1,180p'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: first-party-source-audit
-          path: review/
-          retention-days: 7

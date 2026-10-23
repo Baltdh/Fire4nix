@@ -51,7 +51,15 @@ def resolve(download: Path) -> Path:
     selected = candidates[0]
     for relative in REQUIRED:
         file = selected / relative
-        if not file.is_file() or file.is_symlink() or file.stat().st_size <= 0:
+        # is_file() follows symlinked parent directories as well as the leaf.
+        # Reject every component before accepting transport-provided files.
+        components = [file]
+        parent = file.parent
+        while parent != selected:
+            components.append(parent)
+            parent = parent.parent
+        if (any(component.is_symlink() for component in components)
+                or not file.is_file() or file.stat().st_size <= 0):
             raise ValueError("MISSING_OR_UNSAFE_WPE_ARTIFACT:" + relative)
     return selected
 

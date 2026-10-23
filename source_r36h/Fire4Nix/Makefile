@@ -18,7 +18,7 @@ SDL_PKGS = sdl2 SDL2_image SDL2_ttf SDL2_mixer SDL2_net
 SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(SDL_PKGS) 2>/dev/null)
 SDL_LIBS := $(shell $(PKG_CONFIG) --libs $(SDL_PKGS) 2>/dev/null)
 
-WPE_PKG_NAME ?= $(shell for pkg in wpe-webkit-2.0 wpe-webkit wpewebkit; do $(PKG_CONFIG) --exists $$pkg >/dev/null 2>&1 && { printf '%s\n' $$pkg; break; }; done; printf '%s\n' wpe-webkit-2.0)
+WPE_PKG_NAME ?= $(shell for pkg in wpe-webkit-2.0 wpe-webkit wpewebkit; do $(PKG_CONFIG) --exists $$pkg >/dev/null 2>&1 && { printf '%s\n' $$pkg; exit 0; }; done; printf '%s\n' wpe-webkit-2.0)
 WPE_CFLAGS ?= $(shell if [ -n "$(WPE_PKG_NAME)" ]; then $(PKG_CONFIG) --cflags $(WPE_PKG_NAME) 2>/dev/null; fi)
 WPE_LIBS ?= $(shell if [ -n "$(WPE_PKG_NAME)" ]; then $(PKG_CONFIG) --libs $(WPE_PKG_NAME) 2>/dev/null; fi)
 
@@ -32,6 +32,7 @@ SRCS := src/main.cpp \
 	$(wildcard src/gui/*.cpp)
 
 OBJS := $(SRCS:.cpp=.o)
+DEPS := $(OBJS:.o=.d)
 
 CPPFLAGS += -I. -Isrc -Isrc/gui
 CXXFLAGS += $(WARNFLAGS) $(CURL_CFLAGS) $(LITEHTML_CFLAGS) -std=c++17 -O2 $(SDL_CFLAGS) -DRK3326_BUILD
@@ -44,7 +45,9 @@ $(TARGET): $(OBJS)
 	$(CXX) $(OBJS) $(LDFLAGS) $(LDLIBS) -o $@
 
 %.o: %.cpp
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+-include $(DEPS)
 
 ifeq ($(strip $(WPE_LIBS)),)
 wpe-platform-launcher:
@@ -55,6 +58,6 @@ wpe-platform-launcher: src/wpe/wpe_platform_launcher.cpp
 endif
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(DEPS) $(TARGET) fire4nix-wpe-platform
 
 .PHONY: all clean wpe-platform-launcher

@@ -62,6 +62,27 @@ class AtomicArchiveGateTests(TestCase):
             with self.assertRaisesRegex(ValueError, "WPE_SONAME_MISMATCH"):
                 module.elf_check(Path("/synthetic/libWPEWebKit-2.0.so.1"))
 
+    def test_native_input_loader_is_checked_before_rename(self):
+        for interpreter in ("", "/lib/ld-musl-aarch64.so.1", "/build/ld-linux-aarch64.so.1"):
+            with self.subTest(interpreter=interpreter):
+                def bad(flag, file):
+                    if flag == "-l":
+                        return f"[Requesting program interpreter: {interpreter}]" if interpreter else ""
+                    return self.readelf_fixture("")(flag, file)
+                with mock.patch.object(module, "get_readelf", side_effect=bad):
+                    with self.assertRaisesRegex(ValueError, "INVALID_PROGRAM_LOADER"):
+                        module.elf_check(Path("/synthetic/fire4nix-native-086-aarch64"))
+
+    def test_native_input_supported_loaders(self):
+        for interpreter in ("/lib/ld-linux-aarch64.so.1", "/lib64/ld-linux-aarch64.so.1"):
+            with self.subTest(interpreter=interpreter):
+                def valid(flag, file):
+                    if flag == "-l":
+                        return f"[Requesting program interpreter: {interpreter}]"
+                    return self.readelf_fixture("")(flag, file)
+                with mock.patch.object(module, "get_readelf", side_effect=valid):
+                    module.elf_check(Path("/synthetic/fire4nix-native-086-aarch64"))
+
 
 if __name__ == "__main__":
     main(verbosity=2)

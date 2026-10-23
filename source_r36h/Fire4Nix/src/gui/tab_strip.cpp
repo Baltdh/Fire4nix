@@ -32,6 +32,9 @@ void TabStrip::closeTab(std::size_t index)
     if (tabs_.empty()) {
         tabs_.push_back("Home");
         index_ = 0;
+    } else if (index < index_) {
+        // Erasing an earlier tab shifts the selected tab one slot left.
+        --index_;
     } else if (index_ >= tabs_.size()) {
         index_ = tabs_.size() - 1;
     }

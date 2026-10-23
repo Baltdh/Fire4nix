@@ -1,5 +1,7 @@
 # Fire4Nix — navegador para R36H (ROCKNIX)
 
+[Auditoria dos fontes — 23/10/2026](docs/SOURCE_AUDIT_2026-10-23.md): inventário, falhas reproduzidas, correções e limites dos testes.
+
 ## Estado atual e critérios para terminar (22/10/2026)
 
 O SDK ROCKNIX real e seu overlay de desenvolvimento passaram a auditoria **estática** estrita de 465 referências `DT_NEEDED` na [PR #110](https://github.com/Baltdh/Fire4nix/pull/110), mas isso **não valida um navegador instalável**. Ainda faltam completar WebCore/WebKit WPE 2.54.1, verificar ABI e símbolos do runtime final, integrar o pacote, abrir a interface no R36H físico e comprovar HTTPS/controles. Acompanhar as compilações em [#102](https://github.com/Baltdh/Fire4nix/pull/102), [#106](https://github.com/Baltdh/Fire4nix/pull/106), [#107](https://github.com/Baltdh/Fire4nix/pull/107) e [#108](https://github.com/Baltdh/Fire4nix/pull/108); não presumir resultado de workflow em andamento.
