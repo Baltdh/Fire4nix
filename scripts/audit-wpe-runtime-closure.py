@@ -141,10 +141,16 @@ def injected_bundle_requirement(runtime: Path) -> tuple[bool, str]:
         tree = runtime / dirname
         if tree.is_symlink() or not tree.is_dir():
             raise ValueError("UNSAFE_WPE_ASSET_DIRECTORY")
+        if tree.parent.is_symlink():
+            raise ValueError("UNSAFE_WPE_ASSET_PARENT")
         for asset in tree.rglob("*"):
-            if asset.is_symlink() or not safe_file(asset, runtime) if asset.is_file() else (
-                    asset.is_symlink() or not asset.is_dir()):
+            if asset.is_symlink():
                 raise ValueError("UNSAFE_WPE_ASSET_CONTENT")
+            if asset.is_file():
+                if not safe_file(asset, runtime):
+                    raise ValueError("ESCAPING_WPE_ASSET_CONTENT")
+            elif not asset.is_dir():
+                raise ValueError("SPECIAL_WPE_ASSET_CONTENT")
     return True, "strict_assets_audited" if profile == "strict" else "optional_assets_audited"
 
 
