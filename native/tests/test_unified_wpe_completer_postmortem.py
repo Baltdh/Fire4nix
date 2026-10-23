@@ -57,6 +57,9 @@ class UnifiedArtifactPostmortem(unittest.TestCase):
         self.assertNotIn("R36H_INSTALLABLE=yes", result)
 
     def test_no_artifact_or_report_never_claims_binary_success(self):
+        # setUp builds an empty runtime directory for other tests; remove it
+        # to model a genuinely missing published artifact.
+        self.runtime.rmdir()
         result = module.analyze(self.root, "failure", lambda file: [])
         self.assertIn("WPE_UNIFIED_RUNTIME_SOURCE=NO_STAGED_RUNTIME", result)
         self.assertIn("WPE_UNIFIED_ALL_ASSETS_PRESENT_STATIC=no", result)
