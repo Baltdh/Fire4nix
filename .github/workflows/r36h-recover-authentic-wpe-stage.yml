@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends binutils python3 unzip
+          sudo apt-get install -y --no-install-recommends binutils python3 unzip patchelf
           tarball="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
           test -s "$tarball"
           tar -tJf "$tarball" > "$RUNNER_TEMP/sdk-list.txt"
@@ -120,13 +120,46 @@ jobs:
               if [ -f "$p" ]; then readelf -d "$p" | grep -E 'SONAME|RPATH|RUNPATH' || true; fi
             done
           } | tee recovery/sdk-provider-inventory.txt
+      - name: Sanitize only six proven development RPATHs in independent SDK copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$GITHUB_WORKSPACE/stage1-artifact/stage1-combined"
+          six="$GITHUB_WORKSPACE/recovery/rpath-six"
+          stage="$GITHUB_WORKSPACE/recovery/relocatable-sdk-stage"
+          python3 fire4nix/scripts/sanitize-rocknix-build-rpath.py \
+            --stage "$source" --output "$six" \
+            2>&1 | tee recovery/rpath-sanitizer.txt
+          mkdir -p "$stage"
+          cp -a --reflink=auto "$source/." "$stage/"
+          python3 - "$six" "$stage" <<'PY'
+          from pathlib import Path
+          import json, os, shutil, sys
+          clean, output = (Path(arg) for arg in sys.argv[1:])
+          items = json.loads((clean/"report.json").read_text())
+          if len(items) != 6:
+              raise SystemExit("REQUIRE_EXACTLY_SIX_AUDITED_RPATH_FIXES")
+          for item in items:
+              name = item["file"]
+              if "/" in name or ".." in name or not name.startswith(("libgcrypt", "libfontconfig")):
+                  raise SystemExit("UNSAFE_SANITIZED_ELF_NAME")
+              src = clean / "usr/lib" / name
+              dest = output / "usr/lib" / name
+              if not src.is_file() or src.is_symlink() or not dest.is_file() or dest.is_symlink():
+                  raise SystemExit("MISSING_OR_SYMLINKED_STAGE_ELF:" + name)
+              temp = dest.with_name(name + ".validated-temp")
+              shutil.copy2(src, temp)
+              os.replace(temp, dest)
+          print("RELOCATABLE_SDK_STAGE=PASS_SIX_VERIFIED_COPIES")
+          PY
+          echo 'SDK_STAGE_ORIGINAL_UNMODIFIED=yes' >> "$GITHUB_STEP_SUMMARY"
       - name: Complete genuine ROCKNIX ELF recursive dependency closure
         shell: bash
         run: |
           set -euo pipefail
           sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
           sysroot="$sdk/aarch64-rocknix-linux-gnu/sysroot"
-          stage="$GITHUB_WORKSPACE/stage1-artifact/stage1-combined"
+          stage="$GITHUB_WORKSPACE/recovery/relocatable-sdk-stage"
           closed="$GITHUB_WORKSPACE/recovery/private-wpe-runtime-sdk-closed"
           python3 fire4nix/scripts/bundle-rocknix-wpe-sdk-deps.py \
             --runtime "$GITHUB_WORKSPACE/recovery/private-wpe-runtime" \
@@ -135,6 +168,7 @@ jobs:
             2>&1 | tee recovery/bundle-report.txt
           grep -Fxq 'ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=PASS_STATIC_SONAMES_ONLY' "$closed/SDK-BUNDLE-REPORT.txt"
           grep -Fxq 'WPE_TARGET_LIBATOMIC16_BUNDLED=yes' "$closed/SDK-BUNDLE-REPORT.txt"
+          grep -Fxq 'WPE_TARGET_LIBGCC_BUNDLED=yes' "$closed/SDK-BUNDLE-REPORT.txt"
           (cd "$closed" && sha256sum -c SHA256SUMS.txt)
           python3 fire4nix/scripts/audit-wpe-runtime-closure.py \
             --runtime "$closed" --sysroot "$sysroot" --sdk-stage "$stage" \
