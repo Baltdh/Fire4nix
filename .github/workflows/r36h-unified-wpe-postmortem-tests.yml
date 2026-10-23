@@ -1,0 +1,43 @@
+name: Fire4Nix unified WPE completed-run postmortem regression
+on:
+  push:
+    branches: ['audit/r36h-unified-wpe-completed-run-postmortem-20261023']
+    paths:
+      - 'scripts/inspect-unified-wpe-completed-artifact.py'
+      - 'native/tests/test_unified_wpe_completer_postmortem.py'
+      - '.github/workflows/r36h-unified-wpe-completed-postmortem.yml'
+      - '.github/workflows/r36h-unified-wpe-postmortem-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/inspect-unified-wpe-completed-artifact.py'
+      - 'native/tests/test_unified_wpe_completer_postmortem.py'
+      - '.github/workflows/r36h-unified-wpe-completed-postmortem.yml'
+      - '.github/workflows/r36h-unified-wpe-postmortem-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  host-and-arm64:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fail-closed WPE completed-run static postmortem
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/inspect-unified-wpe-completed-artifact.py
+          python3 native/tests/test_unified_wpe_completer_postmortem.py
+          python3 native/tests/test_diagnose_real_wpe_build_failure.py
+          python3 native/tests/test_real_fourcc_wpe_artifacts.py
+          grep -Fq "R36H_INSTALLABLE=no" scripts/inspect-unified-wpe-completed-artifact.py
+          grep -Fq "R36H_INSTALLABLE=no" .github/workflows/r36h-unified-wpe-completed-postmortem.yml
+          grep -Fq "UNAUTHORIZED_WPE_BUILD_SOURCE" .github/workflows/r36h-unified-wpe-completed-postmortem.yml
+          echo 'WPE_UNIFIED_POSTMORTEM_REGRESSION=PASS_STATIC_NO_TARGET_EXECUTION' >> "$GITHUB_STEP_SUMMARY"
