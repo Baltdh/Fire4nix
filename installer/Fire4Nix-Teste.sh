@@ -6,7 +6,7 @@ HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 ROOT="$HERE/Fire4Nix"
 [ -s "$ROOT/bin/fire4nix-native-aarch64" ] || ROOT="$HERE"
 MODE=${1:---screen}
-case "$MODE" in --safe|--screen|--check|--visual|--collect) ;; *) echo "Use: sh Fire4Nix-Teste.sh [--safe|--screen|--check|--visual|--collect]" >&2; exit 2 ;; esac
+case "$MODE" in --safe|--screen|--check|--visual|--visual-live|--collect) ;; *) echo "Use: sh Fire4Nix-Teste.sh [--safe|--screen|--check|--visual|--visual-live|--collect]" >&2; exit 2 ;; esac
 # Keep the report on /storage when possible; otherwise local or /tmp.
 REPORT_DIR=${FIRE4NIX_TEST_REPORT_DIR:-}
 if [ -z "$REPORT_DIR" ]; then
@@ -80,7 +80,7 @@ exit_diagnostic=NA
     echo 'diagnostic_exit=127'
     echo 'diagnostic_reason=missing_script'
   fi
-  if [ "$MODE" = --visual ]; then
+  if [ "$MODE" = --visual ] || [ "$MODE" = --visual-live ]; then
     if [ -z "$installed_root" ]; then
       echo 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME'
       exit_visual=127
@@ -92,28 +92,48 @@ exit_diagnostic=NA
         echo 'visual_test=BLOCKED_MISSING_OFFLINE_TEST_PAGE'
         exit_visual=127
       else
-      echo "visual_test=STARTED_OFFLINE_HTML"
-      # This uses WebKit's existing built-in smoke timeout. It is not a
-      # simulated display; actual ROCKNIX must render successfully.
-      if command -v timeout >/dev/null 2>&1; then
-        timeout 25 sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
+      if [ "$MODE" = --visual-live ]; then
+        echo 'visual_test=STARTED_INTERACTIVE_OFFLINE_HTML'
+        echo 'visual_live_manual_action=CONFIRM_THREE_COLORS_JS_OK_AND_BUTTON_THEN_EXIT'
+        # Unlike --smoke, keep the page open for the user. The launcher
+        # manages gamepad mapping while the browser is running.
+        # Do not impose a 25-second timeout on the physical display test.
+        sh "$installed_root/Fire4Nix-Iniciar.sh" --open \
           "file://$installed_root/www/primeiro-teste.html" 2>&1
         exit_visual=$?
       else
-        sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
-          "file://$installed_root/www/primeiro-teste.html" 2>&1
-        exit_visual=$?
+        echo "visual_test=STARTED_OFFLINE_HTML"
+        # Bounded page-load signal for automated diagnostics, never proof
+        # of rendered pixels on the physical 640x480 LCD.
+        if command -v timeout >/dev/null 2>&1; then
+          timeout 25 sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
+            "file://$installed_root/www/primeiro-teste.html" 2>&1
+          exit_visual=$?
+        else
+          sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
+            "file://$installed_root/www/primeiro-teste.html" 2>&1
+          exit_visual=$?
+        fi
       fi
       fi
-      echo "visual_smoke_exit=$exit_visual"
-      if [ "$exit_visual" -eq 0 ]; then
-        echo 'visual_test_result=PAGE_LOAD_SIGNAL_ONLY_MANUALLY_CONFIRM_CSS_AND_JS'
+      if [ "$MODE" = --visual-live ]; then
+        echo "visual_live_exit=$exit_visual"
+        if [ "$exit_visual" -eq 0 ]; then
+          echo 'visual_test_result=INTERACTIVE_SESSION_ENDED_MANUAL_FRAME_CONFIRMATION_REQUIRED'
+        else
+          echo 'visual_test_result=INTERACTIVE_SESSION_FAILED_OR_EXITED'
+        fi
       else
-        echo 'visual_test_result=FAILED_OR_TIMED_OUT'
+        echo "visual_smoke_exit=$exit_visual"
+        if [ "$exit_visual" -eq 0 ]; then
+          echo 'visual_test_result=PAGE_LOAD_SIGNAL_ONLY_MANUALLY_CONFIRM_CSS_AND_JS'
+        else
+          echo 'visual_test_result=FAILED_OR_TIMED_OUT'
+        fi
       fi
     fi
   else
-    echo 'visual_test=NOT_RUN_MANUALLY_USE_--visual'
+    echo 'visual_test=NOT_RUN_MANUALLY_USE_--visual_OR_--visual-live'
   fi
   if [ -r /storage/Fire4Nix-ultimo-resultado.txt ]; then
     echo 'previous_browser_exit:'
@@ -127,11 +147,11 @@ exit_diagnostic=NA
 cp "$REPORT" "$LATEST" 2>/dev/null || true
 {
   echo 'FIRE4NIX 1.01 / RESUMO PARA FOTO'
-  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_test_page=|visual_test_manual_checks=|visual_smoke_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
+  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_test_page=|visual_test_manual_checks=|visual_smoke_exit=|visual_live_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
   echo 'FIM DO RESUMO'
 } > "$STATUS_FILE"
 if [ "$MODE" = --safe ] || [ "$MODE" = --screen ] ||
-   [ "$MODE" = --visual ] || [ "$MODE" = --check ]; then
+   [ "$MODE" = --visual ] || [ "$MODE" = --visual-live ] || [ "$MODE" = --check ]; then
   cat "$STATUS_FILE"
   printf 'Relatorio completo: %s\n' "$LATEST"
   printf 'Diagnostico WPE: %s\n' "$DIAG"
@@ -140,7 +160,7 @@ else
 fi
 # Diagnostic failures are findings rather than a script execution failure;
 # --visual returns the meaningful WebKit error for callers/CI.
-if [ "$MODE" = --visual ]; then
+if [ "$MODE" = --visual ] || [ "$MODE" = --visual-live ]; then
   [ "$exit_visual" = NA ] && exit 127
   exit "$exit_visual"
 fi

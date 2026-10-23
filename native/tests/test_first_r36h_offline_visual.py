@@ -74,12 +74,22 @@ class FirstOfflineVisualTests(unittest.TestCase):
 
     def test_visual_script_uses_first_test_page_for_both_paths(self):
         shell = VISUAL.read_text("utf-8")
-        self.assertEqual(shell.count('file://$installed_root/www/primeiro-teste.html'), 2)
+        self.assertEqual(shell.count('file://$installed_root/www/primeiro-teste.html'), 3)
         self.assertNotIn('file://$installed_root/www/inicio.html', shell)
         self.assertIn("visual_test_manual_checks=HTML_CSS_THREE_COLORS_AND_JS_OK", shell)
         self.assertIn("PAGE_LOAD_SIGNAL_ONLY_MANUALLY_CONFIRM_CSS_AND_JS", shell)
         self.assertIn("GRAPHICAL_HARDWARE_STATUS=UNVERIFIED_UNTIL_PHYSICAL_TEST", shell)
         self.assertIn("BLOCKED_MISSING_OFFLINE_TEST_PAGE", shell)
+        self.assertIn('case "$MODE" in --safe|--screen|--check|--visual|--visual-live|--collect)', shell)
+        self.assertIn('sh "$installed_root/Fire4Nix-Iniciar.sh" --open', shell)
+        self.assertIn('visual_live_exit=', shell)
+        self.assertIn('INTERACTIVE_SESSION_ENDED_MANUAL_FRAME_CONFIRMATION_REQUIRED', shell)
+        self.assertIn('STARTED_INTERACTIVE_OFFLINE_HTML', shell)
+        self.assertIn('visual_smoke_exit=', shell)
+        ports = (BASE / "installer/Habilitar-Teste-Ports.sh").read_text("utf-8")
+        self.assertIn('Fire4Nix-Tela-101.sh', ports)
+        self.assertIn('--visual-live', ports)
+
 
 
 if __name__ == "__main__":
