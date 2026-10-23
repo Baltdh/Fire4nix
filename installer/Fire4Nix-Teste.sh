@@ -85,21 +85,29 @@ exit_diagnostic=NA
       echo 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME'
       exit_visual=127
     else
+      echo 'visual_test_page=primeiro-teste.html'
+      echo 'visual_test_manual_checks=HTML_CSS_THREE_COLORS_AND_JS_OK'
+      echo 'visual_test_network_required=no'
+      if [ ! -s "$installed_root/www/primeiro-teste.html" ]; then
+        echo 'visual_test=BLOCKED_MISSING_OFFLINE_TEST_PAGE'
+        exit_visual=127
+      else
       echo "visual_test=STARTED_OFFLINE_HTML"
       # This uses WebKit's existing built-in smoke timeout. It is not a
       # simulated display; actual ROCKNIX must render successfully.
       if command -v timeout >/dev/null 2>&1; then
         timeout 25 sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
-          "file://$installed_root/www/inicio.html" 2>&1
+          "file://$installed_root/www/primeiro-teste.html" 2>&1
         exit_visual=$?
       else
         sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
-          "file://$installed_root/www/inicio.html" 2>&1
+          "file://$installed_root/www/primeiro-teste.html" 2>&1
         exit_visual=$?
+      fi
       fi
       echo "visual_smoke_exit=$exit_visual"
       if [ "$exit_visual" -eq 0 ]; then
-        echo 'visual_test_result=PAGE_LOAD_SIGNAL_ONLY_NOT_PROOF_OF_VISIBLE_WINDOW'
+        echo 'visual_test_result=PAGE_LOAD_SIGNAL_ONLY_MANUALLY_CONFIRM_CSS_AND_JS'
       else
         echo 'visual_test_result=FAILED_OR_TIMED_OUT'
       fi
@@ -119,7 +127,7 @@ exit_diagnostic=NA
 cp "$REPORT" "$LATEST" 2>/dev/null || true
 {
   echo 'FIRE4NIX 1.01 / RESUMO PARA FOTO'
-  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_smoke_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
+  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_test_page=|visual_test_manual_checks=|visual_smoke_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
   echo 'FIM DO RESUMO'
 } > "$STATUS_FILE"
 if [ "$MODE" = --safe ] || [ "$MODE" = --screen ] ||
