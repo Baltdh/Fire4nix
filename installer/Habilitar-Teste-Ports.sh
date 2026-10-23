@@ -45,6 +45,11 @@ mkdir -p "$STAGE/Fire4Nix/bin" "$STAGE/Fire4Nix/www" "$STAGE/Fire4Nix/config"
 cp "$SOURCE/bin/fire4nix-native-aarch64" "$STAGE/Fire4Nix/bin/"
 cp "$SOURCE/Fire4Nix-Iniciar.sh" "$STAGE/Fire4Nix/"
 cp "$SOURCE/www/inicio.html" "$STAGE/Fire4Nix/www/"
+# Keep the dedicated offline diagnostic page alongside the launcher in the
+# stand-alone Ports test kit, even when no WebKit runtime is installed.
+if [ -s "$SOURCE/www/primeiro-teste.html" ]; then
+  cp "$SOURCE/www/primeiro-teste.html" "$STAGE/Fire4Nix/www/"
+fi
 cp "$SOURCE/config/fire4nix.gptk" "$STAGE/Fire4Nix/config/"
 cp "$HERE/Diagnosticar-Fire4Nix.sh" "$STAGE/"
 cp "$HERE/Fire4Nix-Teste.sh" "$STAGE/"

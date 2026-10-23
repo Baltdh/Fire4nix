@@ -62,6 +62,16 @@ bundled_runtime_matches_installed() {
                "$DEST/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess" || return 1
     fi
 }
+# Updating only the self-contained first-frame HTML must not be hidden by
+# matching native binaries, runtime, homepage and controller profile.
+# Preserve idempotence for legacy packages that lack the page on both sides.
+offline_page_matches_installed() {
+    if [ -e "$SOURCE/www/primeiro-teste.html" ] ||
+       [ -e "$DEST/www/primeiro-teste.html" ]; then
+        cmp -s "$SOURCE/www/primeiro-teste.html" "$DEST/www/primeiro-teste.html" || return 1
+    fi
+    return 0
+}
 if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
    [ -s "$DEST/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
    [ -f "$DEST/Fire4Nix-Iniciar.sh" ] &&
@@ -71,6 +81,7 @@ if [ -s "$DEST/bin/fire4nix-native-aarch64" ] &&
    bundled_runtime_matches_installed &&
    cmp -s "$SOURCE/config/fire4nix.gptk" "$DEST/config/fire4nix.gptk" &&
    cmp -s "$SOURCE/www/inicio.html" "$DEST/www/inicio.html" &&
+   offline_page_matches_installed &&
    cmp -s "$SOURCE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh" &&
    cmp -s "$HERE/Diagnosticar-Fire4Nix.sh" "$DEST/Diagnosticar-Fire4Nix.sh"; then
     if sh "$DEST/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1; then

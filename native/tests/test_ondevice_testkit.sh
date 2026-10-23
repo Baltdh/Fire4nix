@@ -13,6 +13,7 @@ grep -q 'NO_WEBKIT_COPIED=1' "$T/enable.log"
 grep -q 'preserve-browser' "$T/roms/ports/Fire4Nix.sh"
 test -f "$T/roms/ports/Fire4Nix-Teste-101.sh"
 test -f "$T/roms/ports/Fire4Nix-Grafico-101.sh"
+test -s "$T/roms/ports/.Fire4Nix-Teste-101/Fire4Nix/www/primeiro-teste.html"
 test ! -d "$T/roms/ports/.Fire4Nix-Teste-101/Fire4Nix/runtime"
 # Running via the actual Ports wrapper does not require a WebKit installation.
 FIRE4NIX_ROMS="$T/roms" FIRE4NIX_TEST_REPORT_DIR="$T/reports" \
