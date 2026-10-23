@@ -10,6 +10,8 @@ cat > "$temp/configure/build.ninja" <<'EOF'
 build WebKit: phony
 build WebProcess: phony
 build NetworkProcess: phony
+build WPEInjectedBundle: phony
+build InspectorResources: phony
 EOF
 cat > "$temp/configure/CMakeCache.txt" <<'EOF'
 ENABLE_WPE_PLATFORM_WAYLAND:BOOL=ON
@@ -20,6 +22,7 @@ USE_LIBDRM:BOOL=OFF
 EOF
 FIRE4NIX_WPE_BUILD_WORK="$temp" bash "$script" --check > "$temp/acceptance.txt"
 grep -Fxq 'WPE_SUBPROCESS_TARGET_CHECK=PASS_STATIC' "$temp/acceptance.txt"
+grep -Fxq 'WPE_REQUIRED_TARGETS=WebKit,WebProcess,NetworkProcess,WPEInjectedBundle,InspectorResources' "$temp/acceptance.txt"
 grep -Fxq 'WPE_PROCESS_BINARIES_BUILT=no' "$temp/acceptance.txt"
 
 # Reject a partial target Ninja graph.
@@ -28,6 +31,24 @@ if FIRE4NIX_WPE_BUILD_WORK="$temp" bash "$script" --check > /dev/null 2>&1; then
   echo 'FAIL: missing WPENetworkProcess target was accepted' >&2; exit 1
 fi
 echo 'build NetworkProcess: phony' >> "$temp/configure/build.ninja"
+# WPEInjectedBundle is a separate module: WebProcess and NetworkProcess do
+# not build it automatically. Missing module must fail prior to hours of CI.
+sed -i '/^build WPEInjectedBundle:/d' "$temp/configure/build.ninja"
+if FIRE4NIX_WPE_BUILD_WORK="$temp" bash "$script" --check > /dev/null 2>&1; then
+  echo 'FAIL: missing separately installed WPEInjectedBundle accepted' >&2; exit 1
+fi
+echo 'build WPEInjectedBundle: phony' >> "$temp/configure/build.ninja"
+
+# inspector.gresource is produced by the independent InspectorResources target.
+sed -i '/^build InspectorResources:/d' "$temp/configure/build.ninja"
+if FIRE4NIX_WPE_BUILD_WORK="$temp" bash "$script" --check > /dev/null 2>&1; then
+  echo 'FAIL: missing InspectorResources target accepted' >&2; exit 1
+fi
+echo 'build InspectorResources: phony' >> "$temp/configure/build.ninja"
+
+# Keep the real CI compilation list in sync with the four independent targets.
+grep -Fq 'cmake --build "$build" --target WebProcess NetworkProcess WPEInjectedBundle InspectorResources --parallel 2' "$script"
+
 
 # Reject GPU enabled (requires GPUProcess, not the two-helper configuration).
 sed -i 's/ENABLE_GPU_PROCESS:BOOL=OFF/ENABLE_GPU_PROCESS:BOOL=ON/' "$temp/configure/CMakeCache.txt"
