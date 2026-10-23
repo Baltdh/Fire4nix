@@ -22,6 +22,10 @@ on:
         description: 'Run ID of successful genuine ROCKNIX WPE 2.54.1 build with SDK-closed private runtime'
         required: true
         type: string
+  workflow_run:
+    workflows:
+      - 'Fire4Nix GCC15 no-outline WPE 2.54 real ROCKNIX ARM64 link'
+    types: [completed]
 
 permissions:
   contents: read
@@ -29,7 +33,7 @@ permissions:
 
 jobs:
   packager-tests:
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 12
     steps:
@@ -68,7 +72,13 @@ jobs:
           echo 'R36H_FIRST_FRAME_VERIFIED=no' >> "$GITHUB_STEP_SUMMARY"
 
   assemble-real-test-candidate:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && github.event.workflow_run.head_repository.full_name == github.repository
+          && github.event.workflow_run.head_branch == 'fix/r36h-wpe-gcc15-atomics-link-20261023')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -80,7 +90,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const id = Number('${{ inputs.wpe_run_id }}')
+            const id = Number('${{ github.event.workflow_run.id || inputs.wpe_run_id }}')
             if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid WPE build run ID')
             const { data } = await github.rest.actions.getWorkflowRun({
               owner: context.repo.owner, repo: context.repo.repo, run_id: id
@@ -105,7 +115,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.wpe_run_id }}
+          run-id: ${{ github.event.workflow_run.id || inputs.wpe_run_id }}
           github-token: ${{ github.token }}
           name: ${{ steps.authenticate-wpe.outputs.wpe_artifact_name }}
           path: ${{ runner.temp }}/wpe-download
@@ -136,7 +146,7 @@ jobs:
           sha256sum delivery/*.zip > delivery/SHA256SUMS.txt
           cat > delivery/STATUS.txt <<EOF
           FIRE4NIX_TEST_CANDIDATE=STATIC_ARM64_CHECKS_ONLY
-          WPE_SOURCE_RUN_ID=${{ inputs.wpe_run_id }}
+          WPE_SOURCE_RUN_ID=${{ github.event.workflow_run.id || inputs.wpe_run_id }}
           NATIVE_SOURCE_RUN_ID=39880058319
           R36H_HARDWARE_TESTED=no
           R36H_INSTALLABLE_VERIFIED=no
