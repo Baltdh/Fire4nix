@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           bash -n native/tests/test_wpe_closure_real_aarch64.sh
-          bash -x native/tests/test_wpe_closure_real_aarch64.sh
+          bash native/tests/test_wpe_closure_real_aarch64.sh
           echo 'AARCH64_ELF_TEST=PASS_REAL_ARM64_ELFS_NO_TARGET_EXECUTION' >> "$GITHUB_STEP_SUMMARY"
           echo 'WPE_WEBKIT_ENGINE_COMPILED=no' >> "$GITHUB_STEP_SUMMARY"
           echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
