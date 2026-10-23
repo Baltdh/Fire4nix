@@ -236,6 +236,12 @@ jobs:
           printf '<!-- homepage-only-update -->\n' >> "$t/pkg/Fire4Nix/www/inicio.html"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
           grep -q 'homepage-only-update' "$t/roms/ports/fire4nix-completo/www/inicio.html"
+          # A change exclusively to the first-frame page must also upgrade
+          # the installed copy; matching homepage/native/runtime is not enough.
+          printf '<!-- offline-firstframe-page-update -->\n' >> "$t/pkg/Fire4Nix/www/primeiro-teste.html"
+          FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
+          grep -Fq 'offline-firstframe-page-update' "$t/roms/ports/fire4nix-completo/www/primeiro-teste.html"
+
           # Controller profile-only upgrades must not be silently skipped.
           printf '# controller-profile-update\n' >> "$t/pkg/Fire4Nix/config/fire4nix.gptk"
           FIRE4NIX_ROMS="$t/roms" sh "$t/pkg/Instalar-Fire4Nix-Uma-Vez.sh"
