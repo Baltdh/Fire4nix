@@ -2,14 +2,16 @@ name: Fire4Nix assemble first experimental offline R36H Ports candidate
 
 on:
   push:
-    branches: ['build/r36h-first-offline-ports-candidate-20261022']
+    branches: ['build/r36h-first-offline-ports-candidate-20261022', 'audit/r36h-wpe-no-unresolved-gcc15-atomics-20261023']
     paths:
       - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
   pull_request:
     paths:
       - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
   workflow_dispatch:
@@ -55,6 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/package-first-r36h-ports-candidate.py
+          python3 native/tests/test_ports_wpe_gcc15_atomic_gate.py
           bash -n native/tests/test_ports_wpe_firsttest_assembly.sh
           bash native/tests/test_ports_wpe_firsttest_assembly.sh
           echo 'FIRST_TEST_PORTS_PACKAGING_TEST=PASS_FIXTURES_ONLY' >> "$GITHUB_STEP_SUMMARY"
