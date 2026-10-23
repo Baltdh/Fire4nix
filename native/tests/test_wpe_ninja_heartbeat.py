@@ -69,10 +69,10 @@ class WPEProgressTests(unittest.TestCase):
 
     def test_bounded_tail_and_progress_counters(self):
         self.log.write_bytes(
-            b"[1/70] first\\n" + b"no command output\\n" * 4500 +
-            b"[45/70] last\\n")
+            b"[1/70] first\n" + b"no command output\n" * 4500 +
+            b"[45/70] last\n")
         self.assertEqual(module.latest_counter(self.log), "45/70")
-        self.log.write_bytes(b"COMPILER_CMD_WITHOUT_COUNTER\\n")
+        self.log.write_bytes(b"COMPILER_CMD_WITHOUT_COUNTER\n")
         self.assertEqual(module.latest_counter(self.log), "not_yet_available")
 
 
