@@ -85,11 +85,11 @@ class RuntimeClosureTests(unittest.TestCase):
         resource.parent.mkdir(parents=True, exist_ok=True)
         resource.write_bytes(b"real-resource-fixture")
         (self.runtime / "BUILD-REPORT.txt").write_text(
-            "GPU_PROCESS_PROFILE=disabled_verified_wayland\\n"
-            "WPE_INSTALLED_ASSETS_PROFILE=strict\\n"
-            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\\n")
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\n")
         self.dynamics["libWPEInjectedBundle.so"] = (
-            "0x01 (NEEDED) Shared library: [libc.so.6]\\n")
+            "0x01 (NEEDED) Shared library: [libc.so.6]\n")
         return module, resource
 
     def test_injected_bundle_checked_as_independent_elf_root(self):
@@ -104,7 +104,7 @@ class RuntimeClosureTests(unittest.TestCase):
     def test_injected_bundle_missing_direct_soname_blocks(self):
         self.add_strict_installed_assets()
         self.dynamics["libWPEInjectedBundle.so"] += (
-            "0x01 (NEEDED) Shared library: [libinjectedonly.so.1]\\n")
+            "0x01 (NEEDED) Shared library: [libinjectedonly.so.1]\n")
         result = self.run_audit()
         self.assertIn("libWPEInjectedBundle.so:libinjectedonly.so.1",
                       result["WPE_MISSING_SONAMES"])
@@ -114,7 +114,7 @@ class RuntimeClosureTests(unittest.TestCase):
         self.add_strict_installed_assets()
         self.create(self.stage / "usr/lib/libprivateinjected.so.1")
         self.dynamics["libWPEInjectedBundle.so"] += (
-            "0x01 (NEEDED) Shared library: [libprivateinjected.so.1]\\n")
+            "0x01 (NEEDED) Shared library: [libprivateinjected.so.1]\n")
         result = self.run_audit()
         self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
         self.assertIn("libWPEInjectedBundle.so:libprivateinjected.so.1",
@@ -131,9 +131,9 @@ class RuntimeClosureTests(unittest.TestCase):
             self.run_audit()
         self.create(module)
         (self.runtime / "BUILD-REPORT.txt").write_text(
-            "GPU_PROCESS_PROFILE=disabled_verified_wayland\\n"
-            "WPE_INSTALLED_ASSETS_PROFILE=strict\\n"
-            "WPE_INSTALLED_ASSETS_STATUS=not_installed\\n")
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_STATUS=not_installed\n")
         with self.assertRaisesRegex(ValueError, "STRICT_WPE_ASSETS_NOT_REPORTED"):
             self.run_audit()
 
@@ -146,10 +146,10 @@ class RuntimeClosureTests(unittest.TestCase):
         module.unlink()
         self.create(module)
         (self.runtime / "BUILD-REPORT.txt").write_text(
-            "GPU_PROCESS_PROFILE=disabled_verified_wayland\\n"
-            "WPE_INSTALLED_ASSETS_PROFILE=strict\\n"
-            "WPE_INSTALLED_ASSETS_PROFILE=optional\\n"
-            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\\n")
+            "GPU_PROCESS_PROFILE=disabled_verified_wayland\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=strict\n"
+            "WPE_INSTALLED_ASSETS_PROFILE=optional\n"
+            "WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked\n")
         with self.assertRaisesRegex(ValueError, "CONFLICTING_WPE_ASSET_REPORT"):
             self.run_audit()
 
