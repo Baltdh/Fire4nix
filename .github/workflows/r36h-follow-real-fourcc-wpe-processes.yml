@@ -1,0 +1,98 @@
+name: Fire4Nix audit actual fourcc WebKit and process artifacts
+
+on:
+  push:
+    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022']
+    paths:
+      - 'scripts/audit-real-fourcc-wpe-artifacts.py'
+      - 'native/tests/test_real_fourcc_wpe_artifacts.py'
+      - '.github/workflows/r36h-follow-real-fourcc-wpe-processes.yml'
+  pull_request:
+    paths:
+      - 'scripts/audit-real-fourcc-wpe-artifacts.py'
+      - 'native/tests/test_real_fourcc_wpe_artifacts.py'
+      - '.github/workflows/r36h-follow-real-fourcc-wpe-processes.yml'
+  workflow_run:
+    workflows:
+      - 'Fire4Nix WPE WebProcess and NetworkProcess ROCKNIX real ARM64'
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  regression:
+    if: github.event_name != 'workflow_run'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test fail-closed real WPE ELF artifact inspection
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/audit-real-fourcc-wpe-artifacts.py
+          python3 native/tests/test_real_fourcc_wpe_artifacts.py
+
+  actual-fourcc-process-audit:
+    if: >-
+      github.event_name == 'workflow_run'
+      && (github.event.workflow_run.conclusion == 'success'
+          || github.event.workflow_run.conclusion == 'failure')
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.head_branch == 'build/r36h-webkit2541-fix-fourcc-all-processes-20261022'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download only the exact completed real ROCKNIX WPE build output
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-WPE2541-TWO-PROCESSES-STATIC-STAGE-NOT-INSTALLABLE
+          path: downloaded
+      - name: Inspect actual AArch64 WebKit and process ELFs (never run them)
+        shell: bash
+        env:
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          python3 scripts/audit-real-fourcc-wpe-artifacts.py \
+            --artifact downloaded \
+            --report audit/linked-wpe-and-processes.txt \
+            --build-conclusion "$SOURCE_CONCLUSION"
+          {
+            echo "SOURCE_RUN=$SOURCE_RUN"
+            echo "SOURCE_SHA=$SOURCE_SHA"
+            echo "SOURCE_CONCLUSION=$SOURCE_CONCLUSION"
+            echo 'R36H_INSTALLABLE=no'
+            echo 'TARGET_EXECUTED=no'
+          } > audit/provenance.txt
+          {
+            echo '## Real WebKit and two-process build artifact status'
+            cat audit/provenance.txt
+            cat audit/linked-wpe-and-processes.txt
+            echo 'Full transitive loader and R36H graphics remain unverified.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload audit report, never rebundle binary fixture or browser
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-REAL-WPE2541-LINK-AND-PROCESSES-AUDIT-NOT-INSTALLABLE
+          path: audit/
+          if-no-files-found: warn
+          retention-days: 30
