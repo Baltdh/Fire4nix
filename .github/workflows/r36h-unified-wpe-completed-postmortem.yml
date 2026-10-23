@@ -1,0 +1,103 @@
+name: Fire4Nix completed unified WPE real ARM64 postmortem
+on:
+  workflow_run:
+    workflows:
+      - 'Fire4Nix unified WPE2541 ROCKNIX GCC15 libatomic full link'
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-real-wpe-output:
+    if: >-
+      github.event.workflow_run.status == 'completed'
+      && (github.event.workflow_run.conclusion == 'success'
+          || github.event.workflow_run.conclusion == 'failure')
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.head_branch == 'build/r36h-unified-wpe2541-gcc15-libatomic-real-20261023'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reauthenticate exact source workflow, branch, SHA and completed result
+        id: source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const {data} = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: run.id,
+            });
+            const authorized = data.id === run.id
+              && data.head_sha === run.head_sha
+              && data.name === 'Fire4Nix unified WPE2541 ROCKNIX GCC15 libatomic full link'
+              && data.status === 'completed'
+              && ['success', 'failure'].includes(data.conclusion)
+              && data.event === 'push'
+              && data.head_repository?.full_name === context.repo.owner + '/' + context.repo.repo
+              && data.head_branch === 'build/r36h-unified-wpe2541-gcc15-libatomic-real-20261023';
+            if (!authorized) core.setFailed('UNAUTHORIZED_WPE_BUILD_SOURCE');
+            else {
+              core.setOutput('run_id', String(data.id));
+              core.setOutput('conclusion', data.conclusion);
+              core.setOutput('source_sha', data.head_sha);
+            }
+      - name: Download real WPE build's published reports and private runtime
+        id: artifact
+        if: steps.source.outcome == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-WPE2541-UNIFIED-GCC15-LIBATOMIC-REAL-STATIC-STAGE
+          path: downloaded
+      - name: Inspect ELF metadata and classify failures without running ARM64 WPE
+        if: steps.source.outcome == 'success'
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          SOURCE_CONCLUSION: ${{ steps.source.outputs.conclusion }}
+          ARTIFACT_OUTCOME: ${{ steps.artifact.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports downloaded
+          {
+            echo "SOURCE_RUN=$SOURCE_RUN_ID"
+            echo "SOURCE_SHA=$SOURCE_SHA"
+            echo "SOURCE_CONCLUSION=$SOURCE_CONCLUSION"
+            echo "SOURCE_ARTIFACT_DOWNLOAD=$ARTIFACT_OUTCOME"
+            echo 'WPE_TARGET_BINARY_EXECUTED=no'
+            echo 'R36H_INSTALLABLE=no'
+          } > reports/provenance.txt
+          python3 scripts/inspect-unified-wpe-completed-artifact.py \
+            --artifact downloaded \
+            --build-conclusion "$SOURCE_CONCLUSION" \
+            --report reports/unified-real-wpe-elf-postmortem.txt
+          python3 scripts/diagnose-real-wpe-build-failure.py \
+            --artifact downloaded \
+            --report reports/unified-real-wpe-build-errors.txt
+          {
+            echo '## Authentic unified WPE GCC15 full-build postmortem'
+            cat reports/provenance.txt
+            cat reports/unified-real-wpe-elf-postmortem.txt
+            cat reports/unified-real-wpe-build-errors.txt
+            echo 'No ELF was executed. No device ABI or rendered frame was certified.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish only diagnostic text, never a replacement browser
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-UNIFIED-GCC15-WPE-POSTMORTEM-NOT-INSTALLABLE
+          path: reports/
+          retention-days: 30
+          if-no-files-found: warn
