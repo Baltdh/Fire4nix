@@ -5,12 +5,16 @@ on:
     branches: ['build/r36h-wpe-subprocesses-after-link-20261022', 'fix/r36h-wpe-process-build-explicit-dispatch-20261022', 'build/r36h-wpe-injected-module-inspector-targets-20261023']
     paths:
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'scripts/audit-wpe-process-rpath.py'
+      - 'native/tests/test_wpe_installed_process_rpath.py'
       - 'native/tests/test_wpe_subprocess_target_guard.sh'
       - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
       - '.github/workflows/r36h-wpe-process-target-guard.yml'
   pull_request:
     paths:
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'scripts/audit-wpe-process-rpath.py'
+      - 'native/tests/test_wpe_installed_process_rpath.py'
       - 'native/tests/test_wpe_subprocess_target_guard.sh'
       - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
       - '.github/workflows/r36h-wpe-process-target-guard.yml'
@@ -32,5 +36,7 @@ jobs:
           command -v ninja
           bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
           bash -n native/tests/test_wpe_subprocess_target_guard.sh
+          python3 -m py_compile scripts/audit-wpe-process-rpath.py
+          python3 native/tests/test_wpe_installed_process_rpath.py
       - name: Reject missing WebKit processes and unverified GPU-on/media profiles
         run: bash native/tests/test_wpe_subprocess_target_guard.sh
