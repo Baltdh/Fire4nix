@@ -70,7 +70,8 @@ python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
 grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$tmp/pass.txt"
 grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' "$tmp/pass.txt"
 grep -Fxq 'WPE_MISSING_SONAMES_COUNT=0' "$tmp/pass.txt"
-grep -Fxq 'WPE_PT_INTERP_CHECKS=1' "$tmp/pass.txt"
+# Both ELF64 PIE helpers carry the AArch64 dynamic linker even with -nostdlib.
+grep -Fxq 'WPE_PT_INTERP_CHECKS=2' "$tmp/pass.txt"
 grep -Fxq 'WPE_PT_INTERP_PROVEN_ON_R36H=no' "$tmp/pass.txt"
 # Removing the runtime loader from the target sysroot blocks an otherwise
 # valid WPEWebProcess binary before it can be treated as deployable.
