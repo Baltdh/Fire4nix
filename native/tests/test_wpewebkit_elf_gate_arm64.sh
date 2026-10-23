@@ -53,7 +53,11 @@ EOF
 cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 "$tmp/outlined.c" \
  -o "$tmp/libWPEWebKit-2.0.so.1"
 readelf --wide --dyn-syms "$tmp/libWPEWebKit-2.0.so.1" > "$tmp/outlined-symbols.txt"
-grep -Fq '__aarch64_ldadd4_relax' "$tmp/outlined-symbols.txt"
+if ! grep -Fq '__aarch64_ldadd4_relax' "$tmp/outlined-symbols.txt"; then
+ echo 'ERROR: synthetic GCC15 undefined symbol not present in ARM64 dynsym:' >&2
+ sed -n '1,75p' "$tmp/outlined-symbols.txt" >&2
+ exit 8
+fi
 if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
  --report "$tmp/outlined-fail.txt" >/dev/null; then
  echo 'FAIL: undefined GCC15 AArch64 outlined atomic accepted' >&2; exit 1
