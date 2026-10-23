@@ -43,7 +43,9 @@ unsigned long broken_aarch64_atomic(void) {
     return __aarch64_ldadd8_acq_rel();
 }
 EOF
-cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 \
+# -nostdlib prevents the Ubuntu ARM runner's libgcc from silently
+# resolving this symbol: the fixture must contain a genuine UND dynsym.
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEWebKit-2.0.so.1 \
   "$tmp/wpe.c" "$tmp/dangling-atomic.c" \
   -o "$dir/libWPEWebKit-2.0.so.1"
 readelf -W --dyn-syms "$dir/libWPEWebKit-2.0.so.1" |
