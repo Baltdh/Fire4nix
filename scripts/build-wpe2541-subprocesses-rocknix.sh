@@ -121,8 +121,11 @@ for process in WPEWebProcess WPENetworkProcess; do
   }
   readelf -h "$found" | grep -Eq 'Class:[[:space:]]+ELF64'
   readelf -h "$found" | grep -Eq 'Data:.*little endian'
-  if readelf -d "$found" | grep -E '\((RPATH|RUNPATH)\).* \[/' >/dev/null; then
-    echo "ERROR: $process contains host absolute RPATH" >&2; exit 11;
+  # Build-tree binaries may legitimately have absolute CMake RPATH to
+  # the temporary target SDK. CMake strips/replaces it at install time.
+  # The *installed* ELF is audited strictly below before runtime staging.
+  if readelf -d "$found" | grep -E '\((RPATH|RUNPATH)\)' >/dev/null; then
+    echo "WPE_PROCESS_BUILD_TREE_RPATH=DEFERRED_UNTIL_INSTALL:$process" | tee -a "$result"
   fi
   python3 - "$found" <<'PY'
 import re, subprocess, sys
@@ -149,6 +152,29 @@ if (( rc != 0 )); then
   tail -n 80 "$report/wpe-subprocesses-install.log"
   exit 12
 fi
+# Portable RPATH is a property of the installed ELF, not the CMake build
+# tree. Do not publish a runtime whose helpers still reference GitHub/SDK
+# absolute directories after cmake --install.
+for process in WPEWebProcess WPENetworkProcess; do
+  installed=""
+  for candidate in "$dest/usr/libexec/wpe-webkit-2.0/$process" \
+                   "$dest/usr/lib/wpe-webkit-2.0/$process"; do
+    if [[ -s "$candidate" && ! -L "$candidate" ]]; then
+      [[ -z "$installed" ]] || {
+        echo "ERROR: ambiguous installed WPE process $process" >&2; exit 12;
+      }
+      installed="$candidate"
+    fi
+  done
+  [[ -n "$installed" ]] || {
+    echo "ERROR: installed WPE process missing: $process" >&2; exit 12;
+  }
+  python3 "$repo_root/scripts/audit-wpe-process-rpath.py" "$installed" || {
+    echo "WPE_INSTALLED_PROCESS_RPATH=BLOCKED:$process" | tee -a "$result"
+    exit 12
+  }
+  echo "WPE_INSTALLED_PROCESS_RPATH=PASS_RELOCATABLE:$process" | tee -a "$result"
+done
 runtime="$work/private-wpe-runtime"
 FIRE4NIX_WPE_DESTDIR="$dest" \
 FIRE4NIX_WPE_RUNTIME_OUT="$runtime" \
