@@ -80,9 +80,9 @@ class LinkedWpeElfTest(unittest.TestCase):
 
     def test_outlined_gcc15_helpers_must_not_remain_undefined(self):
         bad = DYN_SYMBOLS + (
-            "\\n  75: 00000000 0 FUNC GLOBAL DEFAULT UND __aarch64_ldadd4_relax"
-            "\\n  76: 00000000 0 FUNC GLOBAL DEFAULT UND __aarch64_cas4_acq_rel"
-            "\\n  77: 00000000 0 FUNC GLOBAL DEFAULT UND __aarch64_swp4_acq_rel")
+            "\n  75: 00000000 0 FUNC GLOBAL DEFAULT UND __aarch64_ldadd4_relax"
+            "\n  76: 00000000 0 FUNC GLOBAL DEFAULT UND __aarch64_cas4_acq_rel"
+            "\n  77: 00000000 0 FUNC GLOBAL DEFAULT UND __aarch64_swp4_acq_rel")
         result = self.inspect(sym=bad)
         self.assertIn("UNDEFINED_GCC15_OUTLINED_ATOMICS", result["WPE_LIBRARY_ISSUES"])
         self.assertEqual(result["WPE_GCC15_UNDEFINED_OUTLINED_COUNT"], "3")
@@ -94,13 +94,13 @@ class LinkedWpeElfTest(unittest.TestCase):
 
     def test_atomic16_undefined_requires_target_libatomic_provider(self):
         sym = DYN_SYMBOLS + (
-            "\\n  90: 00000000 0 FUNC GLOBAL DEFAULT UND __atomic_load_16@LIBATOMIC_1.0"
-            "\\n  91: 00000000 0 FUNC GLOBAL DEFAULT UND __atomic_store_16@LIBATOMIC_1.0")
+            "\n  90: 00000000 0 FUNC GLOBAL DEFAULT UND __atomic_load_16@LIBATOMIC_1.0"
+            "\n  91: 00000000 0 FUNC GLOBAL DEFAULT UND __atomic_store_16@LIBATOMIC_1.0")
         missing = self.inspect(sym=sym)
         self.assertIn("MISSING_LIBATOMIC16_DT_NEEDED", missing["WPE_LIBRARY_ISSUES"])
         self.assertEqual(missing["WPE_ATOMIC16_UNDEFINED_COUNT"], "2")
         linked = self.inspect(sym=sym, d=DYNAMIC +
-            "0x1 (NEEDED) Shared library: [libatomic.so.1]\\n")
+            "0x1 (NEEDED) Shared library: [libatomic.so.1]\n")
         self.assertNotIn("MISSING_LIBATOMIC16_DT_NEEDED", linked["WPE_LIBRARY_ISSUES"])
         self.assertEqual(linked["WPE_LIBRARY_ELF_AUDIT"], "PASS_STATIC_AARCH64")
         self.assertEqual(linked["WPE_ATOMIC16_PROVIDER_DECLARED"], "true")
