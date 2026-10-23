@@ -52,7 +52,24 @@ int _start(void) { return 0; }
 EOF
 cc -nostdlib -fno-stack-protector -Wl,-e,_start "$tmp/network.c" \
   -o "$runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
-echo 'GPU_PROCESS_PROFILE=disabled_verified_wayland' > "$runtime/BUILD-REPORT.txt"
+# Model WPE 2.54.1's separately dlopen'd injected-bundle ELF.
+# Deliberately include a target SONAME dependency so recursive closure must
+# follow the bundle even if no other binary contains it in DT_NEEDED.
+mkdir -p "$runtime/lib/wpe-webkit-2.0/injected-bundle" "$runtime/share/wpe-webkit-2.0"
+cat > "$tmp/injected.c" <<'EOF'
+extern int step_symbol(void);
+int injected_entrypoint(void) { return step_symbol(); }
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
+  "$tmp/injected.c" -Wl,--no-as-needed \
+  -L"$sysroot/usr/lib" -l:libstep.so.1 \
+  -o "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+printf 'GResource fixture only\\n' > "$runtime/share/wpe-webkit-2.0/inspector.gresource"
+cat > "$runtime/BUILD-REPORT.txt" <<'EOF'
+GPU_PROCESS_PROFILE=disabled_verified_wayland
+WPE_INSTALLED_ASSETS_PROFILE=strict
+WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked
+EOF
 for elf in "$runtime/lib/libWPEWebKit-2.0.so.1" \
   "$runtime/libexec/wpe-webkit-2.0/WPEWebProcess" \
   "$runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" \
@@ -69,6 +86,8 @@ python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
   --sdk-stage "$stage" --report "$tmp/pass.txt" --strict > "$tmp/pass.log"
 grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$tmp/pass.txt"
 grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' "$tmp/pass.txt"
+grep -Fxq 'WPE_INJECTED_BUNDLE_INCLUDED_IN_CLOSURE=yes' "$tmp/pass.txt"
+grep -Fxq 'WPE_SCANNED_ELFS=5' "$tmp/pass.txt"
 grep -Fxq 'WPE_MISSING_SONAMES_COUNT=0' "$tmp/pass.txt"
 # Both ELF64 PIE helpers carry the AArch64 dynamic linker even with -nostdlib.
 grep -Fxq 'WPE_PT_INTERP_CHECKS=2' "$tmp/pass.txt"
@@ -86,6 +105,51 @@ grep -Fq 'MISSING_SYSROOT_PT_INTERP:WPEWebProcess' "$tmp/missing-loader.log"
 mv "$tmp/loader-hidden.so.1" "$sysroot/lib/ld-linux-aarch64.so.1"
 
 grep -Fxq 'R36H_INSTALLABLE=no' "$tmp/pass.txt"
+
+# Injected bundle has a separate dependency graph not listed in the core
+# WebKit shared object's own DT_NEEDED. A missing module-only dependency is
+# still fatal to strict runtime staging.
+cat > "$tmp/injected.c" <<'EOF'
+extern int missing_injected(void);
+int injected_entrypoint(void) { return missing_injected(); }
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
+  "$tmp/injected.c" -o "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+set +e
+python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
+  --sdk-stage "$stage" --strict > "$tmp/injected-missing.log"
+injected_rc=$?
+set -e
+# An unresolved shared-library symbol alone is not a DT_NEEDED edge: add
+# a genuine separate shared object, linked into the injected bundle.
+cat > "$tmp/injecteddep.c" <<'EOF'
+int missing_injected(void) { return 13; }
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libinjecteddep.so.1 \
+  "$tmp/injecteddep.c" -o "$tmp/libinjecteddep.so.1"
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
+  "$tmp/injected.c" -Wl,--no-as-needed -L"$tmp" -l:libinjecteddep.so.1 \
+  -o "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+readelf -d "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so" |
+  grep -Fq 'Shared library: [libinjecteddep.so.1]'
+set +e
+python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
+  --sdk-stage "$stage" --strict > "$tmp/injected-needed.log"
+injected_needed_rc=$?
+set -e
+test "$injected_needed_rc" -eq 6
+grep -Fq 'libWPEInjectedBundle.so:libinjecteddep.so.1' "$tmp/injected-needed.log"
+# Restore the authentic injected fixture before exercising other branches.
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
+  "$tmp/injected.c" -o "$tmp/replaced-injected-unsafe.so"
+cat > "$tmp/injected.c" <<'EOF'
+extern int step_symbol(void);
+int injected_entrypoint(void) { return step_symbol(); }
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
+  "$tmp/injected.c" -Wl,--no-as-needed \
+  -L"$sysroot/usr/lib" -l:libstep.so.1 \
+  -o "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
 
 # Without libstep in ROCKNIX's fixture, a transitive missing SONAME blocks.
 mv "$sysroot/usr/lib/libstep.so.1" "$tmp/step-hidden.so.1"
