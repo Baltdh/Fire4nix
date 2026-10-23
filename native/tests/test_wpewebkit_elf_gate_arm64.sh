@@ -2,6 +2,8 @@
 # Validate the WPE ELF audit CLI against real ARM64 fixture shared objects.
 # These are tiny fakes, not a WebKit engine or a runnable R36H browser.
 set -euo pipefail
+# Print the failed test command (only synthetic ELF fixtures are handled).
+trap 'echo "WPE_CORE_ARM64_FIXTURE_FAILED_AT_LINE=$LINENO COMMAND=$BASH_COMMAND" >&2' ERR
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 auditor="$root/scripts/verify-built-wpewebkit.py"
 tmp=$(mktemp -d)
