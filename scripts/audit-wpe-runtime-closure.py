@@ -37,7 +37,10 @@ HOST_PATH_SEGMENTS = ("/home/", "/tmp/", "/opt/", "/workspace/", "/runner/")
 
 
 def readelf(flag: str, path: Path) -> str:
-    cmd = ["readelf", flag, str(path)]
+    # GNU readelf abbreviates long versioned dynamic symbols unless --wide
+    # is specified. In particular, libatomic's __atomic_load_16 can appear
+    # as _[...] and incorrectly fail a genuine target SDK export check.
+    cmd = ["readelf", "--wide", flag, str(path)] if flag == "--dyn-syms" else ["readelf", flag, str(path)]
     try:
         return subprocess.run(cmd, capture_output=True, check=True,
                               text=True, timeout=45).stdout
