@@ -58,6 +58,12 @@ jobs:
           github-token: ${{ github.token }}
           name: Fire4Nix-0.86-R36H-ARM64-Native-Test
           path: native-download
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39714252160
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-RPATH-CLEAN-OVERLAY-NOT-INSTALLABLE
+          path: fixed-elf-overlay
       - name: Validate completed build evidence and restore target SDK
         shell: bash
         run: |
@@ -79,6 +85,19 @@ jobs:
           python3 native/tests/test_wpe_libatomic_versioned_exports.py
           python3 native/tests/test_materialize_wpe_artifact_sonames.py
           python3 native/tests/test_wpe_runtime_elf_closure.py
+      - name: Prepare isolated SDK analysis layout and verified RPATH overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 native/tests/test_rocknix_audit_sysroot.py
+          python3 scripts/prepare-rocknix-audit-sysroot.py \
+            --source sdk/toolchain/aarch64-rocknix-linux-gnu/sysroot \
+            --output audit-sysroot | tee reports/sdk-relocation.txt
+          python3 scripts/prepare-rocknix-private-closure-sdk.py \
+            --stage stage1-artifact/stage1-combined \
+            --overlay fixed-elf-overlay/isolated-elf-overlay \
+            --support sdk/toolchain/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1 \
+            --out private-closure-stage | tee reports/sdk-overlay.txt
       - name: Recover original SHA256-proven aliases and close dependencies
         shell: bash
         run: |
@@ -92,14 +111,14 @@ jobs:
             --report reports/wpe-core-elf.txt
           python3 scripts/bundle-rocknix-wpe-sdk-deps.py \
             --runtime raw-runtime \
-            --sysroot sdk/toolchain/aarch64-rocknix-linux-gnu/sysroot \
-            --sdk-stage stage1-artifact/stage1-combined \
+            --sysroot audit-sysroot \
+            --sdk-stage private-closure-stage \
             --target-toolchain sdk/toolchain \
             --output closed-runtime | tee reports/sdk-bundle.txt
           python3 scripts/audit-wpe-runtime-closure.py \
             --runtime closed-runtime \
-            --sysroot sdk/toolchain/aarch64-rocknix-linux-gnu/sysroot \
-            --sdk-stage stage1-artifact/stage1-combined --strict | tee reports/closure.txt
+            --sysroot audit-sysroot \
+            --sdk-stage private-closure-stage --strict | tee reports/closure.txt
           (cd closed-runtime && sha256sum -c SHA256SUMS.txt)
           grep -Fxq 'WPE_TARGET_LIBATOMIC16_BUNDLED=yes' closed-runtime/SDK-BUNDLE-REPORT.txt
       - name: Package experimental offline candidate after every static gate
@@ -117,6 +136,7 @@ jobs:
             'SOURCE_BUILD_SHA=f666dd2cee4ed5a3973338e3018f04eb4a8e84d1' \
             'RECOVERY=POST_BUILD_SDK_BUNDLE_ONLY' 'WPE_RECOMPILED=no' \
             'TARGET_EXECUTED=no' 'R36H_FIRST_FRAME_VERIFIED=no' \
+            'DEVICE_LOADER_LAYOUT_VERIFIED=no' \
             > delivery/PROVENANCE.txt
       - uses: actions/upload-artifact@v4
         if: success()

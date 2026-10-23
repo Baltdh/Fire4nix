@@ -30,3 +30,21 @@ Validação local: 161 testes Python aprovados, incluindo biblioteca versionada
 real e recuperação de estágio bruto com hash incorreto, ausência de relatório
 e tentativa de misturar relatório de fechamento com estágio bruto.
 O resultado da recuperação real deve ser confirmado no GitHub Actions.
+
+## Bloqueios seguintes e correção do SDK de análise
+
+A recuperação 39994402340 confirmou o ELF WPE real: SHA256
+`742e19045a9c2b338051d31b6cca641f240f51e6c5c0e4da9d71f8bbb15c321c`,
+156512944 bytes, GLIBC máximo 2.38, sem helpers GCC15 outlined indefinidos.
+O próximo bloqueio expôs RUNPATH de build em fontconfig/gcrypt e links absolutos
+apontando para a localização original do SDK. O SDK também só contém `usr/lib`,
+enquanto os processos declaram `/lib/ld-linux-aarch64.so.1`.
+
+O workflow passa a usar o overlay já auditado de seis arquivos (39714252160),
+validando hashes de entrada/saída e SONAME/NEEDED/GLIBC via o preparador existente.
+Um novo preparador copia o sysroot e relocaliza **apenas** links com o prefixo
+absoluto observado no artefato original. Links de host, escapes e alvos ausentes
+continuam proibidos. O alias privado `lib -> usr/lib` serve somente à análise;
+não prova o layout nem o carregador do R36H. Os originais não são modificados.
+Seis testes cobrem preservação da origem, links de host/escape/alvo ausente,
+saída existente e sobreposição de diretórios. Total local: 167 testes aprovados.
