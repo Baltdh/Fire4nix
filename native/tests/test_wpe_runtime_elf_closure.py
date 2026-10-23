@@ -27,12 +27,13 @@ class RuntimeClosureTests(unittest.TestCase):
         self.sysroot = self.root / "sysroot"
         self.stage = self.root / "stage"
         for sub in ("runtime/lib", "runtime/libexec/wpe-webkit-2.0",
-                    "sysroot/usr/lib", "stage/usr/lib"):
+                    "sysroot/lib", "sysroot/usr/lib", "stage/usr/lib"):
             (self.root / sub).mkdir(parents=True)
         self.create(self.runtime / "lib/libWPEWebKit-2.0.so.1")
         self.create(self.runtime / "libexec/wpe-webkit-2.0/WPEWebProcess")
         self.create(self.runtime / "libexec/wpe-webkit-2.0/WPENetworkProcess")
         self.create(self.sysroot / "usr/lib/libc.so.6")
+        self.create(self.sysroot / "lib/ld-linux-aarch64.so.1")
         (self.runtime / "BUILD-REPORT.txt").write_text(
             "GPU_PROCESS_PROFILE=disabled_verified_wayland\n")
         self.headers = {}
@@ -43,6 +44,10 @@ class RuntimeClosureTests(unittest.TestCase):
             "libc.so.6": "",
         }
         self.versions = {}
+        self.interps = {
+            "WPEWebProcess": "      [Requesting program interpreter: /lib/ld-linux-aarch64.so.1]\\n",
+            "WPENetworkProcess": "      [Requesting program interpreter: /lib/ld-linux-aarch64.so.1]\\n",
+        }
 
     @staticmethod
     def create(path):
@@ -53,6 +58,8 @@ class RuntimeClosureTests(unittest.TestCase):
             return self.headers.get(path.name, ARM64)
         if flag == "-d":
             return self.dynamics.get(path.name, "")
+        if flag == "-l":
+            return self.interps.get(path.name, "")
         if flag == "-V":
             return self.versions.get(path.name, "Name: GLIBC_2.41\n")
         raise AssertionError(flag)
@@ -65,6 +72,8 @@ class RuntimeClosureTests(unittest.TestCase):
         self.assertEqual(r["WPE_RUNTIME_CLOSURE"], "SDK_STATIC_CANDIDATES_ONLY")
         self.assertEqual(r["WPE_SCANNED_ELFS"], 4)
         self.assertEqual(r["WPE_REQUIRED_PROCESSES"], "WPEWebProcess,WPENetworkProcess")
+        self.assertEqual(r["WPE_PT_INTERP_CHECKS"], 2)
+        self.assertEqual(r["WPE_PT_INTERP_PROVEN_ON_R36H"], "no")
         self.assertEqual(r["R36H_INSTALLABLE"], "no")
 
     def test_missing_transitive_soname_is_blocked(self):
@@ -82,6 +91,44 @@ class RuntimeClosureTests(unittest.TestCase):
         self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
         self.assertEqual(result["WPE_STAGE_ONLY_COUNTS_AS_BLOCKER"], "yes")
         self.assertEqual(result["R36H_INSTALLABLE"], "no")
+
+
+    def test_reject_foreign_loader_path(self):
+        self.interps["WPEWebProcess"] = (
+            "      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]\\n")
+        result = self.run_audit()
+        self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
+        self.assertIn("FOREIGN_PT_INTERP:WPEWebProcess:/lib64/ld-linux-x86-64.so.2",
+                      result["WPE_ABI_FINDINGS"])
+
+    def test_reject_missing_and_unsafe_loader(self):
+        loader = self.sysroot / "lib/ld-linux-aarch64.so.1"
+        loader.unlink()
+        result = self.run_audit()
+        self.assertIn("MISSING_SYSROOT_PT_INTERP:WPEWebProcess:/lib/ld-linux-aarch64.so.1",
+                      result["WPE_ABI_FINDINGS"])
+        self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "BLOCKED")
+        loader.symlink_to("/etc/passwd")
+        self.assertIn("MISSING_SYSROOT_PT_INTERP:WPENetworkProcess:/lib/ld-linux-aarch64.so.1",
+                      self.run_audit()["WPE_ABI_FINDINGS"])
+
+    def test_reject_wrong_architecture_loader(self):
+        self.headers["ld-linux-aarch64.so.1"] = ARM64.replace("AArch64", "X86-64")
+        self.assertIn("WRONG_ARCH_PT_INTERP:WPENetworkProcess:/lib/ld-linux-aarch64.so.1",
+                      self.run_audit()["WPE_ABI_FINDINGS"])
+
+    def test_reject_dynamic_helper_without_interpreter(self):
+        self.interps["WPEWebProcess"] = ""
+        self.assertIn("MISSING_DYNAMIC_PT_INTERP:WPEWebProcess",
+                      self.run_audit()["WPE_ABI_FINDINGS"])
+        self.assertEqual(self.run_audit()["WPE_RUNTIME_CLOSURE"], "BLOCKED")
+
+    def test_accept_statically_linked_helper_without_interpreter(self):
+        self.interps["WPENetworkProcess"] = ""
+        self.dynamics["WPENetworkProcess"] = ""
+        result = self.run_audit()
+        self.assertEqual(result["WPE_RUNTIME_CLOSURE"], "SDK_STATIC_CANDIDATES_ONLY")
+        self.assertEqual(result["WPE_PT_INTERP_CHECKS"], 1)
 
     def test_reject_wrong_elf_arch_and_glibc(self):
         self.headers["WPEWebProcess"] = ARM64.replace("AArch64", "X86-64")
