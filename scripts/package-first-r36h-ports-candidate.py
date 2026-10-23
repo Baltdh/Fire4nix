@@ -25,6 +25,10 @@ NAMES = ("lib/libWPEWebKit-2.0.so.1",
          "lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so")
 ASSETS = ("share/wpe-webkit-2.0/inspector.gresource",
           "BUILD-REPORT.txt", "SDK-BUNDLE-REPORT.txt", "SHA256SUMS.txt")
+# WebKit launches these helpers with execve; FAT/ZIP extraction cannot depend
+# on executable bits surviving the GitHub artifact transport.
+RUNTIME_EXECUTABLES = frozenset(("libexec/wpe-webkit-2.0/WPEWebProcess",
+                                  "libexec/wpe-webkit-2.0/WPENetworkProcess"))
 # GCC15 outlined atomics can survive in shared objects as undefined dynamic
 # symbols. ROCKNIX RK3326 test ZIPs must not rely on unknown external LSE
 # atomic helper providers even if ELF headers and SONAMEs otherwise pass.
@@ -207,7 +211,9 @@ def make(runtime: Path, native: Path, installer: Path, output: Path) -> dict:
             elf_check(file)
     added = source_files(installer)
     added.append((native, f"{ROOT_PREFIX}/bin/fire4nix-native-aarch64", True))
-    added += [(f, f"{ROOT_PREFIX}/runtime/{f.relative_to(runtime).as_posix()}", False) for f in files]
+    added += [(f, f"{ROOT_PREFIX}/runtime/{f.relative_to(runtime).as_posix()}",
+               f.relative_to(runtime).as_posix() in RUNTIME_EXECUTABLES)
+              for f in files]
     names = [z[1] for z in added]
     if len(set(names)) != len(names):
         raise ValueError("DUPLICATE_ZIP_ENTRY")
