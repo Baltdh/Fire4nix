@@ -35,6 +35,18 @@ python3 "$root/scripts/audit-real-fourcc-wpe-artifacts.py" \
   --build-conclusion failure
 grep -Fxq 'WPE_LINKED_AND_PROCESSES_STATUS=BLOCKED_OR_INCOMPLETE' "$tmp/reports/failed-build.txt"
 
+# Genuine AArch64 executable can still request a foreign x86_64 dynamic
+# loader; this must fail the artifact gate before deploy.
+cc -fPIE -pie -Wl,--dynamic-linker,/lib64/ld-linux-x86-64.so.2 \
+  "$tmp/process.c" -o "$dir/WPEWebProcess"
+if python3 "$root/scripts/audit-real-fourcc-wpe-artifacts.py" \
+  --artifact "$tmp/download" --report "$tmp/reports/foreign-loader.txt" \
+  --build-conclusion success; then
+  echo 'ERROR: executable using x86_64 ELF interpreter was accepted' >&2; exit 1
+fi
+grep -Fq 'FOREIGN_PT_INTERP:/lib64/ld-linux-x86-64.so.2' \
+  "$tmp/reports/foreign-loader.txt"
+
 # A host-CI path encoded into any subprocess must be blocked.
 cc -fPIE -pie -Wl,-rpath,/home/runner/work/Fire4nix/tmp \
   "$tmp/process.c" -o "$dir/WPEWebProcess"
