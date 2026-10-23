@@ -82,8 +82,12 @@ readelf -d "$runtime/lib/libWPEWebKit-2.0.so.1" |
 readelf -d "$runtime/libexec/wpe-webkit-2.0/WPEWebProcess" |
   grep -Fq 'Shared library: [libWPEWebKit-2.0.so.1]'
 
-python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
-  --sdk-stage "$stage" --report "$tmp/pass.txt" --strict > "$tmp/pass.log"
+if ! python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
+  --sdk-stage "$stage" --report "$tmp/pass.txt" --strict > "$tmp/pass.log"; then
+  echo 'FAIL: real ARM64 injected-module baseline was not a closed runtime graph' >&2
+  cat "$tmp/pass.log" >&2
+  exit 1
+fi
 grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$tmp/pass.txt"
 grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' "$tmp/pass.txt"
 grep -Fxq 'WPE_INJECTED_BUNDLE_INCLUDED_IN_CLOSURE=yes' "$tmp/pass.txt"
