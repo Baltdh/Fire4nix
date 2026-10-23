@@ -23,6 +23,12 @@ TARGET_INTERPRETERS = frozenset({
     "/usr/lib/ld-linux-aarch64.so.1",
 })
 INTERP = re.compile(r"\[Requesting program interpreter:\s*([^\]]+)\]")
+# GCC 15 AArch64 may emit outlined-atomics helpers that are not supplied
+# by the pinned RK3326 runtime. Only undefined dynamic references are fatal:
+# a local definition/export of the same symbol is not a dangling dependency.
+OUTLINED_ATOMICS = re.compile(
+    r"\b__aarch64_(?:cas|swp|ldadd|ldclr|ldset|ldeor)(?:p?[0-9])\w*(?:@|\b)")
+
 
 
 def tool(flag: str, path: Path) -> str:
@@ -68,6 +74,11 @@ def inspect(path: Path, read=tool) -> list[str]:
            re.search(r"\bGST_CAT_DEFAULT(?:@|\s|$)", line)
            for line in sym.splitlines()):
         findings.append("GST_CAT_DEFAULT_UNRESOLVED")
+    for row in sym.splitlines():
+        if re.search(r"\bUND\b", row):
+            hit = OUTLINED_ATOMICS.search(row)
+            if hit:
+                findings.append("UNDEFINED_GCC15_OUTLINED_ATOMIC:" + hit.group(0).rstrip("@"))
     # DT_NEEDED alone does not establish that the handheld's ELF loader
     # can start the process. Require a supported ARM64 PT_INTERP for each
     # dynamic helper, while allowing genuinely static ELF executables.
