@@ -14,6 +14,7 @@ on:
       - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
       - 'native/tests/test_wpe_runtime_download_resolver.py'
+      - 'native/tests/test_wpe_unified_auto_ports_producer.py'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
   pull_request:
     paths:
@@ -27,6 +28,7 @@ on:
       - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
       - 'native/tests/test_wpe_runtime_download_resolver.py'
+      - 'native/tests/test_wpe_unified_auto_ports_producer.py'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
   workflow_dispatch:
     inputs:
@@ -79,6 +81,7 @@ jobs:
           python3 native/tests/test_ports_wpe_gcc15_atomic_gate.py
           python3 -m py_compile scripts/resolve-wpe-runtime-download.py
           python3 native/tests/test_wpe_runtime_download_resolver.py
+          python3 native/tests/test_wpe_unified_auto_ports_producer.py
           bash -n native/tests/test_ports_wpe_firsttest_assembly.sh
           bash native/tests/test_ports_wpe_firsttest_assembly.sh
           python3 native/tests/test_first_r36h_offline_visual.py
