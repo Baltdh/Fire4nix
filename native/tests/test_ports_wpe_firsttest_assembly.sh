@@ -55,6 +55,10 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     names=set(z.namelist())
     assert 'Fire4Nix-Direto.sh' in names
     assert 'Fire4Nix/Fire4Nix-Iniciar.sh' in names
+    assert 'Fire4Nix/www/primeiro-teste.html' in names
+    offline=z.read('Fire4Nix/www/primeiro-teste.html')
+    assert b'JS OK' in offline and b'PENDENTE' in offline
+    assert b'3 cores' in offline
     assert 'Fire4Nix/bin/fire4nix-native-aarch64' in names
     assert 'Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1' in names
     assert 'Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPEWebProcess' in names

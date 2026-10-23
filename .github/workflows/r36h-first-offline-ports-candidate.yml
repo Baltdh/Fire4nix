@@ -7,6 +7,11 @@ on:
       - 'scripts/package-first-r36h-ports-candidate.py'
       - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
+      - 'installer/www/primeiro-teste.html'
+      - 'installer/www/inicio.html'
+      - 'installer/Fire4Nix-Teste.sh'
+      - 'native/tests/test_first_r36h_offline_visual.py'
+      - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
       - 'native/tests/test_wpe_runtime_download_resolver.py'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
@@ -15,6 +20,11 @@ on:
       - 'scripts/package-first-r36h-ports-candidate.py'
       - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
+      - 'installer/www/primeiro-teste.html'
+      - 'installer/www/inicio.html'
+      - 'installer/Fire4Nix-Teste.sh'
+      - 'native/tests/test_first_r36h_offline_visual.py'
+      - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
       - 'native/tests/test_wpe_runtime_download_resolver.py'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
@@ -70,6 +80,10 @@ jobs:
           python3 native/tests/test_wpe_runtime_download_resolver.py
           bash -n native/tests/test_ports_wpe_firsttest_assembly.sh
           bash native/tests/test_ports_wpe_firsttest_assembly.sh
+          python3 native/tests/test_first_r36h_offline_visual.py
+          node --check native/tests/test_first_r36h_offline_js.cjs
+          node native/tests/test_first_r36h_offline_js.cjs
+          sh -n installer/Fire4Nix-Teste.sh
           echo 'FIRST_TEST_PORTS_PACKAGING_TEST=PASS_FIXTURES_ONLY' >> "$GITHUB_STEP_SUMMARY"
           echo 'WPE_WEBKIT_ENGINE_BUILT_IN_THIS_JOB=no' >> "$GITHUB_STEP_SUMMARY"
           echo 'R36H_FIRST_FRAME_VERIFIED=no' >> "$GITHUB_STEP_SUMMARY"
