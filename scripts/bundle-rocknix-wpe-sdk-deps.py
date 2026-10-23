@@ -70,8 +70,8 @@ def libatomic_exported(symbol_table: str, required: str) -> bool:
         return False
     for row in symbol_table.splitlines():
         match = re.match(
-            r"^\\s*\\d+:\\s+\\S+\\s+\\d+\\s+\\S+\\s+(?:GLOBAL|WEAK)"
-            r"\\s+\\S+\\s+(\\S+)\\s+(\\S+)", row)
+            r"^\s*\d+:\s+\S+\s+\d+\s+\S+\s+(?:GLOBAL|WEAK)"
+            r"\s+\S+\s+(\S+)\s+(\S+)", row)
         if not match:
             continue
         index, symbol = match.groups()
