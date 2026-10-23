@@ -17,6 +17,7 @@ cat > "$APP/bin/fire4nix-native-aarch64" <<'MOCK'
 printf 'observed_lib_path=%s\n' "$LD_LIBRARY_PATH" >> "$MOCK_RESULT"
 printf 'observed_debug=%s\n' "${LD_DEBUG:-}" >> "$MOCK_RESULT"
 printf 'observed_debug_output=%s\n' "${LD_DEBUG_OUTPUT:-}" >> "$MOCK_RESULT"
+printf 'observed_mali_default=%s\n' "${MALI_DEFAULT_DISPLAY:-unset}" >> "$MOCK_RESULT"
 printf '[FIRE4NIX-NATIVE] dlopen libWPEWebKit-2.0.so.1\n'
 printf '[FIRE4NIX-NATIVE] dlopen success\n'
 printf '[FIRE4NIX-ABI] wpe_version=2.54.1\n'
@@ -25,12 +26,13 @@ MOCK
 chmod +x "$APP/bin/fire4nix-native-aarch64"
 : > "$T/observed"
 set +e
-MOCK_RESULT="$T/observed" LD_LIBRARY_PATH="$T/foreign" FIRE4NIX_GAMEPAD=0 \
+env -u MALI_DEFAULT_DISPLAY MOCK_RESULT="$T/observed" LD_LIBRARY_PATH="$T/foreign" FIRE4NIX_GAMEPAD=0 \
   FIRE4NIX_LOG_DIR="$T/logs" sh "$APP/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
 status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib" "$T/observed"
+grep -Fxq 'observed_mali_default=wayland' "$T/observed"
 grep -q 'library_path_mode=isolated_discarded_inherited_paths' "$T/logs/Fire4Nix-"*-log-*
 grep -q 'warning=private_system_or_gpu_library:libEGL.so.1' "$T/logs/Fire4Nix-"*-log-*
 if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
@@ -38,13 +40,14 @@ if grep -q 'observed_lib_path=.*foreign' "$T/observed"; then
 fi
 : > "$T/observed"
 set +e
-MOCK_RESULT="$T/observed" LD_LIBRARY_PATH="$T/foreign" FIRE4NIX_INHERIT_LIBRARY_PATH=1 \
+MOCK_RESULT="$T/observed" MALI_DEFAULT_DISPLAY=x11 LD_LIBRARY_PATH="$T/foreign" FIRE4NIX_INHERIT_LIBRARY_PATH=1 \
   FIRE4NIX_GAMEPAD=0 FIRE4NIX_LOG_DIR="$T/logs" \
   sh "$APP/Fire4Nix-Iniciar.sh" --check-platform >/dev/null
 status=$?
 set -e
 test "$status" -eq 139
 grep -Fxq "observed_lib_path=$APP/runtime/lib:$T/foreign" "$T/observed"
+grep -Fxq 'observed_mali_default=x11' "$T/observed"
 grep -q 'library_path_mode=compat_inherited' "$T/logs/Fire4Nix-"*-log-*
 : > "$T/observed"
 # Two separate probes must never share a loader debug output prefix.
