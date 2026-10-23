@@ -73,6 +73,44 @@ grep -Fxq 'WPE_MISSING_SONAMES_COUNT=0' "$tmp/pass.txt"
 # Both ELF64 PIE helpers carry the AArch64 dynamic linker even with -nostdlib.
 grep -Fxq 'WPE_PT_INTERP_CHECKS=2' "$tmp/pass.txt"
 grep -Fxq 'WPE_PT_INTERP_PROVEN_ON_R36H=no' "$tmp/pass.txt"
+# Simulate the dlopen-only WPEInjectedBundle. It has no inbound DT_NEEDED,
+# so recursive inspection must add it as a root from the strict asset report.
+mkdir -p "$runtime/lib/wpe-webkit-2.0/injected-bundle" \
+ "$runtime/share/wpe-webkit-2.0"
+cat > "$tmp/injected.c" <<'EOF'
+extern int step_symbol(void);
+int wpe_injected_bundle_entry(void) { return step_symbol(); }
+EOF
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
+ "$tmp/injected.c" -Wl,--no-as-needed \
+ -L"$sysroot/usr/lib" -l:libstep.so.1 \
+ -o "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+echo 'synthetic inspector fixture only' > "$runtime/share/wpe-webkit-2.0/inspector.gresource"
+cat > "$runtime/BUILD-REPORT.txt" <<'EOF'
+GPU_PROCESS_PROFILE=disabled_verified_wayland
+WPE_INSTALLED_ASSETS_PROFILE=strict
+WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked
+EOF
+python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
+ --sdk-stage "$stage" --report "$tmp/strict-injected-pass.txt" --strict \
+ > "$tmp/strict-injected-pass.log"
+grep -Fxq 'WPE_INJECTED_BUNDLE_ELF_AUDITED=yes' "$tmp/strict-injected-pass.txt"
+grep -Fxq 'WPE_INSTALLED_ASSETS_AUDIT=strict_assets_audited' "$tmp/strict-injected-pass.txt"
+grep -Fxq 'WPE_SCANNED_ELFS=5' "$tmp/strict-injected-pass.txt"
+grep -Fxq 'R36H_INSTALLABLE=no' "$tmp/strict-injected-pass.txt"
+# Broken inspector data invalidates the strict runtime independently of ELF.
+rm "$runtime/share/wpe-webkit-2.0/inspector.gresource"
+set +e
+python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
+ --sdk-stage "$stage" --strict > "$tmp/strict-injected-missing.log" 2>&1
+injected_rc=$?
+set -e
+test "$injected_rc" -eq 4
+grep -Fq 'MISSING_UNSAFE_WPE_MODULE_OR_RESOURCE' "$tmp/strict-injected-missing.log"
+# Restore legacy fixture profile for the remaining loader and SONAME cases.
+rm -rf "$runtime/lib/wpe-webkit-2.0" "$runtime/share/wpe-webkit-2.0"
+echo 'GPU_PROCESS_PROFILE=disabled_verified_wayland' > "$runtime/BUILD-REPORT.txt"
+
 # Removing the runtime loader from the target sysroot blocks an otherwise
 # valid WPEWebProcess binary before it can be treated as deployable.
 mv "$sysroot/lib/ld-linux-aarch64.so.1" "$tmp/loader-hidden.so.1"
