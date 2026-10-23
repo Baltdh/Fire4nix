@@ -151,6 +151,15 @@ def source_files(installer: Path) -> list[tuple[Path, str, bool]]:
     if not root_script.is_file():
         raise ValueError("MISSING_PORTS_ENTRY")
     result.append((root_script, "Fire4Nix-Direto.sh", True))
+    # The diagnostic Ports kit expects these three entry-point scripts beside
+    # the Fire4Nix/ directory. Shipping only Fire4Nix/Fire4Nix-Teste.sh would
+    # make the ZIP unable to expose Fire4Nix-Tela-101.sh after extraction.
+    for name in ("Habilitar-Teste-Ports.sh", "Fire4Nix-Teste.sh",
+                 "Diagnosticar-Fire4Nix.sh"):
+        file = installer / name
+        if not file.is_file() or file.is_symlink() or not file.stat().st_size:
+            raise ValueError("MISSING_TESTKIT_INSTALLER:" + name)
+        result.append((file, name, True))
     for name in ("Fire4Nix-Iniciar.sh", "Fire4Nix-Teste.sh",
                  "Diagnosticar-Fire4Nix.sh", "Fire4Nix-Inspecionar-ELF.sh"):
         file = installer / name
@@ -210,6 +219,9 @@ def make(runtime: Path, native: Path, installer: Path, output: Path) -> dict:
         "Nao comprova compatibilidade de hardware, driver Mali, TLS ou Wayland.\n"
         "Nao modifica /usr nem o firmware. Primeiro teste somente HTML offline.\n"
         "Extrair a pasta Fire4Nix e Fire4Nix-Direto.sh lado a lado em roms/ports.\n"
+        "Habilitar-Teste-Ports.sh cria atalhos de diagnostico sem substituir o navegador.\n"
+        "Entradas: Fire4Nix-Teste-101, Fire4Nix-Grafico-101, Fire4Nix-Tela-101.\n"
+        "Fire4Nix-Tela-101 abre a pagina offline interativa; confirme cores e JS OK.\n"
         "Iniciar pelo menu Ports. Enviar logs se falhar ou encerrar com 139.\n"
         "Motor WPE e binario principal sao componentes reais, nao simulacoes.\n"
         "R36H_FIRST_FRAME_VERIFIED=no\n"

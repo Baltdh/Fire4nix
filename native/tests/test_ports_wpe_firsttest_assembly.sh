@@ -54,6 +54,10 @@ import sys, zipfile
 with zipfile.ZipFile(sys.argv[1]) as z:
     names=set(z.namelist())
     assert 'Fire4Nix-Direto.sh' in names
+    for entry in ('Habilitar-Teste-Ports.sh', 'Fire4Nix-Teste.sh',
+                  'Diagnosticar-Fire4Nix.sh'):
+        assert entry in names, 'Missing standalone diagnostic: ' + entry
+        assert z.getinfo(entry).external_attr >> 16 & 0o111, entry + ' not executable'
     assert 'Fire4Nix/Fire4Nix-Iniciar.sh' in names
     assert 'Fire4Nix/www/primeiro-teste.html' in names
     offline=z.read('Fire4Nix/www/primeiro-teste.html')
@@ -71,6 +75,35 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     assert z.getinfo('Fire4Nix/bin/fire4nix-native-aarch64').external_attr >> 16 & 0o111
 print('PORTS_EXPERIMENTAL_ZIP_STRUCTURE=PASS_REAL_ELF_ARM64_FIXTURES')
 PY
+# Extract the candidate into a path with spaces and install its diagnostic
+# shortcuts using the EXACT root scripts contained in the candidate ZIP.
+# Never run the synthetic WebKit ELF or touch a real ROMs directory.
+mkdir -p "$out/extracted candidate" "$out/roms with spaces/ports"
+python3 - "$out/valid.zip" "$out/extracted candidate" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z:
+    z.extractall(sys.argv[2])
+PY
+printf 'preserve-existing-browser\n' > "$out/roms with spaces/ports/Fire4Nix.sh"
+(
+ cd /
+ FIRE4NIX_ROMS="$out/roms with spaces" \
+   sh "$out/extracted candidate/Habilitar-Teste-Ports.sh" > "$out/testkit-installed.txt"
+)
+grep -Fxq 'NO_WEBKIT_COPIED=1' "$out/testkit-installed.txt"
+grep -Fxq 'preserve-existing-browser' "$out/roms with spaces/ports/Fire4Nix.sh"
+for name in Fire4Nix-Teste-101 Fire4Nix-Grafico-101 Fire4Nix-Tela-101; do
+  test -f "$out/roms with spaces/ports/$name.sh"
+  grep -Fq '.Fire4Nix-Teste-101/Fire4Nix-Teste.sh' "$out/roms with spaces/ports/$name.sh"
+done
+grep -Fq -- '--visual-live' "$out/roms with spaces/ports/Fire4Nix-Tela-101.sh"
+test -s "$out/roms with spaces/ports/.Fire4Nix-Teste-101/Fire4Nix/www/primeiro-teste.html"
+test ! -e "$out/roms with spaces/ports/.Fire4Nix-Teste-101/Fire4Nix/runtime"
+FIRE4NIX_ROMS="$out/roms with spaces" \
+  sh "$out/extracted candidate/Habilitar-Teste-Ports.sh" > "$out/testkit-repeat.txt"
+grep -Fq 'already present' "$out/testkit-repeat.txt"
+echo 'PORTS_EXPERIMENTAL_TESTKIT=PASS_FROM_ZIP_ANY_CWD_NO_WEBKIT_COPIED'
+
 # CMake emits in-runtime SONAME aliases, which should become regular ZIP
 # members; ZIP symlinks and escaping aliases would be dangerous on FAT/SD.
 ln -s libWPEWebKit-2.0.so.1 "$runtime/lib/libWPEWebKit-2.0.so"
