@@ -1,0 +1,42 @@
+name: Fire4Nix unified WPE2.54 GCC15 DRM and libatomic gates
+
+on:
+  push:
+    branches: ['fix/r36h-unified-wpe2541-fourcc-gcc15-libatomic-20261023']
+    paths:
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'scripts/patch-wpe2541-drm-fourcc.py'
+      - 'native/tests/test_wpe2541_fourcc_patch.py'
+      - 'native/tests/test_wpe_unified_gcc15_libatomic_fourcc_contract.py'
+      - '.github/workflows/r36h-wpe-unified-profile-guard.yml'
+  pull_request:
+    paths:
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'scripts/patch-wpe2541-drm-fourcc.py'
+      - 'native/tests/test_wpe2541_fourcc_patch.py'
+      - 'native/tests/test_wpe_unified_gcc15_libatomic_fourcc_contract.py'
+      - '.github/workflows/r36h-wpe-unified-profile-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  static-profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify full source/profile gates before a costly WebKit compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          python3 -m py_compile scripts/patch-wpe2541-drm-fourcc.py
+          python3 native/tests/test_wpe2541_fourcc_patch.py
+          python3 native/tests/test_wpe_unified_gcc15_libatomic_fourcc_contract.py
+          echo 'WPE_UNIFIED_SOURCE_PROFILE=PASS_HOST_STATIC_TESTS_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_WEBKIT_REAL_ENGINE_LINKED_IN_THIS_JOB=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
