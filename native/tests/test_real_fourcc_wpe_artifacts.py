@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Unit-test WPE WebKit + Web/Network process artifact inspection without ARM execution."""
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/audit-real-fourcc-wpe-artifacts.py"
+spec = importlib.util.spec_from_file_location("audit_fourcc_evidence", SCRIPT)
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+
+HEADER = ("Class: ELF64\nData: 2's complement, little endian\n"
+          "Machine: AArch64\nType: DYN (Shared object file)\n")
+VERSION = "Name: GLIBC_2.41"
+SYM = "12: 0 40 FUNC GLOBAL DEFAULT 15 webkit_web_view_get_wpe_view"
+DYN = ("(SONAME) Library soname: [libWPEWebKit-2.0.so.1]\n"
+       "(NEEDED) Shared library: [libc.so.6]\n")
+
+
+class RealWPEEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.stage = self.root / "download/compiled-target-evidence"
+        self.stage.mkdir(parents=True)
+        for name in m.NAMES:
+            (self.stage / name).write_bytes(b"\x7fELF" + b"\x00" * 256)
+
+    def fake_read(self, flag, path):
+        return {"-h": HEADER, "-d": DYN,
+                "-V": VERSION,
+                "--dyn-syms": SYM if path.name.startswith("libWPE") else ""}[flag]
+
+    def test_complete_files_never_claim_installable(self):
+        content, passed = m.evidence(self.root, "success", self.fake_read)
+        self.assertTrue(passed)
+        self.assertIn("WPE_LINKED_AND_PROCESSES_STATUS=PASS_STATIC_ONLY_NOT_DEVICE_ABI", content)
+        self.assertIn("R36H_INSTALLABLE=no", content)
+        self.assertIn("R36H_PHYSICAL_TEST_COMPLETED=no", content)
+
+    def test_missing_network_process_fails_closed(self):
+        (self.stage / "WPENetworkProcess").unlink()
+        content, passed = m.evidence(self.root, "success", self.fake_read)
+        self.assertFalse(passed)
+        self.assertIn("WPENetworkProcess:MISSING", content)
+
+    def test_failure_never_becomes_success_even_with_good_elves(self):
+        content, passed = m.evidence(self.root, "failure", self.fake_read)
+        self.assertFalse(passed)
+        self.assertIn("SOURCE_BUILD_CONCLUSION=failure", content)
+
+    def test_second_output_folder_is_ambiguous(self):
+        other = self.root / "another/compiled-target-evidence"
+        other.mkdir(parents=True)
+        content, passed = m.evidence(self.root, "success", self.fake_read)
+        self.assertFalse(passed)
+        self.assertIn("WPE_EVIDENCE_DIR_COUNT=2", content)
+
+    def test_foreign_architecture(self):
+        def bad_arch(flag, path):
+            val = self.fake_read(flag, path)
+            return val.replace("AArch64", "X86-64") if flag == "-h" else val
+        content, passed = m.evidence(self.root, "success", bad_arch)
+        self.assertFalse(passed)
+        self.assertIn("WRONG_MACHINE", content)
+
+    def test_ci_runpath_and_new_glibc(self):
+        def bad(flag, path):
+            v = self.fake_read(flag, path)
+            if flag == "-d":
+                v += "(RUNPATH) Library runpath: [/home/runner/work/Fire4nix]\n"
+            if flag == "-V":
+                v += "\nName: GLIBC_2.42"
+            return v
+        content, passed = m.evidence(self.root, "success", bad)
+        self.assertFalse(passed)
+        self.assertIn("UNSAFE_RUNPATH", content)
+        self.assertIn("GLIBC_ABOVE_2_41", content)
+
+    def test_no_required_wpe_export(self):
+        def missing_export(flag, path):
+            return "" if flag == "--dyn-syms" else self.fake_read(flag, path)
+        content, passed = m.evidence(self.root, "success", missing_export)
+        self.assertFalse(passed)
+        self.assertIn("MISSING_WPE_PLATFORM_ENTRYPOINT", content)
+
+    def test_gstreamer_symbol_forbidden(self):
+        def bad_gst(flag, path):
+            if flag == "--dyn-syms":
+                return self.fake_read(flag, path) + "\n1: 0 0 OBJECT GLOBAL DEFAULT UND GST_CAT_DEFAULT"
+            return self.fake_read(flag, path)
+        content, passed = m.evidence(self.root, "success", bad_gst)
+        self.assertFalse(passed)
+        self.assertIn("GST_CAT_DEFAULT_UNRESOLVED", content)
+
+    def test_symlink_component_rejected(self):
+        (self.stage / "WPEWebProcess").unlink()
+        (self.stage / "WPEWebProcess").symlink_to(self.stage / "WPENetworkProcess")
+        content, passed = m.evidence(self.root, "success", self.fake_read)
+        self.assertFalse(passed)
+        self.assertIn("WPEWebProcess:MISSING", content)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
