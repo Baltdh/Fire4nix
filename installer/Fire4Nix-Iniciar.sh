@@ -225,6 +225,12 @@ if [ "$WPE_PLATFORM" = wayland ] &&
         done
     done
 fi
+# Fire4Nix runs under ROCKNIX Sway. On the verified Mali g29p1 userspace,
+# EGL_DEFAULT_DISPLAY works when the driver's native display is Wayland.
+# Preserve any explicitly configured driver selection.
+if [ "$WPE_PLATFORM" = wayland ] && [ -z "${MALI_DEFAULT_DISPLAY+x}" ]; then
+    export MALI_DEFAULT_DISPLAY=wayland
+fi
 printf 'platform=%s\nsocket=%s/%s\n' "$WPE_PLATFORM" \
     "${XDG_RUNTIME_DIR:-none}" "${WAYLAND_DISPLAY:-none}" >> "$LOG"
 if [ "$WPE_PLATFORM" = wayland ] &&
