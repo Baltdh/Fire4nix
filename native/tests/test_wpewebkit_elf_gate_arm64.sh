@@ -46,12 +46,18 @@ fi
 grep -Fq 'UNDEFINED_GST_CAT_DEFAULT' "$tmp/undefined-gst.txt"
 # Recreate the GCC15 failure as a real AArch64 ELF with undefined
 # __aarch64_ldadd4_relax and no runtime provider.
-cat > "$tmp/outlined.c" <<'EOF'
-extern int gcc15_helper(int) __asm__("__aarch64_ldadd4_relax");
-int webkit_web_view_get_wpe_view(void) { return gcc15_helper(1); }
+# GCC recognizes the helper name as its own outlined-atomic runtime
+# function and rewrites a direct C declaration into a __getauxval call.
+# A data relocation in ARM64 assembly creates the *real* unresolved dynsym.
+cat > "$tmp/outlined.S" <<'EOF'
+.data
+.global synthetic_outlined_atomic_reference
+synthetic_outlined_atomic_reference:
+  .xword __aarch64_ldadd4_relax
+.section .note.GNU-stack,"",%progbits
 EOF
-cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 "$tmp/outlined.c" \
- -o "$tmp/libWPEWebKit-2.0.so.1"
+cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 \
+ "$tmp/good.c" "$tmp/outlined.S" -o "$tmp/libWPEWebKit-2.0.so.1"
 readelf --wide --dyn-syms "$tmp/libWPEWebKit-2.0.so.1" > "$tmp/outlined-symbols.txt"
 if ! grep -Fq '__aarch64_ldadd4_relax' "$tmp/outlined-symbols.txt"; then
  echo 'ERROR: synthetic GCC15 undefined symbol not present in ARM64 dynsym:' >&2
@@ -67,12 +73,15 @@ grep -Fq 'UNDEFINED_GCC15_OUTLINED_ATOMICS' "$tmp/outlined-fail.txt"
 
 # GCC still legitimately needs libatomic.so.1 for 128-bit operations:
 # if an ELF retains __atomic_load_16 without DT_NEEDED, fail it.
-cat > "$tmp/unprovided-atomic.c" <<'EOF'
-extern void *atomic16_helper(void) __asm__("__atomic_load_16");
-void *webkit_web_view_get_wpe_view(void) { return atomic16_helper(); }
+cat > "$tmp/unprovided-atomic.S" <<'EOF'
+.data
+.global synthetic_unprovided_atomic16_reference
+synthetic_unprovided_atomic16_reference:
+  .xword __atomic_load_16
+.section .note.GNU-stack,"",%progbits
 EOF
-cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 "$tmp/unprovided-atomic.c" \
- -o "$tmp/libWPEWebKit-2.0.so.1"
+cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 \
+ "$tmp/good.c" "$tmp/unprovided-atomic.S" -o "$tmp/libWPEWebKit-2.0.so.1"
 if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
  --report "$tmp/atomic16-fail.txt" >/dev/null; then
  echo 'FAIL: unresolved 128-bit atomic without libatomic provider accepted' >&2; exit 1
