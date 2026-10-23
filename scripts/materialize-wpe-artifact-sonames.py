@@ -38,11 +38,13 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def locate(download: Path) -> Path:
+def locate(download: Path, *, unbundled: bool = False) -> Path:
     if not download.is_dir() or download.is_symlink():
         raise ValueError("INVALID_DOWNLOAD_ROOT")
     found = []
-    for rel in LAYOUTS:
+    layouts = (("private-wpe-runtime", "wpe-unified-sdk-build/private-wpe-runtime")
+               if unbundled else LAYOUTS)
+    for rel in layouts:
         d = download / rel
         if d.exists() or d.is_symlink():
             if not d.is_dir() or d.is_symlink() or any(
@@ -92,8 +94,8 @@ def manifest_entries(root: Path) -> dict[str, str]:
     return result
 
 
-def materialize(download: Path, output: Path) -> dict:
-    source = locate(download)
+def materialize(download: Path, output: Path, *, unbundled: bool = False) -> dict:
+    source = locate(download, unbundled=unbundled)
     if output.exists() or output.is_symlink() or not output.parent.is_dir() or output.parent.is_symlink():
         raise ValueError("REFUSE_TO_OVERWRITE_OR_MISSING_PARENT")
     if output.resolve().is_relative_to(download.resolve()) or download.resolve().is_relative_to(output.resolve()):
@@ -123,7 +125,10 @@ def materialize(download: Path, output: Path) -> dict:
                 repaired.append(relative)
             if path.is_symlink() or not path.is_file() or digest(path) != expected:
                 raise ValueError("DOWNLOADED_RUNTIME_HASH_MISMATCH:" + relative)
-        for rel in REQUIRED:
+        required = tuple(rel for rel in REQUIRED if rel != "SDK-BUNDLE-REPORT.txt") if unbundled else REQUIRED
+        if unbundled and (target / "SDK-BUNDLE-REPORT.txt").exists():
+            raise ValueError("UNBUNDLED_RUNTIME_HAS_SDK_REPORT")
+        for rel in required:
             if not (target / rel).is_file() or not (target / rel).stat().st_size:
                 raise ValueError("INCOMPLETE_WPE_RUNTIME_AFTER_RECOVERY:" + rel)
         # Rename only after the entire SHA256 manifest and required filenames
@@ -136,14 +141,18 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--download-root", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--unbundled", action="store_true",
+                   help="Recover a raw build stage; SDK bundling and ELF closure remain mandatory")
     args = p.parse_args()
     try:
-        report = materialize(args.download_root, args.output)
+        report = materialize(args.download_root, args.output, unbundled=args.unbundled)
     except (OSError, ValueError, UnicodeError) as exc:
         print("WPE_ARTIFACT_MATERIALIZATION=BLOCKED:" + str(exc), file=sys.stderr)
         return 6
     print("WPE_ARTIFACT_MATERIALIZATION=PASS_VERIFIED_SHA256_ONLY", file=sys.stderr)
     print("WPE_REPAIRED_SONAME_ALIASES=" + str(len(report["repaired"])), file=sys.stderr)
+    if args.unbundled:
+        print("WPE_RECOVERED_STAGE=UNBUNDLED_REQUIRES_SDK_CLOSURE", file=sys.stderr)
     print(report["path"])
     return 0
 
