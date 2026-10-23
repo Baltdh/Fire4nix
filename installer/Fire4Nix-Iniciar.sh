@@ -9,7 +9,7 @@ if ! mkdir -p "$LOG_DIR" 2>/dev/null || [ ! -w "$LOG_DIR" ]; then
 fi
 # mktemp avoids collisions between simultaneous sessions without relying on
 # process-ID expansion or synchronized handheld clocks.
-LOG=$(mktemp "$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-XXXXXX.log") || {
+LOG=$(mktemp "$LOG_DIR/Fire4Nix-$(date +%Y%m%d-%H%M%S)-log-XXXXXX") || {
     echo "Fire4Nix: unable to allocate unique diagnostic log" >&2
     exit 73
 }
@@ -91,7 +91,7 @@ fail() {
     exit "$code"
 }
 # At most 12 log files; never delete the stable last-result copy in /storage.
-ls -1t "$LOG_DIR"/Fire4Nix-*.log 2>/dev/null | sed -n '13,$p' |
+ls -1t "$LOG_DIR"/Fire4Nix-*.log "$LOG_DIR"/Fire4Nix-*-log-* 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
@@ -157,6 +157,10 @@ for lib in libc.so.6 ld-linux-aarch64.so.1 libwayland-client.so.0 \
     fi
 done
 export WEBKIT_EXEC_PATH="$CHILD"
+# Patched WPE keeps normal EGL paths first, then permits the device-probed
+# EGL_DEFAULT_DISPLAY fallback. Unpatched upstream ignores this variable.
+export FIRE4NIX_WPE_DEFAULT_EGL=${FIRE4NIX_WPE_DEFAULT_EGL:-1}
+printf 'wpe_default_egl_fallback=%s\n' "$FIRE4NIX_WPE_DEFAULT_EGL" >> "$LOG"
 # WPE 2.54.1 looks for its dlopen-loaded injected bundle and GResource via
 # these exact variables. A private SD-card runtime must not inherit values
 # from another WebKit installation or fall back to build-time /usr paths.

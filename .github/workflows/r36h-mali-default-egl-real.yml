@@ -1,0 +1,214 @@
+name: Fire4Nix R36H Mali default EGL and relocatable WPE full build
+
+on:
+  push:
+    branches: ['build/r36h-mali-default-egl-20261023']
+    paths:
+      - '.github/workflows/r36h-mali-default-egl-real.yml'
+      - 'scripts/patch-wpe2541-r36h-platform.py'
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  real-wpe-processes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 250
+    # Only the single scoped trial branch is permitted to start this expensive build.
+    if: github.ref == 'refs/heads/build/r36h-mali-default-egl-20261023'
+    env:
+      FIRE4NIX_WPE_CCACHE: '1'
+      FIRE4NIX_WPE_R36H_PLATFORM_PATCH: '1'
+      FIRE4NIX_WPE_CLOSURE_SYSROOT: ${{ github.workspace }}/audit-sysroot
+      FIRE4NIX_WPE_CLOSURE_STAGE: ${{ github.workspace }}/portable-closure-stage
+      CCACHE_DIR: ${{ github.workspace }}/.ccache-rocknix-wpe
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 768M
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ROCKNIX/distribution
+          ref: 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          path: rocknix-source
+          persist-credentials: false
+      - name: Host tools and offline syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config python3 perl ruby gperf bison flex \
+            unifdef wayland-protocols libwayland-bin binutils file ccache patchelf
+          bash -n fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh
+          python3 -m unittest discover -s fire4nix/native/tests -p 'test_*.py'
+          python3 fire4nix/native/tests/test_wpe2541_fourcc_patch.py
+          python3 fire4nix/native/tests/test_integrated_wpe_gcc15_libatomic_preflight.py
+          python3 -m py_compile fire4nix/scripts/bundle-rocknix-wpe-sdk-deps.py
+          sh -n fire4nix/scripts/verify-unified-wpe-media-cache.sh
+          test -x /usr/bin/unifdef
+          test -x /usr/bin/wayland-scanner
+          test "$(command -v ccache)" = /usr/bin/ccache
+          mkdir -p "$CCACHE_DIR"
+      - name: Restore GCC15 cross-compiler object cache (never host libraries)
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: wpe2541-rk3326-gcc15-nooutline-source-${{ hashFiles('fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh') }}-run-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            wpe2541-rk3326-gcc15-nooutline-source-${{ hashFiles('fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh') }}-run-
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39714252160
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-RPATH-CLEAN-OVERLAY-NOT-INSTALLABLE
+          path: fixed-elf-overlay
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39880058319
+          github-token: ${{ github.token }}
+          name: Fire4Nix-0.86-R36H-ARM64-Native-Test
+          path: native-download
+      - name: Restore immutable ROCKNIX 20260801 AArch64 compiler and stage-1 metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C rocknix-source rev-parse HEAD)" = 3b9cb1f6bf48ee9ca0cf01edd9af52ca2a6b73fb
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar -tJf "$archive" > "$RUNNER_TEMP/step2-sdk-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/step2-sdk-members.txt"; then
+            echo 'ERROR: unsafe SDK member path' >&2; exit 4
+          fi
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          test "$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -dumpmachine)" = aarch64-rocknix-linux-gnu
+          readelf -h "$sdk/aarch64-rocknix-linux-gnu/sysroot/usr/lib/libc.so.6" | grep -Eq 'Machine:.*AArch64'
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+          grep -Fxq 'STAGE1_ROCKNIX_COMBINED=PASS_REAL_ELF64_AARCH64_COLLISION_SAFE' stage1-artifact/stage1-reports/merge.txt
+      - name: Configure authentic WPE 2.54.1 reduced Wayland engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
+          grep -Fxq 'WPE_CMAKE_EXIT_CODE=0' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_TARGET_CONFIGURE=CONFIGURED_REQUIRES_ABI_REVIEW' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_CCACHE_PROFILE=ROCKNIX_TARGET_GCC_OPT_IN' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_CCACHE_CMAKE_CACHE=PASS_C_AND_CXX_TARGET_COMPILATION' wpe-unified-sdk-build/report/status.txt
+          # Full WebKit/ANGLE used to fail on undefined GCC15 __aarch64_*,
+          # so never launch a cached retry without the reviewed corrective flags.
+          grep -Fxq 'WPE_ROCKNIX_GCC15_ATOMICS=NO_OUTLINE_VERIFIED_CMAKE_CACHE' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_ROCKNIX_LIBATOMIC16=PASS_PINNED_GCC_TARGET_LIB64' wpe-unified-sdk-build/report/status.txt
+          echo 'WPE_CONFIGURED_FOR_TWO_WPE_PROCESSES=PASS_REAL_ROCKNIX_AARCH64' >> "$GITHUB_STEP_SUMMARY"
+      - name: Prepare verified private closure SDK without changing compiler inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'WPE_R36H_PLATFORM_PATCH=WPE2541_R36H_DEFAULT_EGL_AND_PRIVATE_EXEC_V1' wpe-unified-sdk-build/report/status.txt
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          python3 fire4nix/scripts/prepare-rocknix-audit-sysroot.py \
+            --source "$sdk/aarch64-rocknix-linux-gnu/sysroot" --output audit-sysroot
+          python3 fire4nix/scripts/prepare-rocknix-private-closure-sdk.py \
+            --stage stage1-artifact/stage1-combined --overlay fixed-elf-overlay/isolated-elf-overlay \
+            --support "$sdk/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1" --out private-closure-stage
+          python3 fire4nix/scripts/prepare-portable-sdk-rpaths.py \
+            --source private-closure-stage --output portable-closure-stage
+          cp portable-closure-stage/PORTABLE-RPATH-REPORT.json wpe-unified-sdk-build/report/
+      - name: Build native ROCKNIX WPEWebProcess and WPENetworkProcess and stage offline runtime
+        shell: bash
+        timeout-minutes: 230
+        run: |
+          set -euo pipefail
+          # This script defaults to a safe usage error; opt in explicitly to cross-compilation.
+          bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh --build
+          grep -Fxq 'WPE_SUBPROCESS_BUILD=PASS_REAL_AARCH64' \
+            wpe-unified-sdk-build/report/wpe-subprocesses-result.txt
+      - name: Assemble checksum-verified experimental Mali EGL Ports package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-086 delivery
+          unzip -q native-download/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip -d native-086
+          native=native-086/fire4nix-native-086-aarch64
+          test "$(sha256sum "$native" | cut -d' ' -f1)" = 4295f354873519802fc5817a1ee6d194489d1cc824fcd8e2cb65569d0fa0f1f4
+          # Validate links with the packager before flattening a private copy.
+          python3 - <<'PYCODE'
+          import importlib.util, shutil
+          from pathlib import Path
+          spec=importlib.util.spec_from_file_location('package', 'fire4nix/scripts/package-first-r36h-ports-candidate.py')
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          src=Path('wpe-unified-sdk-build/private-wpe-runtime-sdk-closed')
+          mod.ensure_tree(src)
+          shutil.copytree(src, 'package-runtime', symlinks=False)
+          PYCODE
+          (cd package-runtime && sha256sum -c SHA256SUMS.txt)
+          python3 fire4nix/scripts/package-first-r36h-ports-candidate.py \
+            --runtime package-runtime --native "$native" --installer fire4nix/installer \
+            --output delivery/Fire4Nix-R36H-Mali-EGL-Experimental.zip
+          (cd delivery && sha256sum *.zip > SHA256SUMS.txt)
+          printf '%s\n' "SOURCE_COMMIT=$GITHUB_SHA" 'DEVICE_EGL_DEFAULT_INITIALIZE=OBSERVED_SUCCESS' \
+            'NEW_WPE_DEVICE_RENDERING_VERIFIED=no' 'FIRMWARE_MODIFIED=no' > delivery/PROVENANCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-Mali-EGL-Experimental
+          path: delivery/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Preserve GCC15 cross-compiler cache statistics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wpe-unified-sdk-build/report
+          ccache --show-stats > wpe-unified-sdk-build/report/ccache-host-stats.txt || true
+          {
+            echo '## Cache de objetos do GCC15 ROCKNIX'
+            cat wpe-unified-sdk-build/report/ccache-host-stats.txt
+            echo 'R36H_EXECUTED=no'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save bounded GCC15 cache after success or link failure
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: wpe2541-rk3326-gcc15-nooutline-source-${{ hashFiles('fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh') }}-run-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Preserve CMake, compiler logs and reproducibility evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-Mali-EGL-Build-Evidence
+          path: |
+            wpe-unified-sdk-build/report/
+            wpe-unified-sdk-build/configure/CMakeCache.txt
+            wpe-unified-sdk-build/private-wpe-runtime/
+            wpe-unified-sdk-build/private-wpe-runtime-sdk-closed/
+          retention-days: 14
+          if-no-files-found: warn

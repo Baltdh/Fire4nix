@@ -235,10 +235,12 @@ test -s "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
 # source-tree or Ubuntu host libraries into a release candidate. Every copied
 # AArch64 library is checked for ABI, SONAME, GLIBC, textrels and CI RPATH.
 closed_runtime="$work/private-wpe-runtime-sdk-closed"
+closure_sysroot=${FIRE4NIX_WPE_CLOSURE_SYSROOT:-$sdk/aarch64-rocknix-linux-gnu/sysroot}
+closure_stage=${FIRE4NIX_WPE_CLOSURE_STAGE:-$root/stage1-artifact/stage1-combined}
 python3 "$repo_root/scripts/bundle-rocknix-wpe-sdk-deps.py" \
   --runtime "$runtime" \
-  --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
-  --sdk-stage "$root/stage1-artifact/stage1-combined" \
+  --sysroot "$closure_sysroot" \
+  --sdk-stage "$closure_stage" \
   --target-toolchain "$sdk" \
   --output "$closed_runtime" \
   > "$report/wpe-sdk-dependency-bundle.log" 2>&1 || {
@@ -259,8 +261,8 @@ runtime="$closed_runtime"
 closure="$report/wpe-runtime-closure.txt"
 python3 "$repo_root/scripts/audit-wpe-runtime-closure.py" \
   --runtime "$runtime" \
-  --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
-  --sdk-stage "$root/stage1-artifact/stage1-combined" \
+  --sysroot "$closure_sysroot" \
+  --sdk-stage "$closure_stage" \
   --report "$closure" --strict \
   > "$report/wpe-runtime-closure.log" 2>&1 || {
     echo 'WPE_PRIVATE_RUNTIME_CLOSURE=BLOCKED' | tee -a "$result"

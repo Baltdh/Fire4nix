@@ -136,6 +136,12 @@ grep -Fxq 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' \
  "$work/report/wpe2541-fourcc-patch.txt" || exit 30
 echo 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' >> "$work/report/status.txt"
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
+# Explicit trial profile: source archive remains immutable and SHA256-pinned.
+if [[ "${FIRE4NIX_WPE_R36H_PLATFORM_PATCH:-0}" == 1 ]]; then
+  python3 "$base/fire4nix/scripts/patch-wpe2541-r36h-platform.py" \
+    --source-root "$work/source" --report "$work/report/r36h-platform-patch.json" \
+    | tee -a "$work/report/status.txt"
+fi
 # Optional cross-compiler cache for future authentic ROCKNIX builds. This
 # is a HOST executable only; never replace the target GCC or target libc.
 # Disabled unless a CI workflow intentionally opts in. Compiler content,
