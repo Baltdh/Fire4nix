@@ -86,7 +86,7 @@ cat > "$PACKAGE/bin/fire4nix-native-aarch64" <<'MOCK'
 # A matching ABI test must use only the selected private WPE runtime.
 # The intentionally inherited foreign path must not contaminate preflight.
 case "${LD_LIBRARY_PATH:-}" in
-  "$FIRE4NIX_TEST_PACKAGE_LIB"|"$FIRE4NIX_TEST_INSTALLED_LIB") ;;
+  "$FIRE4NIX_TEST_PACKAGE_LIB"|"$FIRE4NIX_TEST_INSTALLED_LIB"|"$FIRE4NIX_TEST_STAGING_PREFIX"*/runtime/lib) ;;
   *) printf 'Unexpected loader contamination: %s\n' "${LD_LIBRARY_PATH:-}" >&2; exit 94 ;;
 esac
 exit 0
@@ -111,6 +111,7 @@ install_once() {
     FIRE4NIX_ROMS="$ROM" FIRE4NIX_GAMEPAD=0 \
       FIRE4NIX_TEST_PACKAGE_LIB="$PKG_RUNTIME/lib" \
       FIRE4NIX_TEST_INSTALLED_LIB="$ROM/ports/fire4nix-completo/runtime/lib" \
+      FIRE4NIX_TEST_STAGING_PREFIX="$ROM/ports/.fire4nix-staging-" \
       LD_LIBRARY_PATH="$T/incompatible-foreign-runtime" \
       sh "$PKG/Install.sh" > "$T/install.log" 2>&1
 }
