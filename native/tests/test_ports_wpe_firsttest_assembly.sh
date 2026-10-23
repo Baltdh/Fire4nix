@@ -67,6 +67,29 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     assert z.getinfo('Fire4Nix/bin/fire4nix-native-aarch64').external_attr >> 16 & 0o111
 print('PORTS_EXPERIMENTAL_ZIP_STRUCTURE=PASS_REAL_ELF_ARM64_FIXTURES')
 PY
+# CMake emits in-runtime SONAME aliases, which should become regular ZIP
+# members; ZIP symlinks and escaping aliases would be dangerous on FAT/SD.
+ln -s libWPEWebKit-2.0.so.1 "$runtime/lib/libWPEWebKit-2.0.so"
+python3 "$packer" --runtime "$runtime" --native "$native" \
+  --installer "$root/installer" --output "$out/aliases.zip" >/dev/null
+python3 - "$out/aliases.zip" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z:
+    alias='Fire4Nix/runtime/lib/libWPEWebKit-2.0.so'
+    actual='Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1'
+    assert alias in z.namelist()
+    assert z.read(alias)==z.read(actual)
+    assert (z.getinfo(alias).external_attr >> 16 & 0o170000) == 0o100000
+print('PORTS_SAFE_WPE_SONAME_ALIAS=PASS_REGULAR_FILE_CONTENT')
+PY
+rm "$runtime/lib/libWPEWebKit-2.0.so"
+ln -s /etc/passwd "$runtime/lib/libWPEWebKit-2.0.so"
+if python3 "$packer" --runtime "$runtime" --native "$native" \
+  --installer "$root/installer" --output "$out/escape-fail.zip" > /dev/null 2>&1; then
+ echo 'ERROR: absolute path symlink was packed' >&2; exit 1
+fi
+test ! -e "$out/escape-fail.zip"
+rm "$runtime/lib/libWPEWebKit-2.0.so"
 # A corrupted asset hash must prevent generating another archive.
 echo 'changed' >> "$runtime/share/wpe-webkit-2.0/inspector.gresource"
 if python3 "$packer" --runtime "$runtime" --native "$native" \
