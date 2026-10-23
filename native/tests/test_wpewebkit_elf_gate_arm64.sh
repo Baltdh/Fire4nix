@@ -56,8 +56,11 @@ synthetic_outlined_atomic_reference:
   .xword __aarch64_ldadd4_relax
 .section .note.GNU-stack,"",%progbits
 EOF
-cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 \
- "$tmp/good.c" "$tmp/outlined.S" -o "$tmp/libWPEWebKit-2.0.so.1"
+# Avoid implicit libgcc: the ARM64 host compiler resolves special
+# __aarch64_* helpers itself, concealing exactly the dangling ABI to test.
+# Explicit -lc still supplies real DT_NEEDED for the shared object.
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEWebKit-2.0.so.1 \
+ "$tmp/good.c" "$tmp/outlined.S" -lc -o "$tmp/libWPEWebKit-2.0.so.1"
 readelf --wide --dyn-syms "$tmp/libWPEWebKit-2.0.so.1" > "$tmp/outlined-symbols.txt"
 if ! grep -Fq '__aarch64_ldadd4_relax' "$tmp/outlined-symbols.txt"; then
  echo 'ERROR: synthetic GCC15 undefined symbol not present in ARM64 dynsym:' >&2
@@ -80,8 +83,8 @@ synthetic_unprovided_atomic16_reference:
   .xword __atomic_load_16
 .section .note.GNU-stack,"",%progbits
 EOF
-cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 \
- "$tmp/good.c" "$tmp/unprovided-atomic.S" -o "$tmp/libWPEWebKit-2.0.so.1"
+cc -shared -fPIC -nostdlib -Wl,-soname,libWPEWebKit-2.0.so.1 \
+ "$tmp/good.c" "$tmp/unprovided-atomic.S" -lc -o "$tmp/libWPEWebKit-2.0.so.1"
 if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
  --report "$tmp/atomic16-fail.txt" >/dev/null; then
  echo 'FAIL: unresolved 128-bit atomic without libatomic provider accepted' >&2; exit 1
