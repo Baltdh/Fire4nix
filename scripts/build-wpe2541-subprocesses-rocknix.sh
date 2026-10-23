@@ -163,6 +163,38 @@ sh "$repo_root/rocknix-integration/stage-wpe-runtime.sh" --stage \
    exit 13
  }
 test -s "$runtime/lib/libWPEWebKit-2.0.so.1"
+# Audit the actual linked WPE library (not a CMake configure or an object
+# count) before accepting the staged runtime or bundling other dependencies.
+# The installed SONAME is often a symlink; inspect the one real versioned ELF
+# in this private stage, refusing an ambiguous or host-escaped target.
+library=$(python3 - "$runtime/lib" <<'PY'
+from pathlib import Path
+import sys
+root=Path(sys.argv[1]).resolve(strict=True)
+soname=root/"libWPEWebKit-2.0.so.1"
+if not soname.exists() or not soname.is_file():
+    raise SystemExit("ERROR: staged SONAME missing")
+if not soname.resolve(strict=True).is_relative_to(root):
+    raise SystemExit("ERROR: WPE SONAME escapes stage")
+candidates=[f for f in root.glob("libWPEWebKit-2.0.so.1*")
+            if f.is_file() and not f.is_symlink()]
+if len(candidates)!=1 or candidates[0].resolve()!=soname.resolve():
+    raise SystemExit("ERROR: ambiguous or invalid real WPE library ELF")
+print(candidates[0])
+PY
+) || exit 13
+python3 "$repo_root/scripts/verify-built-wpewebkit.py" \
+  --library "$library" --report "$report/wpe-linked-core-elf-abi.txt" \
+  > "$report/wpe-linked-core-audit.log" 2>&1 || {
+    echo 'WPE_LINKED_CORE_ELF=BLOCKED' | tee -a "$result"
+    cat "$report/wpe-linked-core-audit.log"
+    exit 13
+  }
+grep -Fxq 'WPE_LIBRARY_ELF_AUDIT=PASS_STATIC_AARCH64' \
+  "$report/wpe-linked-core-elf-abi.txt" || exit 13
+grep -Fxq 'WPE_GCC15_UNDEFINED_OUTLINED_COUNT=0' \
+  "$report/wpe-linked-core-elf-abi.txt" || exit 13
+echo 'WPE_LINKED_CORE_ELF=PASS_ARM64_GCC15_ATOMICS_STATIC' | tee -a "$result"
 for p in WPEWebProcess WPENetworkProcess; do
   test -s "$runtime/libexec/wpe-webkit-2.0/$p"
 done
