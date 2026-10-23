@@ -64,6 +64,20 @@ def validated_stage_elf(mod, soname: str, source: Path, stage: Path) -> None:
             raise ValueError("GSTREAMER_STAGE_NEEDED:" + soname)
 
 
+def audited_toolchain_libatomic(mod, toolchain: Path) -> Path:
+    """Permit only the 16-byte atomic ABI library of the pinned ROCKNIX SDK."""
+    if not toolchain.is_dir() or toolchain.is_symlink() or toolchain.resolve() == Path("/"):
+        raise ValueError("INVALID_TARGET_COMPILER_ROOT")
+    file = toolchain / "aarch64-rocknix-linux-gnu/lib64/libatomic.so.1"
+    validated_stage_elf(mod, "libatomic.so.1", file, toolchain)
+    symbols = mod.readelf("--dyn-syms", file)
+    for required in ("__atomic_load_16", "__atomic_store_16"):
+        if not any(required in line and not re.search(r"\bUND\b", line)
+                   for line in symbols.splitlines()):
+            raise ValueError("TARGET_LIBATOMIC_MISSING_EXPORT:" + required)
+    return file
+
+
 def ensure_safe_paths(runtime: Path, sysroot: Path, stage: Path, output: Path) -> None:
     for p in (runtime, sysroot, stage):
         if not p.is_dir() or p.is_symlink() or p.resolve() == Path("/"):
@@ -81,13 +95,19 @@ def ensure_safe_paths(runtime: Path, sysroot: Path, stage: Path, output: Path) -
         raise ValueError("OVERLAPPING_OUTPUT_AND_INPUT_ROOTS")
 
 
-def bundle(runtime: Path, sysroot: Path, stage: Path, output: Path, mod=None) -> dict:
+def bundle(runtime: Path, sysroot: Path, stage: Path, output: Path, mod=None,
+           toolchain: Path | None = None) -> dict:
     ensure_safe_paths(runtime, sysroot, stage, output)
     mod = mod or import_auditor()
     indexed, unsafe = mod.index_libraries(stage)
     if unsafe:
         raise ValueError("UNSAFE_STAGE_SONAME_LINKS:" + ",".join(unsafe[:8]))
     copied: dict[str, tuple[str, str]] = {}
+    if toolchain is not None:
+        if toolchain.resolve() in (runtime.resolve(), sysroot.resolve(), stage.resolve()):
+            raise ValueError("TOOLCHAIN_ROOT_OVERLAPS_RUNTIME_ROOT")
+        if output.resolve().is_relative_to(toolchain.resolve()):
+            raise ValueError("OUTPUT_INSIDE_TOOLCHAIN")
     rounds = 0
     with tempfile.TemporaryDirectory(prefix=".fire4nix-private-deps-", dir=output.parent) as scratch:
         working = Path(scratch) / "runtime"
@@ -95,6 +115,25 @@ def bundle(runtime: Path, sysroot: Path, stage: Path, output: Path, mod=None) ->
         while rounds < MAX_ROUNDS:
             rounds += 1
             result = mod.audit(working, sysroot, stage)
+            # WPEWebKit uses GCC's shared 128-bit atomic runtime. This
+            # dependency is installed in the pinned compiler's target lib64,
+            # not necessarily in the firmware sysroot or stage-1 SDK. Add it
+            # ONLY if the closure actually reports libatomic.so.1 missing.
+            missing = {entry.rsplit(":", 1)[-1] for entry in result["WPE_MISSING_SONAMES"]}
+            if "libatomic.so.1" in missing and toolchain is not None:
+                if "libatomic.so.1" in copied or len(copied) >= MAX_LIBRARIES:
+                    raise ValueError("REPEATED_OR_TOO_MANY_TOOLCHAIN_LIBATOMIC")
+                src = audited_toolchain_libatomic(mod, toolchain)
+                dest = working / "lib/libatomic.so.1"
+                if dest.exists() or dest.is_symlink():
+                    raise ValueError("REFUSE_TO_OVERWRITE_RUNTIME_LIBATOMIC")
+                shutil.copyfile(src.resolve(strict=True), dest)
+                shutil.copymode(src.resolve(strict=True), dest)
+                copied["libatomic.so.1"] = (
+                    "PINNED_GCC15_TARGET_LIB64/libatomic.so.1", sha256(dest))
+                # Recompute the complete ELF closure against the copied file,
+                # rather than trusting a compiler SDK outside the runtime.
+                continue
             if result["WPE_ABI_FINDINGS"] or result["WPE_MISSING_SONAMES"]:
                 raise ValueError(
                     "STATIC_CLOSURE_ERRORS:"
@@ -149,6 +188,8 @@ def bundle(runtime: Path, sysroot: Path, stage: Path, output: Path, mod=None) ->
             "WEBKIT_RENDERED_ON_R36H=no",
             "R36H_INSTALLABLE=no",
             "TARGET_EXECUTED=no",
+            "WPE_TARGET_LIBATOMIC16_BUNDLED=" + (
+                "yes" if "libatomic.so.1" in copied else "no"),
         ]
         for name in sorted(copied):
             origin, digest = copied[name]
@@ -166,9 +207,12 @@ def main() -> int:
     parser.add_argument("--sysroot", type=Path, required=True)
     parser.add_argument("--sdk-stage", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--target-toolchain", type=Path,
+                        help="GCC15 ROCKNIX target SDK for libatomic.so.1 only")
     args = parser.parse_args()
     try:
-        outcome = bundle(args.runtime, args.sysroot, args.sdk_stage, args.output)
+        outcome = bundle(args.runtime, args.sysroot, args.sdk_stage, args.output,
+                         toolchain=args.target_toolchain)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=BLOCKED:{exc}", file=sys.stderr)
         return 6

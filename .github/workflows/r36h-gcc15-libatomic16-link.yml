@@ -1,0 +1,59 @@
+name: Fire4Nix ROCKNIX GCC15 libatomic16 target link probe
+
+on:
+  push:
+    branches: ['fix/r36h-wpe-libatomic16-linker-path-20261023']
+    paths:
+      - 'scripts/probe-rocknix-gcc15-libatomic16.sh'
+      - '.github/workflows/r36h-gcc15-libatomic16-link.yml'
+  pull_request:
+    paths:
+      - 'scripts/probe-rocknix-gcc15-libatomic16.sh'
+      - '.github/workflows/r36h-gcc15-libatomic16-link.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  real-rocknix-atomic16:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate real target compiler probe syntax
+        run: bash -n scripts/probe-rocknix-gcc15-libatomic16.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore pinned GCC15 ROCKNIX toolchain without untrusted members
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar -tJf "$archive" > "$RUNNER_TEMP/gcc15-atomic-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/gcc15-atomic-members.txt"; then
+            echo 'ERROR: invalid compiler SDK path' >&2; exit 4
+          fi
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+      - name: Verify libatomic16 actual target ABI and executable link
+        shell: bash
+        run: bash scripts/probe-rocknix-gcc15-libatomic16.sh
+      - name: Retain ELF and dynamic-library probe reports only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-GCC15-LIBATOMIC16-RK3326-REPORT-NOT-INSTALLABLE
+          path: atomic16-link-evidence/
+          retention-days: 14
+          if-no-files-found: warn

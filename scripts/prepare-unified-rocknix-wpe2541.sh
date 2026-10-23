@@ -74,6 +74,32 @@ done | tee "$work/report/target-package-versions.txt"
     pkg-config --print-errors --exists 'libsoup-3.0 >= 3.0' || true
   fi
 } 2>&1 | tee "$work/report/soup3-pkgconfig-resolution.txt"
+# The first genuine WPE 2.54.1 GCC15 build (#39893792106) reached
+# [8830/8833] and linked libWPEWebKit but failed WPEWebProcess because ld
+# could not locate libatomic.so.1 for __atomic_load_16/__atomic_store_16.
+# ROCKNIX GCC 15.2 resolves it in aarch64-rocknix-linux-gnu/lib64, which is
+# NOT part of the stage1 pkg-config library search directory.
+atomic_path=$("$sdk/bin/aarch64-rocknix-linux-gnu-gcc" -print-file-name=libatomic.so.1)
+[[ -f "$atomic_path" ]] || { echo 'ERROR: ROCKNIX target libatomic.so.1 missing' >&2; exit 32; }
+atomic_path=$(realpath -e "$atomic_path") || exit 32
+case "$atomic_path" in "$sdk"/aarch64-rocknix-linux-gnu/lib64/*) ;; *)
+  echo "ERROR: libatomic resolved outside pinned ROCKNIX target GCC lib64: $atomic_path" >&2
+  exit 32
+esac
+atomic_dir=$(dirname "$atomic_path")
+readelf -h "$atomic_path" | grep -Eq 'Machine:[[:space:]]+AArch64' || exit 32
+readelf -d "$atomic_path" | grep -Fq '[libatomic.so.1]' || exit 32
+readelf --wide --dyn-syms "$atomic_path" | grep -Fq '__atomic_load_16' || exit 32
+readelf --wide --dyn-syms "$atomic_path" | grep -Fq '__atomic_store_16' || exit 32
+python3 - "$atomic_path" <<'PY'
+import re, subprocess, sys
+out=subprocess.check_output(["readelf","--wide","-V",sys.argv[1]],text=True)
+if any((int(a),int(b))>(2,41) for a,b in re.findall(r"Name:\s*GLIBC_(\d+)\.(\d+)",out)):
+    raise SystemExit("ERROR: ROCKNIX libatomic requires GLIBC newer than 2.41")
+PY
+echo 'WPE_ROCKNIX_LIBATOMIC16=PASS_PINNED_GCC_TARGET_LIB64' >> "$work/report/status.txt"
+echo 'WPE_ROCKNIX_LIBATOMIC16_LINKER=RPATH_LINK_ONLY_NOT_EMBEDDED_RUNPATH' >> "$work/report/status.txt"
+
 # Extend rather than replace the immutable SDK toolchain: this makes CMake
 # find target libraries from the downloaded private stage ahead of base libc.
 cat > "$work/probe-toolchain.cmake" <<EOF
@@ -81,8 +107,9 @@ include("$sdk/fire4nix-toolchain.cmake")
 list(PREPEND CMAKE_FIND_ROOT_PATH "$stage")
 string(APPEND CMAKE_C_FLAGS_INIT " -I$stage/usr/include")
 string(APPEND CMAKE_CXX_FLAGS_INIT " -I$stage/usr/include")
-set(CMAKE_EXE_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib -Wl,-rpath-link,$atomic_dir")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib -Wl,-rpath-link,$atomic_dir")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "-L$stage/usr/lib -Wl,-rpath-link,$stage/usr/lib -Wl,-rpath-link,$atomic_dir")
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
