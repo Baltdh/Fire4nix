@@ -245,7 +245,7 @@ if [ "${FIRE4NIX_LOADER_DEBUG:-0}" = 1 ] &&
    { [ "$MODE" = --check-library ] || [ "$MODE" = --check-platform ]; }; then
     ulimit -c 0 2>/dev/null || true
     LD_DEBUG=libs,versions,files
-    LD_DEBUG_OUTPUT="$LOG_DIR/Fire4Nix-LD-$(date +%Y%m%d-%H%M%S)-$"
+    LD_DEBUG_OUTPUT="$LOG_DIR/Fire4Nix-LD-$(date +%Y%m%d-%H%M%S)-$$"
     export LD_DEBUG LD_DEBUG_OUTPUT
     printf 'loader_debug=enabled\nloader_debug_prefix=%s\n' "$LD_DEBUG_OUTPUT" >> "$LOG"
 else
