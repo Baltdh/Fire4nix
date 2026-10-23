@@ -42,7 +42,7 @@ with open(sys.argv[1], encoding="utf-8") as f:
     pairs = [line.split() for line in f if line.strip()]
 stats = {fields[0]: int(fields[-1]) for fields in pairs if len(fields) >= 2
          and fields[-1].isdigit()}
-hits = int(stats.get("cache_hit_direct", 0)) + int(stats.get("cache_hit_preprocessed", 0))
+hits = int(stats.get("direct_cache_hit", 0)) + int(stats.get("preprocessed_cache_hit", 0))
 misses = int(stats.get("cache_miss", 0))
 if hits < 1 or misses < 1:
     raise SystemExit(f"ERROR: expected cross compiler ccache miss and hit, got {stats}")
