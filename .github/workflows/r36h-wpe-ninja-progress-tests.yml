@@ -1,0 +1,41 @@
+name: Fire4Nix real WPE Ninja progress and timeout regression
+on:
+  push:
+    branches: ['ci/r36h-wpe-ninja-progress-heartbeat-20261023']
+    paths:
+      - 'scripts/wpe-ninja-heartbeat.py'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'native/tests/test_wpe_ninja_heartbeat.py'
+      - '.github/workflows/r36h-wpe-ninja-progress-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/wpe-ninja-heartbeat.py'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'native/tests/test_wpe_ninja_heartbeat.py'
+      - '.github/workflows/r36h-wpe-ninja-progress-tests.yml'
+permissions:
+  contents: read
+
+jobs:
+  progress-regression:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check WPE cross-build progress reporter and failure semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          python3 -m py_compile scripts/wpe-ninja-heartbeat.py
+          python3 native/tests/test_wpe_ninja_heartbeat.py
+          python3 native/tests/test_integrated_wpe_gcc15_libatomic_preflight.py
+          grep -Fq '"$repo_root/scripts/wpe-ninja-heartbeat.py"' scripts/build-wpe2541-subprocesses-rocknix.sh
+          echo 'WPE_NINJA_NUMERIC_PROGRESS=PASS_HOST_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_REAL_WEBKIT_ARM64_LINK_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"

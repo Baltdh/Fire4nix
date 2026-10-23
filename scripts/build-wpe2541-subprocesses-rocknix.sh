@@ -72,10 +72,14 @@ cc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
 }
 result="$report/wpe-subprocesses-result.txt"
 echo 'WPE_SUBPROCESS_BUILD=START_REAL_ROCKNIX_AARCH64' | tee "$result"
+# The 3h cross-build historically redirected all Ninja progress to a log,
+# leaving the GitHub Actions UI silent. Publish ONLY numeric [done/total]
+# counters and elapsed time, keeping compiler commands in the same logfile.
+# The wrapper preserves GNU timeout's exit code (including 124).
 set +e
-timeout --signal=TERM --kill-after=20s 10800s \
- cmake --build "$build" --target WebProcess NetworkProcess WPEInjectedBundle InspectorResources --parallel 2 \
- > "$report/wpe-subprocesses-build.log" 2>&1
+python3 "$repo_root/scripts/wpe-ninja-heartbeat.py" \
+ --log "$report/wpe-subprocesses-build.log" --interval 180 --timeout 10800 -- \
+ cmake --build "$build" --target WebProcess NetworkProcess WPEInjectedBundle InspectorResources --parallel 2
 rc=$?
 set -e
 echo "WPE_SUBPROCESS_CMAKE_EXIT=$rc" | tee -a "$result"
