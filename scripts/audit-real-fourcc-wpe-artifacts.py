@@ -15,6 +15,14 @@ import sys
 ARTIFACT_DIR = "compiled-target-evidence"
 NAMES = ("libWPEWebKit-2.0.so.1", "WPEWebProcess", "WPENetworkProcess")
 GLIBC_MAX = (2, 41)
+# Accepted loader names for the RK3326 ROCKNIX AArch64 toolchain. This only
+# validates ELF metadata, not that the user's physical firmware supplies it.
+TARGET_INTERPRETERS = frozenset({
+    "/lib/ld-linux-aarch64.so.1",
+    "/lib64/ld-linux-aarch64.so.1",
+    "/usr/lib/ld-linux-aarch64.so.1",
+})
+INTERP = re.compile(r"\[Requesting program interpreter:\s*([^\]]+)\]")
 
 
 def tool(flag: str, path: Path) -> str:
@@ -31,6 +39,7 @@ def inspect(path: Path, read=tool) -> list[str]:
         d = read("-d", path)
         v = read("-V", path)
         sym = read("--dyn-syms", path)
+        program_headers = read("-l", path) if path.name in NAMES[1:] else ""
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return ["UNREADABLE_ELF"]
     expected = ((r"Class:\s+ELF64\b", "WRONG_CLASS"),
@@ -59,6 +68,18 @@ def inspect(path: Path, read=tool) -> list[str]:
            re.search(r"\bGST_CAT_DEFAULT(?:@|\s|$)", line)
            for line in sym.splitlines()):
         findings.append("GST_CAT_DEFAULT_UNRESOLVED")
+    # DT_NEEDED alone does not establish that the handheld's ELF loader
+    # can start the process. Require a supported ARM64 PT_INTERP for each
+    # dynamic helper, while allowing genuinely static ELF executables.
+    if path.name in NAMES[1:]:
+        interp_paths = INTERP.findall(program_headers)
+        if len(interp_paths) > 1:
+            findings.append("AMBIGUOUS_PT_INTERP")
+        elif not interp_paths:
+            if re.search(r"\(NEEDED\)", d):
+                findings.append("MISSING_DYNAMIC_PT_INTERP")
+        elif interp_paths[0] not in TARGET_INTERPRETERS:
+            findings.append("FOREIGN_PT_INTERP:" + interp_paths[0])
     if path.name == "libWPEWebKit-2.0.so.1":
         if not re.search(r"\(SONAME\).*?\[libWPEWebKit-2\.0\.so\.1\]", d):
             findings.append("WRONG_SONAME")
