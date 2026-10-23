@@ -2,9 +2,11 @@ name: Fire4Nix audit actual fourcc WebKit and process artifacts
 
 on:
   push:
-    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022', 'ci/r36h-wpe-real-build-failure-diagnostics-20261023']
+    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022', 'ci/r36h-wpe-real-build-failure-diagnostics-20261023', 'audit/r36h-wpe-gcc15-atomic-elf-gates-current-main-20261023']
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
+      - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'scripts/diagnose-real-wpe-build-failure.py'
       - 'native/tests/test_diagnose_real_wpe_build_failure.py'
       - 'native/tests/test_real_fourcc_wpe_artifacts.py'
@@ -13,6 +15,8 @@ on:
   pull_request:
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
+      - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'scripts/diagnose-real-wpe-build-failure.py'
       - 'native/tests/test_diagnose_real_wpe_build_failure.py'
       - 'native/tests/test_real_fourcc_wpe_artifacts.py'
@@ -45,6 +49,8 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/audit-real-fourcc-wpe-artifacts.py
           python3 native/tests/test_real_fourcc_wpe_artifacts.py
+          python3 -m py_compile scripts/package-first-r36h-ports-candidate.py native/tests/test_ports_wpe_gcc15_atomic_gate.py
+          python3 native/tests/test_ports_wpe_gcc15_atomic_gate.py
           python3 -m py_compile scripts/diagnose-real-wpe-build-failure.py
           python3 native/tests/test_diagnose_real_wpe_build_failure.py
           bash -n native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh
