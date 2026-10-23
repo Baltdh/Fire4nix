@@ -42,4 +42,34 @@ if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
  echo 'FAIL: undefined GST_CAT_DEFAULT accepted' >&2; exit 1
 fi
 grep -Fq 'UNDEFINED_GST_CAT_DEFAULT' "$tmp/undefined-gst.txt"
+# Recreate the GCC15 failure as a real AArch64 ELF with undefined
+# __aarch64_ldadd4_relax and no runtime provider.
+cat > "$tmp/outlined.c" <<'EOF'
+extern int gcc15_helper(int) __asm__("__aarch64_ldadd4_relax");
+int webkit_web_view_get_wpe_view(void) { return gcc15_helper(1); }
+EOF
+cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 "$tmp/outlined.c" \
+ -o "$tmp/libWPEWebKit-2.0.so.1"
+readelf --dyn-syms "$tmp/libWPEWebKit-2.0.so.1" | grep -q '__aarch64_ldadd4'
+if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
+ --report "$tmp/outlined-fail.txt" >/dev/null; then
+ echo 'FAIL: undefined GCC15 AArch64 outlined atomic accepted' >&2; exit 1
+fi
+grep -Fxq 'WPE_GCC15_UNDEFINED_OUTLINED_COUNT=1' "$tmp/outlined-fail.txt"
+grep -Fq 'UNDEFINED_GCC15_OUTLINED_ATOMICS' "$tmp/outlined-fail.txt"
+
+# GCC still legitimately needs libatomic.so.1 for 128-bit operations:
+# if an ELF retains __atomic_load_16 without DT_NEEDED, fail it.
+cat > "$tmp/unprovided-atomic.c" <<'EOF'
+extern void *atomic16_helper(void) __asm__("__atomic_load_16");
+void *webkit_web_view_get_wpe_view(void) { return atomic16_helper(); }
+EOF
+cc -shared -fPIC -Wl,-soname,libWPEWebKit-2.0.so.1 "$tmp/unprovided-atomic.c" \
+ -o "$tmp/libWPEWebKit-2.0.so.1"
+if python3 "$auditor" --library "$tmp/libWPEWebKit-2.0.so.1" \
+ --report "$tmp/atomic16-fail.txt" >/dev/null; then
+ echo 'FAIL: unresolved 128-bit atomic without libatomic provider accepted' >&2; exit 1
+fi
+grep -Fq 'MISSING_LIBATOMIC16_DT_NEEDED' "$tmp/atomic16-fail.txt"
+
 echo 'WPE_LINKED_LIBRARY_ARM64_FIXTURES=PASS_REAL_ELF_GATE'
