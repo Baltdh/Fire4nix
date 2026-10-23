@@ -60,7 +60,7 @@ jobs:
           # WPE OptionsWPE.cmake calls FindGLibCompileResources at configure time.
           # ubuntu-24.04 lacks the host generator unless libglib2.0-bin is installed.
           test -x /usr/bin/glib-compile-resources
-          /usr/bin/glib-compile-resources --version > /dev/null
+          # CMake only needs the executable; GLib builds differ in --version support.
           test "$(command -v ccache)" = /usr/bin/ccache
           mkdir -p "$CCACHE_DIR"
       - name: Restore GCC15 cross-compiler object cache (never host libraries)
