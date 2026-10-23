@@ -37,6 +37,7 @@ on:
   workflow_run:
     workflows:
       - 'Fire4Nix GCC15 no-outline WPE 2.54 real ROCKNIX ARM64 link'
+      - 'Fire4Nix unified WPE2541 ROCKNIX GCC15 libatomic full link'
     types: [completed]
 
 permissions:
@@ -95,7 +96,8 @@ jobs:
           && github.event.workflow_run.conclusion == 'success'
           && github.event.workflow_run.event == 'push'
           && github.event.workflow_run.head_repository.full_name == github.repository
-          && github.event.workflow_run.head_branch == 'fix/r36h-wpe-gcc15-atomics-link-20261023')
+          && (github.event.workflow_run.head_branch == 'fix/r36h-wpe-gcc15-atomics-link-20261023'
+              || github.event.workflow_run.head_branch == 'build/r36h-unified-wpe2541-gcc15-libatomic-real-20261023'))
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -119,13 +121,19 @@ jobs:
               data.name === 'Fire4Nix GCC15 no-outline WPE 2.54 real ROCKNIX ARM64 link' &&
               data.event === 'push' &&
               data.head_branch === 'fix/r36h-wpe-gcc15-atomics-link-20261023'
+            const unifiedAuthorized =
+              data.name === 'Fire4Nix unified WPE2541 ROCKNIX GCC15 libatomic full link' &&
+              data.event === 'push' &&
+              data.head_branch === 'build/r36h-unified-wpe2541-gcc15-libatomic-real-20261023'
             if (data.conclusion !== 'success' ||
                 data.head_repository?.full_name !== context.repo.owner + '/' + context.repo.repo ||
-                !(oldAuthorized || gcc15Authorized)) {
+                !(oldAuthorized || gcc15Authorized || unifiedAuthorized)) {
               throw new Error('WPE source must be a successful allowlisted genuine ROCKNIX build, not an arbitrary Actions run')
             }
             core.setOutput('wpe_artifact_name',
-              gcc15Authorized
+              unifiedAuthorized
+              ? 'Fire4Nix-ROCKNIX-WPE2541-UNIFIED-GCC15-LIBATOMIC-REAL-STATIC-STAGE'
+              : gcc15Authorized
               ? 'Fire4Nix-ROCKNIX-WPE2541-GCC15-NO-OUTLINE-NOT-INSTALLABLE'
               : 'Fire4Nix-ROCKNIX-WPE2541-TWO-PROCESSES-STATIC-STAGE-NOT-INSTALLABLE')
       - name: Download exact successful ROCKNIX WPE runtime candidate
