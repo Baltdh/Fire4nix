@@ -13,6 +13,8 @@ on:
       - 'native/tests/test_first_r36h_offline_visual.py'
       - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
+      - 'scripts/materialize-wpe-artifact-sonames.py'
+      - 'native/tests/test_materialize_wpe_artifact_sonames.py'
       - 'native/tests/test_wpe_runtime_download_resolver.py'
       - 'native/tests/test_wpe_unified_auto_ports_producer.py'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
@@ -27,6 +29,8 @@ on:
       - 'native/tests/test_first_r36h_offline_visual.py'
       - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
+      - 'scripts/materialize-wpe-artifact-sonames.py'
+      - 'native/tests/test_materialize_wpe_artifact_sonames.py'
       - 'native/tests/test_wpe_runtime_download_resolver.py'
       - 'native/tests/test_wpe_unified_auto_ports_producer.py'
       - '.github/workflows/r36h-first-offline-ports-candidate.yml'
@@ -81,6 +85,8 @@ jobs:
           python3 native/tests/test_ports_wpe_gcc15_atomic_gate.py
           python3 -m py_compile scripts/resolve-wpe-runtime-download.py
           python3 native/tests/test_wpe_runtime_download_resolver.py
+          python3 -m py_compile scripts/materialize-wpe-artifact-sonames.py
+          python3 native/tests/test_materialize_wpe_artifact_sonames.py
           python3 native/tests/test_wpe_unified_auto_ports_producer.py
           bash -n native/tests/test_ports_wpe_firsttest_assembly.sh
           bash native/tests/test_ports_wpe_firsttest_assembly.sh
@@ -163,9 +169,13 @@ jobs:
           unzip -q "$RUNNER_TEMP/native-download/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-086"
           native="$RUNNER_TEMP/native-086/fire4nix-native-086-aarch64"
           test "$(sha256sum "$native" | cut -d' ' -f1)" = 4295f354873519802fc5817a1ee6d194489d1cc824fcd8e2cb65569d0fa0f1f4
-          runtime=$(python3 scripts/resolve-wpe-runtime-download.py \
-            --download-root "$RUNNER_TEMP/wpe-download") || {
-              echo 'ERROR: no single full SDK-closed WPE runtime inside the verified build artifact' >&2
+          # actions/upload-artifact may flatten/drop .so SONAME symlinks.
+          # Materialize a separate copy and reconstruct only SHA256-proven
+          # internal aliases; the full ELF and integrity gate still follows.
+          runtime=$(python3 scripts/materialize-wpe-artifact-sonames.py \
+            --download-root "$RUNNER_TEMP/wpe-download" \
+            --output "$RUNNER_TEMP/wpe-materialized-verified") || {
+              echo 'ERROR: WPE runtime alias transfer cannot be proven from source SHA256 manifest' >&2
               exit 6
             }
           python3 scripts/package-first-r36h-ports-candidate.py \

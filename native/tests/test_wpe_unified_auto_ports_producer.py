@@ -26,7 +26,8 @@ class VerifiedWpeProducer(unittest.TestCase):
  def test_no_packages_from_failed_or_mock_runs(self):
   self.assertIn("const unifiedAuthorized =",self.w)
   self.assertIn("!(oldAuthorized || gcc15Authorized || unifiedAuthorized)",self.w)
-  self.assertIn("python3 scripts/resolve-wpe-runtime-download.py",self.w)
+  self.assertIn("python3 scripts/materialize-wpe-artifact-sonames.py",self.w)
+  self.assertIn("python3 scripts/package-first-r36h-ports-candidate.py",self.w)
   self.assertIn("python3 scripts/package-first-r36h-ports-candidate.py",self.w)
   self.assertIn("R36H_HARDWARE_TESTED=no",self.w)
 
