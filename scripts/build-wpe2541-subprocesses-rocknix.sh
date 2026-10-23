@@ -149,6 +149,26 @@ grep -Fxq 'WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked' "$runtime/
 test -s "$runtime/share/wpe-webkit-2.0/inspector.gresource"
 test -s "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
 (cd "$runtime" && sha256sum -c SHA256SUMS.txt)
+# Resolve stage-only SONAMEs into a SECOND private runtime. Never copy
+# source-tree or Ubuntu host libraries into a release candidate. Every copied
+# AArch64 library is checked for ABI, SONAME, GLIBC, textrels and CI RPATH.
+closed_runtime="$work/private-wpe-runtime-sdk-closed"
+python3 "$repo_root/scripts/bundle-rocknix-wpe-sdk-deps.py" \
+  --runtime "$runtime" \
+  --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
+  --sdk-stage "$root/stage1-artifact/stage1-combined" \
+  --output "$closed_runtime" \
+  > "$report/wpe-sdk-dependency-bundle.log" 2>&1 || {
+    echo 'WPE_PRIVATE_RUNTIME_SDK_DEPENDENCIES=BLOCKED' | tee -a "$result"
+    tail -n 90 "$report/wpe-sdk-dependency-bundle.log"
+    exit 14
+  }
+grep -Fxq 'ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=PASS_STATIC_SONAMES_ONLY' \
+  "$closed_runtime/SDK-BUNDLE-REPORT.txt"
+echo 'WPE_PRIVATE_RUNTIME_SDK_DEPENDENCIES=BUNDLED_AND_STATIC_AUDITED' | tee -a "$result"
+runtime="$closed_runtime"
+(cd "$runtime" && sha256sum -c SHA256SUMS.txt)
+
 # A correct AArch64 library may still depend on libraries available only in
 # the temporary compilation SDK overlay, not on the physical console.
 # Classify the complete reachable NEEDED graph before declaring staging done.

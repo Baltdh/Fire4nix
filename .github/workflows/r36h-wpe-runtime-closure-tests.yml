@@ -4,6 +4,7 @@ on:
     branches: ['test/r36h-real-elf-closure-stage-only-block-20261022', 'audit/r36h-wpe-subprocess-interpreter-20261023']
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
+      - 'scripts/bundle-rocknix-wpe-sdk-deps.py'
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
       - 'native/tests/test_wpe_closure_real_aarch64.sh'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
+      - 'scripts/bundle-rocknix-wpe-sdk-deps.py'
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
       - 'native/tests/test_wpe_closure_real_aarch64.sh'
@@ -34,6 +36,8 @@ jobs:
           bash native/tests/test_wpe_subprocess_target_guard.sh
           grep -Fq 'WPE_PRIVATE_RUNTIME_CLOSURE=PASS_SDK_STATIC_SONAMES_NOT_DEVICE_ABI' scripts/build-wpe2541-subprocesses-rocknix.sh
           python3 -m py_compile scripts/audit-wpe-runtime-closure.py
+          python3 -m py_compile scripts/bundle-rocknix-wpe-sdk-deps.py
+          python3 scripts/bundle-rocknix-wpe-sdk-deps.py --help > /dev/null
           python3 -m py_compile native/tests/test_wpe_runtime_elf_closure.py
           python3 native/tests/test_wpe_runtime_elf_closure.py
           python3 scripts/audit-wpe-runtime-closure.py --help > /dev/null
@@ -53,7 +57,8 @@ jobs:
         run: |
           set -euo pipefail
           bash -n native/tests/test_wpe_closure_real_aarch64.sh
-          bash native/tests/test_wpe_closure_real_aarch64.sh
+          bash native/tests/test_wpe_closure_real_aarch64.sh | tee "$RUNNER_TEMP/wpe-closure-fixture.log"
+          grep -Fxq 'WPE_PRIVATE_SDK_BUNDLE_FIXTURES=PASS_REAL_AARCH64_CLOSED_NO_HOST_LIBS' "$RUNNER_TEMP/wpe-closure-fixture.log"
           echo 'AARCH64_ELF_TEST=PASS_REAL_ARM64_ELFS_NO_TARGET_EXECUTION' >> "$GITHUB_STEP_SUMMARY"
           echo 'WPE_WEBKIT_ENGINE_COMPILED=no' >> "$GITHUB_STEP_SUMMARY"
           echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
