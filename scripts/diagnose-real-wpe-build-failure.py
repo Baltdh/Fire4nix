@@ -114,11 +114,12 @@ def analyze(root: Path) -> str:
     lines.append("WPE_FAILURE_PHASE=" + phase)
     lines.append("WPE_FAILURE_PHASE_LOG=" + phase_log)
     first_error = None
-    classification = "UNDETERMINED"
+    classification = "NO_FAILURE_REPORTED" if phase == "NO_FAILURE_REPORTED" else "UNDETERMINED"
     selected = "none"
     # The phase-specific log is authoritative when a prior step has succeeded.
     # Preserve legacy first-error heuristics if the build result was not saved.
-    order = (phase_log,) if phase_log != "none" else REPORTS
+    order = (() if phase == "NO_FAILURE_REPORTED" else
+             (phase_log,) if phase_log != "none" else REPORTS)
     for filename in order:
         path = found[filename]
         if path is None:
