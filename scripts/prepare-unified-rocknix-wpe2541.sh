@@ -98,6 +98,31 @@ tar -xJf "$archive" -C "$work/source" --strip-components=1
 [[ -s "$work/source/CMakeLists.txt" && -s "$work/source/Source/cmake/OptionsWPE.cmake" ]] ||
   { echo 'ERROR: official WPE tree incomplete' >&2; exit 6; }
 echo 'WPE_SOURCE_SHA256=PASS_OFFICIAL_2_54_1' >> "$work/report/status.txt"
+# Optional cross-compiler cache for future authentic ROCKNIX builds. This
+# is a HOST executable only; never replace the target GCC or target libc.
+# Disabled unless a CI workflow intentionally opts in. Compiler content,
+# arguments and preprocessed input remain part of ccache's content key.
+ccache_flags=()
+if [[ "${FIRE4NIX_WPE_CCACHE:-0}" == "1" ]]; then
+  launcher=$(command -v ccache) || {
+    echo 'ERROR: requested GCC15 cross-build ccache unavailable' >&2; exit 29;
+  }
+  case "$launcher" in /usr/bin/ccache|/bin/ccache) ;; *)
+    echo "ERROR: unapproved ccache path $launcher" >&2; exit 29 ;;
+  esac
+  [[ -n "${CCACHE_DIR:-}" && -d "$CCACHE_DIR" && ! -L "$CCACHE_DIR" ]] || {
+    echo 'ERROR: explicit non-symlink CCACHE_DIR required when caching' >&2
+    exit 29
+  }
+  ccache_flags=("-DCMAKE_C_COMPILER_LAUNCHER:STRING=$launcher"
+                "-DCMAKE_CXX_COMPILER_LAUNCHER:STRING=$launcher")
+  echo 'WPE_CCACHE_PROFILE=ROCKNIX_TARGET_GCC_OPT_IN' >> "$work/report/status.txt"
+else
+  [[ "${FIRE4NIX_WPE_CCACHE:-0}" == "0" ]] || {
+    echo 'ERROR: invalid FIRE4NIX_WPE_CCACHE value' >&2; exit 29;
+  }
+  echo 'WPE_CCACHE_PROFILE=DISABLED' >> "$work/report/status.txt"
+fi
 # This is explicitly a CONFIGURE ONLY (never cmake --build / cmake --install).
 set +e
 # Wayland protocol XML is architecture-independent input for the HOST scanner,
@@ -133,6 +158,7 @@ case "$host_unifdef" in
   *) echo "ERROR: unexpected host unifdef location $host_unifdef" >&2; exit 25 ;;
 esac
 cmake -S "$work/source" -B "$work/configure" -G Ninja \
+ "${ccache_flags[@]}" \
  -DCMAKE_TOOLCHAIN_FILE="$work/probe-toolchain.cmake" \
  -DHarfBuzz_LIBRARY:FILEPATH="$stage/usr/lib/libharfbuzz.so.0" \
  -DHarfBuzz_INCLUDE_DIR:PATH="$stage/usr/include/harfbuzz" \
@@ -185,6 +211,15 @@ echo "WPE_CMAKE_EXIT_CODE=$rc" >> "$work/report/status.txt"
 # DRM/GBM-enabled ROCKNIX graphical build. It only isolates the requirements
 # for the WPEPlatform Wayland client in a first-HTML configuration.
 cache="$work/configure/CMakeCache.txt"
+if [[ "${FIRE4NIX_WPE_CCACHE:-0}" == "1" ]]; then
+  grep -Fxq "CMAKE_C_COMPILER_LAUNCHER:STRING=$launcher" "$cache" || {
+    echo 'ERROR: missing CMake C ccache launcher' >&2; exit 29;
+  }
+  grep -Fxq "CMAKE_CXX_COMPILER_LAUNCHER:STRING=$launcher" "$cache" || {
+    echo 'ERROR: missing CMake C++ ccache launcher' >&2; exit 29;
+  }
+  echo 'WPE_CCACHE_CMAKE_CACHE=PASS_C_AND_CXX_TARGET_COMPILATION' >> "$work/report/status.txt"
+fi
 for option in USE_LIBDRM USE_GBM ENABLE_GPU_PROCESS ENABLE_WPE_PLATFORM_DRM;do
   grep -Eq "^$option:BOOL=OFF$" "$cache" || {
     echo "ERROR: CMake did not retain $option=OFF; reduced-profile probe invalid" >&2
