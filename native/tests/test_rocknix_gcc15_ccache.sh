@@ -33,13 +33,16 @@ for name in one two; do
   fi
 done
 cmp "$out/one.o" "$out/two.o"
-ccache --show-stats --format=json > "$out/cache-stats.json"
-python3 - "$out/cache-stats.json" <<'PY'
-import json, sys
+# Ubuntu 22.04 ships ccache 4.5.1, which supports --print-stats but
+# not the later --format=json option.
+ccache --print-stats > "$out/cache-stats.txt"
+python3 - "$out/cache-stats.txt" <<'PY'
+import sys
 with open(sys.argv[1], encoding="utf-8") as f:
-    doc = json.load(f)
-stats = doc.get("stats", doc)
-hits = sum(int(v) for k, v in stats.items() if k.startswith("cache_hit"))
+    pairs = [line.split() for line in f if line.strip()]
+stats = {fields[0]: int(fields[-1]) for fields in pairs if len(fields) >= 2
+         and fields[-1].isdigit()}
+hits = int(stats.get("cache_hit_direct", 0)) + int(stats.get("cache_hit_preprocessed", 0))
 misses = int(stats.get("cache_miss", 0))
 if hits < 1 or misses < 1:
     raise SystemExit(f"ERROR: expected cross compiler ccache miss and hit, got {stats}")
