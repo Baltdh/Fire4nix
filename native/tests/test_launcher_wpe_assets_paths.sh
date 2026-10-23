@@ -11,9 +11,9 @@ cp "$repo/installer/Fire4Nix-Iniciar.sh" "$root/Fire4Nix-Iniciar.sh"
 cat > "$root/bin/fire4nix-native-aarch64" <<'EOF'
 #!/bin/sh
 printf 'exec=%s\ninjected=%s\ninspector=%s\n' \
-  "\${WEBKIT_EXEC_PATH:-absent}" \
-  "\${WEBKIT_INJECTED_BUNDLE_PATH:-unset}" \
-  "\${WEBKIT_INSPECTOR_RESOURCES_PATH:-unset}" > "$FIRE4NIX_ENV_CAPTURE"
+  "${WEBKIT_EXEC_PATH:-absent}" \
+  "${WEBKIT_INJECTED_BUNDLE_PATH:-unset}" \
+  "${WEBKIT_INSPECTOR_RESOURCES_PATH:-unset}" > "$FIRE4NIX_ENV_CAPTURE"
 EOF
 chmod +x "$root/bin/fire4nix-native-aarch64"
 printf 'fake WPE ELF metadata fixture\n' > "$root/runtime/lib/libWPEWebKit-2.0.so.1"
