@@ -195,13 +195,13 @@ if [ -e "$INJECTED_DIR" ] || [ -L "$INJECTED_DIR" ] ||
         fail 127 "WPE installed-assets report conflicts with packaged files"
     export WEBKIT_INJECTED_BUNDLE_PATH="$INJECTED_DIR"
     export WEBKIT_INSPECTOR_RESOURCES_PATH="$INSPECTOR_RESOURCE"
-    printf 'wpe_installed_assets=private_verified_path profile=%s\\n' "$ASSET_PROFILE" >> "$LOG"
+    printf 'wpe_installed_assets=private_verified_path profile=%s\n' "$ASSET_PROFILE" >> "$LOG"
 else
     [ "$ASSET_PROFILE" != strict ] &&
     [ "$ASSET_STATUS" != copied_and_static_elf_checked ] ||
         fail 127 "WPE runtime reported installed assets but files are absent"
     unset WEBKIT_INJECTED_BUNDLE_PATH WEBKIT_INSPECTOR_RESOURCES_PATH
-    printf 'wpe_installed_assets=legacy_absent\\n' >> "$LOG"
+    printf 'wpe_installed_assets=legacy_absent\n' >> "$LOG"
 fi
 export WPE_PLATFORM=wayland
 unset WPE_DISPLAY
