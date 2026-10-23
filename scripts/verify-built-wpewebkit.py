@@ -15,6 +15,12 @@ import sys
 
 SONAME = "libWPEWebKit-2.0.so.1"
 ABI_MAX = (2, 41)
+# GCC 15's outlined AArch64 atomics could remain as undefined dynamic
+# references even when CMake reports successful shared-library linking.
+# The RK3326 profile uses -mno-outline-atomics, so reject any such UND.
+UNDEFINED_GCC15_OUTLINED = re.compile(
+    r"\b__aarch64_(?:cas|swp|ldadd|ldclr|ldset|ldeor)(?:p?[0-9])\w*(?:@|\b)")
+ATOMIC16 = re.compile(r"\b__atomic_(?:load|store|exchange|compare_exchange)_16(?:@|\b)")
 
 
 def inspect_elf(header: str, dynamic: str, versions: str, symbols: str) -> dict[str, str]:
@@ -39,6 +45,23 @@ def inspect_elf(header: str, dynamic: str, versions: str, symbols: str) -> dict[
            for line in symbols.splitlines()):
         problems.append("UNDEFINED_GST_CAT_DEFAULT")
     dependencies = re.findall(r"\(NEEDED\).*\[([^\]]+)\]", dynamic)
+    atomic16_unresolved = []
+    outlined_unresolved = []
+    for line in symbols.splitlines():
+        if re.search(r"\bUND\b", line):
+            outlined = UNDEFINED_GCC15_OUTLINED.search(line)
+            atomic16 = ATOMIC16.search(line)
+            if outlined:
+                outlined_unresolved.append(outlined.group(0).rstrip("@"))
+            if atomic16:
+                atomic16_unresolved.append(atomic16.group(0).rstrip("@"))
+    if outlined_unresolved:
+        problems.append("UNDEFINED_GCC15_OUTLINED_ATOMICS")
+    # __atomic_load_16 and __atomic_store_16 are legitimately supplied by
+    # libatomic.so.1. Without its DT_NEEDED, an undefined symbol can survive
+    # shared linking and then prevent the handheld from loading WebKit.
+    if atomic16_unresolved and "libatomic.so.1" not in dependencies:
+        problems.append("MISSING_LIBATOMIC16_DT_NEEDED")
     if not dependencies:
         problems.append("NO_DYNAMIC_DEPENDENCIES")
     for dependency in dependencies:
@@ -64,6 +87,9 @@ def inspect_elf(header: str, dynamic: str, versions: str, symbols: str) -> dict[
         "WPE_PLATFORM_EXPORT_PRESENT": str("MISSING_WPE_PLATFORM_ENTRYPOINT" not in problems).lower(),
         "WPE_MEDIA_FREE": str(not any(problem in problems for problem in
                                 ("UNDEFINED_GST_CAT_DEFAULT", "GSTREAMER_DEPENDENCY_IN_MEDIA_FREE_BUILD"))).lower(),
+        "WPE_GCC15_UNDEFINED_OUTLINED_COUNT": str(len(outlined_unresolved)),
+        "WPE_ATOMIC16_UNDEFINED_COUNT": str(len(atomic16_unresolved)),
+        "WPE_ATOMIC16_PROVIDER_DECLARED": str("libatomic.so.1" in dependencies).lower(),
         "WPE_LIBRARY_GLIBC_MAX": ".".join(map(str, highest)),
         "WPE_LIBRARY_ISSUES": ",".join(sorted(set(problems))) or "none",
         "WPE_LIBRARY_ELF_AUDIT": "PASS_STATIC_AARCH64" if not problems else "BLOCKED",
