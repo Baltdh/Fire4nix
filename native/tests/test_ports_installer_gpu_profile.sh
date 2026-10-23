@@ -79,6 +79,12 @@ cp "$BASE/installer/Fire4Nix-Iniciar.sh" "$PACKAGE/Fire4Nix-Iniciar.sh"
 cat > "$PACKAGE/bin/fire4nix-native-aarch64" <<'MOCK'
 #!/bin/sh
 [ "$1" = --check-platform ] || exit 127
+# A matching ABI test must use only the selected private WPE runtime.
+# The intentionally inherited foreign path must not contaminate preflight.
+case "${LD_LIBRARY_PATH:-}" in
+  "$FIRE4NIX_TEST_PACKAGE_LIB"|"$FIRE4NIX_TEST_INSTALLED_LIB") ;;
+  *) printf 'Unexpected loader contamination: %s\n' "${LD_LIBRARY_PATH:-}" >&2; exit 94 ;;
+esac
 exit 0
 MOCK
 chmod +x "$PACKAGE/bin/fire4nix-native-aarch64"
@@ -98,7 +104,11 @@ for name in WPEWebProcess WPENetworkProcess; do
 done
 printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\n' > "$PKG_RUNTIME/BUILD-REPORT.txt"
 install_once() {
-    FIRE4NIX_ROMS="$ROM" FIRE4NIX_GAMEPAD=0 sh "$PKG/Install.sh" > "$T/install.log" 2>&1
+    FIRE4NIX_ROMS="$ROM" FIRE4NIX_GAMEPAD=0 \
+      FIRE4NIX_TEST_PACKAGE_LIB="$PKG_RUNTIME/lib" \
+      FIRE4NIX_TEST_INSTALLED_LIB="$ROM/ports/fire4nix-completo/runtime/lib" \
+      LD_LIBRARY_PATH="$T/incompatible-foreign-runtime" \
+      sh "$PKG/Install.sh" > "$T/install.log" 2>&1
 }
 install_once
 DEST="$ROM/ports/fire4nix-completo"
@@ -153,4 +163,4 @@ rc=$?
 set -e
 test "$rc" -eq 5
 test -s "$DEST/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
-echo 'R36H_PORTS_INSTALL_GPU_PROFILE=PASS_HOST_ONLY_NO_WEBKIT_LOADED'
+echo 'R36H_PORTS_INSTALL_GPU_PROFILE=PASS_HOST_ONLY_ISOLATED_PRECHECK_NO_WEBKIT_LOADED'
