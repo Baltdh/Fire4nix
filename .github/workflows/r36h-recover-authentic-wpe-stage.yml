@@ -99,6 +99,27 @@ jobs:
           (cd recovery/private-wpe-runtime && sha256sum -c SHA256SUMS.txt)
           echo 'WPE_BUILD_SOURCE_RUN=39929101615' >> "$GITHUB_STEP_SUMMARY"
           echo 'PRE_CLOSED_WPE_RECOVERY=SHA256_VERIFIED' >> "$GITHUB_STEP_SUMMARY"
+      - name: Inventory genuine compiler loader and libgcc candidate paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          gcc="$sdk/bin/aarch64-rocknix-linux-gnu-gcc"
+          {
+            echo '--- PINNED REAL SDK PROVIDERS ---'
+            "$gcc" -print-file-name=libgcc_s.so.1
+            "$gcc" -print-file-name=libatomic.so.1
+            find "$sdk" \( -name 'libgcc_s.so.1' -o -name 'ld-linux-aarch64.so.1' \) -print
+            echo '--- SYSROOT LOADER ---'
+            ls -ld "$sdk/aarch64-rocknix-linux-gnu/sysroot"/lib* || true
+            echo '--- TARGET GLIBC MATCHES ---'
+            find "$sdk/aarch64-rocknix-linux-gnu/sysroot" -name 'ld-linux*' -o -name 'libc.so.6'
+            echo '--- PRIVATE STAGE SHARED LIBRARY RPATH ---'
+            for name in libfontconfig.so.1 libgcrypt.so.20 libgcc_s.so.1; do
+              p="$GITHUB_WORKSPACE/stage1-artifact/stage1-combined/usr/lib/$name"
+              if [ -f "$p" ]; then readelf -d "$p" | grep -E 'SONAME|RPATH|RUNPATH' || true; fi
+            done
+          } | tee recovery/sdk-provider-inventory.txt
       - name: Complete genuine ROCKNIX ELF recursive dependency closure
         shell: bash
         run: |
