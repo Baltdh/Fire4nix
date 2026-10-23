@@ -13,6 +13,7 @@ spec.loader.exec_module(m)
 HEADER = ("Class: ELF64\nData: 2's complement, little endian\n"
           "Machine: AArch64\nType: DYN (Shared object file)\n")
 VERSION = "Name: GLIBC_2.41"
+INTERP = "      [Requesting program interpreter: /lib/ld-linux-aarch64.so.1]\\n"
 SYM = "12: 0 40 FUNC GLOBAL DEFAULT 15 webkit_web_view_get_wpe_view"
 DYN = ("(SONAME) Library soname: [libWPEWebKit-2.0.so.1]\n"
        "(NEEDED) Shared library: [libc.so.6]\n")
@@ -31,6 +32,7 @@ class RealWPEEvidenceTests(unittest.TestCase):
     def fake_read(self, flag, path):
         return {"-h": HEADER, "-d": DYN,
                 "-V": VERSION,
+                "-l": INTERP,
                 "--dyn-syms": SYM if path.name.startswith("libWPE") else ""}[flag]
 
     def test_complete_files_never_claim_installable(self):
@@ -57,6 +59,37 @@ class RealWPEEvidenceTests(unittest.TestCase):
         content, passed = m.evidence(self.root, "success", self.fake_read)
         self.assertFalse(passed)
         self.assertIn("WPE_EVIDENCE_DIR_COUNT=2", content)
+
+
+    def test_reject_foreign_interpreter_even_with_aarch64_header(self):
+        def bad_loader(flag, path):
+            if flag == "-l" and path.name == "WPEWebProcess":
+                return "      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]\\n"
+            return self.fake_read(flag, path)
+        content, passed = m.evidence(self.root, "success", bad_loader)
+        self.assertFalse(passed)
+        self.assertIn("FOREIGN_PT_INTERP:/lib64/ld-linux-x86-64.so.2", content)
+
+    def test_reject_dynamic_process_missing_loader(self):
+        def no_loader(flag, path):
+            if flag == "-l" and path.name == "WPENetworkProcess":
+                return ""
+            return self.fake_read(flag, path)
+        content, passed = m.evidence(self.root, "success", no_loader)
+        self.assertFalse(passed)
+        self.assertIn("WPENetworkProcess:MISSING_DYNAMIC_PT_INTERP", content)
+
+    def test_accept_static_process_without_loader(self):
+        def static_process(flag, path):
+            if path.name == "WPENetworkProcess":
+                if flag == "-l":
+                    return ""
+                if flag == "-d":
+                    return ""
+            return self.fake_read(flag, path)
+        content, passed = m.evidence(self.root, "success", static_process)
+        self.assertTrue(passed)
+        self.assertIn("WPE_ARTIFACT_WPENetworkProcess=PASS_STATIC_AARCH64", content)
 
     def test_foreign_architecture(self):
         def bad_arch(flag, path):
