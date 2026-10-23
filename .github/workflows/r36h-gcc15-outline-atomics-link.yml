@@ -1,0 +1,60 @@
+name: Fire4Nix ROCKNIX GCC15 atomic linker regression
+
+on:
+  push:
+    branches: ['fix/r36h-wpe-gcc15-atomics-link-20261023']
+    paths:
+      - 'scripts/probe-rocknix-gcc15-outline-atomics.sh'
+      - '.github/workflows/r36h-gcc15-outline-atomics-link.yml'
+  pull_request:
+    paths:
+      - 'scripts/probe-rocknix-gcc15-outline-atomics.sh'
+      - '.github/workflows/r36h-gcc15-outline-atomics-link.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gcc15-arm64-atomic-link:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - name: Check script syntax
+        run: bash -n fire4nix/scripts/probe-rocknix-gcc15-outline-atomics.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore official ROCKNIX 20260801 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$archive"
+          tar -tJf "$archive" > "$RUNNER_TEMP/atomic-sdk-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/atomic-sdk-members.txt"; then
+            echo 'ERROR: unsafe toolchain archive path' >&2; exit 4
+          fi
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$archive" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+      - name: Probe actual ROCKNIX AArch64 GCC 15 atomic link
+        shell: bash
+        run: bash fire4nix/scripts/probe-rocknix-gcc15-outline-atomics.sh
+      - name: Upload compiler and static ARM64 evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-GCC15-ATOMIC-LINK-PROBE-NOT-INSTALLABLE
+          path: atomic-test-results/
+          retention-days: 14
+          if-no-files-found: warn
