@@ -113,15 +113,7 @@ cat > "$tmp/injected.c" <<'EOF'
 extern int missing_injected(void);
 int injected_entrypoint(void) { return missing_injected(); }
 EOF
-cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
-  "$tmp/injected.c" -o "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
-set +e
-python3 "$auditor" --runtime "$runtime" --sysroot "$sysroot" \
-  --sdk-stage "$stage" --strict > "$tmp/injected-missing.log"
-injected_rc=$?
-set -e
-# An unresolved shared-library symbol alone is not a DT_NEEDED edge: add
-# a genuine separate shared object, linked into the injected bundle.
+# A genuine separate library with DT_NEEDED is needed for this test.
 cat > "$tmp/injecteddep.c" <<'EOF'
 int missing_injected(void) { return 13; }
 EOF
@@ -139,9 +131,7 @@ injected_needed_rc=$?
 set -e
 test "$injected_needed_rc" -eq 6
 grep -Fq 'libWPEInjectedBundle.so:libinjecteddep.so.1' "$tmp/injected-needed.log"
-# Restore the authentic injected fixture before exercising other branches.
-cc -shared -fPIC -nostdlib -Wl,-soname,libWPEInjectedBundle.so \
-  "$tmp/injected.c" -o "$tmp/replaced-injected-unsafe.so"
+# Restore the baseline injected fixture before exercising other branches.
 cat > "$tmp/injected.c" <<'EOF'
 extern int step_symbol(void);
 int injected_entrypoint(void) { return step_symbol(); }
