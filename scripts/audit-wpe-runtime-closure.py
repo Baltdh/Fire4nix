@@ -253,6 +253,15 @@ def audit(runtime: Path, sysroot: Path, stage: Path | None = None,
                     bad.append(f"FOREIGN_PT_INTERP:{path.name}:{name}")
                 else:
                     provider = sysroot / name.lstrip("/")
+                    # ROCKNIX SDK is usr-merged: /lib is supplied by
+                    # sysroot/usr/lib on the physical firmware. Accept only
+                    # this exact loader basename and independently audit ELF.
+                    # This is SDK evidence, not proof of the R36H filesystem.
+                    if (name == "/lib/ld-linux-aarch64.so.1"
+                            and not safe_file(provider, sysroot)):
+                        fallback = sysroot / "usr/lib/ld-linux-aarch64.so.1"
+                        if safe_file(fallback, sysroot):
+                            provider = fallback
                     if not safe_file(provider, sysroot):
                         bad.append(f"MISSING_SYSROOT_PT_INTERP:{path.name}:{name}")
                     else:
