@@ -5,11 +5,13 @@ on:
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
       - 'native/tests/test_launcher_verified_gpu_profile.sh'
+      - 'native/tests/test_isolated_loader.sh'
       - '.github/workflows/r36h-launcher-gpu-profile.yml'
   pull_request:
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
       - 'native/tests/test_launcher_verified_gpu_profile.sh'
+      - 'native/tests/test_isolated_loader.sh'
       - '.github/workflows/r36h-launcher-gpu-profile.yml'
   workflow_dispatch:
 
@@ -31,6 +33,8 @@ jobs:
           sh -n installer/Fire4Nix-Iniciar.sh
           sh -n native/tests/test_launcher_verified_gpu_profile.sh
           sh native/tests/test_launcher_verified_gpu_profile.sh
+          sh -n native/tests/test_isolated_loader.sh
+          sh native/tests/test_isolated_loader.sh
           echo 'R36H_GPU_DISABLED_LAUNCHER=PASS_HOST_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
           echo 'WPE_WEBKIT_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
           echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"

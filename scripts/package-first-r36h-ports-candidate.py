@@ -37,6 +37,12 @@ UNDEFINED_OUTLINED_ATOMICS = re.compile(
 
 
 
+def sha256_file(path: Path) -> str:
+    """Hash large WPE ELF and resource payloads without buffering them in RAM."""
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
 def get_readelf(flag: str, file: Path) -> str:
     p = subprocess.run(["readelf", "--wide", flag, str(file)],
                        check=True, capture_output=True, text=True, timeout=40)
@@ -142,7 +148,7 @@ def verify_checksums(runtime: Path) -> None:
         file = runtime / relative
         if not file.is_file() or file.is_symlink():
             raise ValueError("MISSING_RUNTIME_HASHED_FILE:" + relative)
-        if hashlib.sha256(file.read_bytes()).hexdigest() != digest:
+        if sha256_file(file) != digest:
             raise ValueError("RUNTIME_HASH_MISMATCH:" + relative)
     required = set(NAMES) | {"share/wpe-webkit-2.0/inspector.gresource"}
     if not required.issubset(seen):
@@ -245,7 +251,7 @@ def make(runtime: Path, native: Path, installer: Path, output: Path) -> dict:
                 with path.open("rb") as source, z.open(zi, "w") as target:
                     import shutil
                     shutil.copyfileobj(source, target, 1024 * 1024)
-                digest_lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {dst}")
+                digest_lines.append(f"{sha256_file(path)}  {dst}")
             z.writestr("LEIA-ME-PRIMEIRO.txt", notes)
             z.writestr("PACOTE-SHA256SUMS.txt", "\n".join(digest_lines) + "\n")
     except BaseException:

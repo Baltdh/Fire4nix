@@ -5,6 +5,7 @@ on:
     branches: ['build/r36h-first-offline-ports-candidate-20261022', 'fix/r36h-first-test-accept-gcc15-build-20261023', 'audit/r36h-wpe-gcc15-atomic-elf-gates-current-main-20261023']
     paths:
       - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_ports_packager_streaming_sha256.py'
       - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
       - 'installer/www/primeiro-teste.html'
@@ -21,6 +22,7 @@ on:
   pull_request:
     paths:
       - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'native/tests/test_ports_packager_streaming_sha256.py'
       - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
       - 'installer/www/primeiro-teste.html'
@@ -82,6 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/package-first-r36h-ports-candidate.py
+          python3 native/tests/test_ports_packager_streaming_sha256.py
           python3 native/tests/test_ports_wpe_gcc15_atomic_gate.py
           python3 -m py_compile scripts/resolve-wpe-runtime-download.py
           python3 native/tests/test_wpe_runtime_download_resolver.py
