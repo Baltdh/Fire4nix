@@ -1,3 +1,5 @@
+> **Documento histórico de 11/10/2026.** A árvore ativa já foi extraída; este texto não representa o estado atual. Consulte a [auditoria de fontes de 23/10/2026](docs/SOURCE_AUDIT_2026-10-23.md) e os [critérios de validação no R36H](docs/R36H_RELEASE_GATES_2026-10-22.md).
+
 # Fire4NIX Browser - Project Audit & Reorganization
 
 **Date**: 2026-10-11

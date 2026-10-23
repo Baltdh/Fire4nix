@@ -85,7 +85,8 @@ def elf_check(file: Path) -> None:
                    not re.search(r"\bUND\b", row)
                    for row in symbols.splitlines()):
             raise ValueError("WPE_PLATFORM_EXPORT_MISSING")
-    if file.name in ("fire4nix-native-aarch64", "WPEWebProcess", "WPENetworkProcess"):
+    if file.name in ("fire4nix-native-086-aarch64", "fire4nix-native-aarch64",
+                     "WPEWebProcess", "WPENetworkProcess"):
         program = get_readelf("-l", file)
         interp = re.findall(r"\[Requesting program interpreter:\s*([^\]]+)\]", program)
         if interp != ["/lib/ld-linux-aarch64.so.1"] and interp != ["/lib64/ld-linux-aarch64.so.1"]:
