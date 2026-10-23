@@ -1,0 +1,34 @@
+name: Fire4Nix unified WPE GCC15 build and Ports provenance contract
+on:
+  push:
+    branches: ['ci/r36h-unified-wpe-real-link-once-20261023']
+    paths:
+      - '.github/workflows/r36h-wpe2541-unified-gcc15-libatomic-real.yml'
+      - '.github/workflows/r36h-unified-wpe-onebuild-contract.yml'
+      - 'native/tests/test_wpe_unified_onebuild_contract.py'
+  pull_request:
+    paths:
+      - '.github/workflows/r36h-wpe2541-unified-gcc15-libatomic-real.yml'
+      - '.github/workflows/r36h-unified-wpe-onebuild-contract.yml'
+      - 'native/tests/test_wpe_unified_onebuild_contract.py'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify actual integrated link workflow and downstream authenticated ZIP gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 native/tests/test_wpe_unified_onebuild_contract.py
+          python3 native/tests/test_integrated_wpe_gcc15_libatomic_preflight.py
+          python3 native/tests/test_wpe2541_fourcc_patch.py
+          bash -n scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          echo 'WPE_ONE_BRANCH_FULL_BUILD_CONTRACT=PASS_STATIC_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_REAL_ARM64_LINK_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
