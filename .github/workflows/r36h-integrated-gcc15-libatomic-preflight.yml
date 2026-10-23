@@ -1,0 +1,42 @@
+name: Fire4Nix WPE 2.54 integrated GCC15 libatomic16 build preflight
+on:
+  push:
+    branches: ['fix/r36h-wpe-postlink-report-not-executable-20261023']
+    paths:
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'scripts/patch-wpe2541-drm-fourcc.py'
+      - 'native/tests/test_wpe2541_fourcc_patch.py'
+      - 'native/tests/test_integrated_wpe_gcc15_libatomic_preflight.py'
+      - '.github/workflows/r36h-integrated-gcc15-libatomic-preflight.yml'
+  pull_request:
+    paths:
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
+      - 'scripts/patch-wpe2541-drm-fourcc.py'
+      - 'native/tests/test_wpe2541_fourcc_patch.py'
+      - 'native/tests/test_integrated_wpe_gcc15_libatomic_preflight.py'
+      - '.github/workflows/r36h-integrated-gcc15-libatomic-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-integrated-real-wpe-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Static and executable patch safety preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
+          python3 -m py_compile scripts/patch-wpe2541-drm-fourcc.py
+          python3 native/tests/test_wpe2541_fourcc_patch.py
+          python3 native/tests/test_integrated_wpe_gcc15_libatomic_preflight.py
+          echo 'WPE_GCC15_FOURCC_LIBATOMIC_CCACHE_PREFLIGHT=PASS_STATIC' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_REAL_WEBKIT_ARM64_LINK_EXECUTED=no' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_INSTALLABLE=no' >> "$GITHUB_STEP_SUMMARY"
