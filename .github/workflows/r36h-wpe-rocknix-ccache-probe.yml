@@ -1,0 +1,72 @@
+name: Fire4Nix ROCKNIX GCC15 CCache cross compiler smoke
+
+on:
+  push:
+    branches: ['build/r36h-wpe-gcc15-ccache-retry-20261023']
+    paths:
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'native/tests/test_rocknix_gcc15_ccache.sh'
+      - '.github/workflows/r36h-wpe-rocknix-ccache-probe.yml'
+  pull_request:
+    paths:
+      - 'scripts/prepare-unified-rocknix-wpe2541.sh'
+      - 'native/tests/test_rocknix_gcc15_ccache.sh'
+      - '.github/workflows/r36h-wpe-rocknix-ccache-probe.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  cross-compiler-cache-proof:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CCACHE_DIR: ${{ runner.temp }}/wpe-ccache-probe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fire4nix
+          persist-credentials: false
+      - name: Install approved host compiler-cache utilities
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ccache binutils
+          test "$(command -v ccache)" = /usr/bin/ccache
+          ccache --version
+          mkdir -p "$CCACHE_DIR"
+          bash -n fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n fire4nix/native/tests/test_rocknix_gcc15_ccache.sh
+      - uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: ${{ runner.temp }}/sdk-download
+      - name: Restore exact original ROCKNIX RK3326 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarfile="$RUNNER_TEMP/sdk-download/rocknix-toolchain-host-only.tar.xz"
+          test -s "$tarfile"
+          tar -tJf "$tarfile" > "$RUNNER_TEMP/cache-probe-sdk-members.txt"
+          if grep -E '(^/|(^|/)\.\.(/|$))' "$RUNNER_TEMP/cache-probe-sdk-members.txt"; then
+            echo 'ERROR: unsafe pinned SDK member path' >&2
+            exit 4
+          fi
+          mkdir -p rocknix-source/build.ROCKNIX-RK3326.aarch64
+          tar --no-same-owner --no-same-permissions -xJf "$tarfile" \
+            -C rocknix-source/build.ROCKNIX-RK3326.aarch64
+      - name: Prove cached AArch64 compilation and correct GCC atomics
+        shell: bash
+        run: bash fire4nix/native/tests/test_rocknix_gcc15_ccache.sh
+      - name: Preserve cache hit/miss metrics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-ROCKNIX-GCC15-CCACHE-CROSS-PROBE-NOT-INSTALLABLE
+          path: ccache-cross-test/
+          retention-days: 14
+          if-no-files-found: warn
