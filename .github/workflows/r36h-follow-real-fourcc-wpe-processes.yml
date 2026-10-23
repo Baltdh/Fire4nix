@@ -6,11 +6,13 @@ on:
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
       - 'native/tests/test_real_fourcc_wpe_artifacts.py'
+      - 'native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh'
       - '.github/workflows/r36h-follow-real-fourcc-wpe-processes.yml'
   pull_request:
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
       - 'native/tests/test_real_fourcc_wpe_artifacts.py'
+      - 'native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh'
       - '.github/workflows/r36h-follow-real-fourcc-wpe-processes.yml'
   workflow_run:
     workflows:
@@ -39,6 +41,10 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/audit-real-fourcc-wpe-artifacts.py
           python3 native/tests/test_real_fourcc_wpe_artifacts.py
+          bash -n native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh
+      - name: Real ARM64 WebKit and Web/Network ELF artifact acceptance and rejection
+        if: matrix.os == 'ubuntu-24.04-arm'
+        run: bash native/tests/test_real_fourcc_wpe_artifact_elf_aarch64.sh
 
   actual-fourcc-process-audit:
     if: >-
