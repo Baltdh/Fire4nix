@@ -11,6 +11,12 @@ jobs:
   real-wpe-processes:
     runs-on: ubuntu-22.04
     timeout-minutes: 250
+    env:
+      FIRE4NIX_WPE_CCACHE: '1'
+      CCACHE_DIR: ${{ github.workspace }}/.ccache-rocknix-wpe
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 768M
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,13 +35,22 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build pkg-config python3 perl ruby gperf bison flex \
-            unifdef wayland-protocols libwayland-bin binutils file
+            unifdef wayland-protocols libwayland-bin binutils file ccache
           bash -n fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
           bash -n fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh
           python3 -m py_compile fire4nix/scripts/bundle-rocknix-wpe-sdk-deps.py
           sh -n fire4nix/scripts/verify-unified-wpe-media-cache.sh
           test -x /usr/bin/unifdef
           test -x /usr/bin/wayland-scanner
+          test "$(command -v ccache)" = /usr/bin/ccache
+          mkdir -p "$CCACHE_DIR"
+      - name: Restore GCC15 cross-compiler object cache (never host libraries)
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: wpe2541-rk3326-gcc15-nooutline-source-${{ hashFiles('fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh') }}-run-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            wpe2541-rk3326-gcc15-nooutline-source-${{ hashFiles('fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh') }}-run-
       - uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -78,6 +93,12 @@ jobs:
           grep -Fxq 'WPE_TARGET_CONFIGURE=CONFIGURED_REQUIRES_ABI_REVIEW' wpe-unified-sdk-build/report/status.txt
           grep -Fxq 'WPE_REDUCED_WAYLAND_NO_DRM_GBM=PASS_CMAKE_CACHE_GATED' wpe-unified-sdk-build/report/status.txt
           grep -Fxq 'WPE_WAYLAND_PROTOCOLS=ROCKNIX_1_44_DATA_ONLY' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_CCACHE_PROFILE=ROCKNIX_TARGET_GCC_OPT_IN' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_CCACHE_CMAKE_CACHE=PASS_C_AND_CXX_TARGET_COMPILATION' wpe-unified-sdk-build/report/status.txt
+          # Full WebKit/ANGLE used to fail on undefined GCC15 __aarch64_*,
+          # so never launch a cached retry without the reviewed corrective flags.
+          grep -Fxq 'WPE_ROCKNIX_GCC15_ATOMICS=NO_OUTLINE_VERIFIED_CMAKE_CACHE' wpe-unified-sdk-build/report/status.txt
+          grep -Fxq 'WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1' wpe-unified-sdk-build/report/status.txt
           echo 'WPE_CONFIGURED_FOR_TWO_WPE_PROCESSES=PASS_REAL_ROCKNIX_AARCH64' >> "$GITHUB_STEP_SUMMARY"
       - name: Build native ROCKNIX WPEWebProcess and WPENetworkProcess and stage offline runtime
         shell: bash
@@ -88,6 +109,25 @@ jobs:
           bash fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh --build
           grep -Fxq 'WPE_SUBPROCESS_BUILD=PASS_REAL_AARCH64' \
             wpe-unified-sdk-build/report/wpe-subprocesses-result.txt
+      - name: Preserve GCC15 cross-compiler cache statistics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wpe-unified-sdk-build/report
+          ccache --show-stats > wpe-unified-sdk-build/report/ccache-host-stats.txt || true
+          {
+            echo '## Cache de objetos do GCC15 ROCKNIX'
+            cat wpe-unified-sdk-build/report/ccache-host-stats.txt
+            echo 'R36H_EXECUTED=no'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save bounded GCC15 cache after success or link failure
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: wpe2541-rk3326-gcc15-nooutline-source-${{ hashFiles('fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh') }}-run-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Preserve CMake, compiler logs and reproducibility evidence only
         if: always()
         uses: actions/upload-artifact@v4

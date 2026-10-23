@@ -1,0 +1,34 @@
+name: Fire4Nix WPE GCC15 resumable cache contract
+
+on:
+  push:
+    branches: ['ci/r36h-resumable-wpe-gcc15-cache-20261023']
+    paths:
+      - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
+      - '.github/workflows/r36h-wpe-gcc15-cache-retry-guard.yml'
+      - 'native/tests/test_wpe_gcc15_cache_retry_workflow.py'
+  pull_request:
+    paths:
+      - '.github/workflows/r36h-wpe2541-processes-real-rk3326.yml'
+      - '.github/workflows/r36h-wpe-gcc15-cache-retry-guard.yml'
+      - 'native/tests/test_wpe_gcc15_cache_retry_workflow.py'
+
+permissions:
+  contents: read
+
+jobs:
+  retry-contract:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify manual WPE retry never starts automatically and restores bounded GCC15 ccache
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile native/tests/test_wpe_gcc15_cache_retry_workflow.py
+          python3 native/tests/test_wpe_gcc15_cache_retry_workflow.py
+          bash -n scripts/prepare-unified-rocknix-wpe2541.sh
+          bash -n scripts/build-wpe2541-subprocesses-rocknix.sh
