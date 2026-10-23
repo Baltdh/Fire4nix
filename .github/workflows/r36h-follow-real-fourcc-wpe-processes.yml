@@ -2,7 +2,7 @@ name: Fire4Nix audit actual fourcc WebKit and process artifacts
 
 on:
   push:
-    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022', 'ci/r36h-wpe-real-build-failure-diagnostics-20261023'', 'audit/r36h-wpe-no-unresolved-gcc15-atomics-20261023']
+    branches: ['ci/r36h-follow-real-fourcc-webkit-processes-20261022', 'ci/r36h-wpe-real-build-failure-diagnostics-20261023', 'audit/r36h-wpe-no-unresolved-gcc15-atomics-20261023']
     paths:
       - 'scripts/audit-real-fourcc-wpe-artifacts.py'
       - 'scripts/package-first-r36h-ports-candidate.py'
