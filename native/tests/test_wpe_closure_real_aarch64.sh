@@ -163,4 +163,44 @@ grep -Fxq 'WPE_RUNTIME_CLOSURE=BLOCKED' "$tmp/overlay.log"
 grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=1' "$tmp/overlay.log"
 grep -Fq 'WPE_STAGE_ONLY_DEPENDENCIES=libstep.so.1:liboverlay.so.1' "$tmp/overlay.log"
 grep -Fxq 'R36H_INSTALLABLE=no' "$tmp/overlay.log"
+
+# Stage-only dependencies must be privately copied from the *exact* ARM64
+# SDK overlay and the entire dynamic graph audited again, never host /usr.
+bundler="$root/scripts/bundle-rocknix-wpe-sdk-deps.py"
+bundled="$tmp/private-sdk-closed-runtime"
+python3 "$bundler" --runtime "$runtime" --sysroot "$sysroot" \
+  --sdk-stage "$stage" --output "$bundled" > "$tmp/bundle.log"
+test -s "$bundled/lib/liboverlay.so.1"
+cmp "$bundled/lib/liboverlay.so.1" "$stage/usr/lib/liboverlay.so.1"
+grep -Fxq 'ROCKNIX_SDK_BUNDLED_LIBRARIES=1' "$bundled/SDK-BUNDLE-REPORT.txt"
+grep -Fxq 'R36H_INSTALLABLE=no' "$bundled/SDK-BUNDLE-REPORT.txt"
+grep -q 'lib/liboverlay.so.1' "$bundled/SHA256SUMS.txt"
+(cd "$bundled" && sha256sum -c SHA256SUMS.txt > /dev/null)
+python3 "$auditor" --runtime "$bundled" --sysroot "$sysroot" \
+  --sdk-stage "$stage" --strict > "$tmp/closed.txt"
+grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$tmp/closed.txt"
+grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' "$tmp/closed.txt"
+# Inputs were never modified and outputs are immutable once created.
+test ! -e "$runtime/lib/liboverlay.so.1"
+if python3 "$bundler" --runtime "$runtime" --sysroot "$sysroot" \
+  --sdk-stage "$stage" --output "$bundled" > /dev/null 2>&1; then
+  echo 'ERROR: output bundle was silently overwritten' >&2; exit 1
+fi
+
+# A stage library carrying a temporary GitHub build RUNPATH must NOT be
+# bundled even when its SONAME and architecture match the requested edge.
+cc -shared -fPIC -nostdlib -Wl,-soname,liboverlay.so.1 \
+ -Wl,-rpath,/home/runner/work/Fire4nix/build \
+ "$tmp/overlay.c" -o "$stage/usr/lib/liboverlay.so.1"
+set +e
+python3 "$bundler" --runtime "$runtime" --sysroot "$sysroot" \
+ --sdk-stage "$stage" --output "$tmp/untrusted-sdk-runtime" \
+ > "$tmp/rejected-sdk.log" 2>&1
+bad_rc=$?
+set -e
+test "$bad_rc" -eq 6
+test ! -e "$tmp/untrusted-sdk-runtime"
+grep -Eq 'UNSAFE_STAGE_ELF_RPATH|STATIC_CLOSURE_ERRORS' "$tmp/rejected-sdk.log"
+echo 'WPE_PRIVATE_SDK_BUNDLE_FIXTURES=PASS_REAL_AARCH64_CLOSED_NO_HOST_LIBS'
+
 echo 'WPE_REAL_AARCH64_ELF_FIXTURES=PASS_STATIC_RUNTIME_STAGE_ONLY_BLOCKS'
