@@ -26,7 +26,7 @@ Workflow: `r36h-recover-compiled-wpe-runtime.yml`, limitado à branch
 originais; não recompila WebKit, não executa binários ARM64 e não instala no
 console. Só publica o candidato experimental se todas as verificações passarem.
 
-Validação local: 161 testes Python aprovados, incluindo biblioteca versionada
+Validação local inicial: 161 testes Python aprovados, incluindo biblioteca versionada
 real e recuperação de estágio bruto com hash incorreto, ausência de relatório
 e tentativa de misturar relatório de fechamento com estágio bruto.
 O resultado da recuperação real deve ser confirmado no GitHub Actions.
@@ -65,5 +65,18 @@ Registra hashes anteriores/posteriores. O fechamento e o empacotamento rodam
 novamente depois da transformação, sem alterar o motor WPE original.
 
 Integra também a verificação exata de exportações libatomic da main (#175).
-Validação integrada local: 176 testes Python aprovados. A nova recuperação
-real está em execução; o teste físico no R36H continua pendente.
+Validação integrada local: 176 testes Python aprovados.
+
+## Resultado integrado confirmado
+
+A [execução 40025659871](https://github.com/Baltdh/Fire4nix/actions/runs/40025659871)
+terminou com sucesso no commit `bfaa43220a4265ccae678fc35bb3c7056c8e818a`.
+Removeu caminhos padrão de nove cópias de bibliotecas do estágio, fechou as
+35 bibliotecas privadas e passou novamente por 43 ELFs e 187 dependências,
+com zero dependências ausentes e zero achados ABI.
+
+O empacotador aprovou `PASS_STATIC_ARM64_NOT_HARDWARE_TESTED` e gerou
+`Fire4Nix-R36H-Primeiro-Teste-Experimental.zip`: 59 arquivos e 196407954 bytes.
+Artefato GitHub: 12531724575. O motor original não foi recompilado ou alterado.
+Os testes de fechamento ELF, empacotador e compilação ARM64 do commit integrado
+também passaram no GitHub. O teste físico no R36H continua pendente.
