@@ -22,7 +22,7 @@ if ! mkdir -p "$REPORT_DIR" 2>/dev/null; then
   echo "Fire4Nix: unable to create test report directory $REPORT_DIR" >&2
   exit 73
 fi
-REPORT=$(mktemp "$REPORT_DIR/Fire4Nix-Teste-101-XXXXXX.txt") || exit 73
+REPORT=$(mktemp "$REPORT_DIR/Fire4Nix-Teste-101-txt-XXXXXX") || exit 73
 DIAG="$REPORT_DIR/Fire4Nix-Diagnostico-101.txt"
 LATEST="$REPORT_DIR/Fire4Nix-Ultimo-Teste.txt"
 STATUS_FILE="$REPORT_DIR/Fire4Nix-Resumo-101.txt"
