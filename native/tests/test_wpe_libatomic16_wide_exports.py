@@ -53,7 +53,7 @@ class Atomic16ExportTests(TestCase):
             runner.return_value = SimpleNamespace(stdout="header")
             closure.readelf("-h", Path("/private/target/libatomic.so.1"))
         self.assertEqual(runner.call_args.args[0],
-                         ["readelf", "-h", "/private/target/libatomic.so.1"])
+                         ["readelf", "--wide", "-h", "/private/target/libatomic.so.1"])
 
     def test_missing_provider_never_accepted(self):
         self.assertFalse(bundle.libatomic_exported("", "__atomic_load_16"))

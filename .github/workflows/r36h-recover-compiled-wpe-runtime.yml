@@ -1,0 +1,160 @@
+name: Fire4Nix recover compiled WPE SDK closure
+on:
+  push:
+    branches: ['fix/wpe-build-continuation-20261023']
+    paths:
+      - '.github/workflows/r36h-recover-compiled-wpe-runtime.yml'
+      - 'scripts/audit-wpe-runtime-closure.py'
+      - 'scripts/materialize-wpe-artifact-sonames.py'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Authenticate pinned completed compilation and SDK inputs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const expected = [
+              [39929101615, 'f666dd2cee4ed5a3973338e3018f04eb4a8e84d1', 'failure'],
+              [39525819979, '6342d15d4e538ca5e525346fbf477ab585e199bc', 'success'],
+            ];
+            for (const [id, sha, conclusion] of expected) {
+              const {data} = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner, repo: context.repo.repo, run_id: id
+              });
+              if (data.head_sha !== sha || data.conclusion !== conclusion ||
+                  data.status !== 'completed' ||
+                  data.head_repository?.full_name !== context.repo.owner + '/' + context.repo.repo)
+                throw new Error('PINNED_SOURCE_PROVENANCE_MISMATCH:' + id);
+            }
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39929101615
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-WPE2541-UNIFIED-GCC15-LIBATOMIC-REAL-STATIC-STAGE
+          path: downloaded
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39525819979
+          github-token: ${{ github.token }}
+          name: ROCKNIX-RK3326-toolchain-HOST-ONLY
+          path: sdk-download
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39712898635
+          github-token: ${{ github.token }}
+          name: Fire4Nix-STEP1-Unified-RK3326-AARCH64-SDK-NOT-INSTALLABLE
+          path: stage1-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39880058319
+          github-token: ${{ github.token }}
+          name: Fire4Nix-0.86-R36H-ARM64-Native-Test
+          path: native-download
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39714252160
+          github-token: ${{ github.token }}
+          name: Fire4Nix-ROCKNIX-RPATH-CLEAN-OVERLAY-NOT-INSTALLABLE
+          path: fixed-elf-overlay
+      - name: Validate completed build evidence and restore target SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports sdk native-086 delivery
+          grep -Fxq 'WPE_SUBPROCESS_CMAKE_EXIT=0' downloaded/report/wpe-subprocesses-result.txt
+          # Process verification messages are console-only in the producer.
+          # Verify the persisted stage evidence here; re-audit the actual ELFs below.
+          grep -Fxq 'WPE_INSTALLED_ASSETS_PROFILE=strict' downloaded/private-wpe-runtime/BUILD-REPORT.txt
+          grep -Fxq 'WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked' downloaded/private-wpe-runtime/BUILD-REPORT.txt
+          grep -Fxq 'ROCKNIX_PRIVATE_SDK_ELF_BUNDLE=BLOCKED:TARGET_LIBATOMIC_MISSING_EXPORT:__atomic_load_16' downloaded/report/wpe-sdk-dependency-bundle.log
+          grep -Fxq 'TARGET_PC_MISSING_COUNT=0' stage1-artifact/stage1-reports/pkgconfig-readiness.txt
+          archive=sdk-download/rocknix-toolchain-host-only.tar.xz
+          tar -tJf "$archive" > reports/sdk-members.txt
+          if grep -E '(^/|(^|/)\.\.(/|$))' reports/sdk-members.txt; then exit 4; fi
+          tar --no-same-owner --no-same-permissions -xJf "$archive" -C sdk
+          # Data inspection only. Do not run the cross compiler or target ELFs.
+          readelf --wide --dyn-syms sdk/toolchain/aarch64-rocknix-linux-gnu/lib64/libatomic.so.1 > reports/real-libatomic-symbols.txt
+          python3 native/tests/test_wpe_libatomic_versioned_exports.py
+          python3 native/tests/test_materialize_wpe_artifact_sonames.py
+          python3 native/tests/test_wpe_runtime_elf_closure.py
+      - name: Prepare isolated SDK analysis layout and verified RPATH overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y patchelf
+          python3 native/tests/test_portable_sdk_rpaths.py
+          python3 native/tests/test_rocknix_audit_sysroot.py
+          python3 scripts/prepare-rocknix-audit-sysroot.py \
+            --source sdk/toolchain/aarch64-rocknix-linux-gnu/sysroot \
+            --output audit-sysroot | tee reports/sdk-relocation.txt
+          python3 scripts/prepare-rocknix-private-closure-sdk.py \
+            --stage stage1-artifact/stage1-combined \
+            --overlay fixed-elf-overlay/isolated-elf-overlay \
+            --support sdk/toolchain/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1 \
+            --out private-closure-stage | tee reports/sdk-overlay.txt
+          python3 scripts/prepare-portable-sdk-rpaths.py \
+            --source private-closure-stage --output portable-closure-stage \
+            | tee reports/sdk-portable-rpaths.txt
+          cp portable-closure-stage/PORTABLE-RPATH-REPORT.json reports/
+      - name: Recover original SHA256-proven aliases and close dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/materialize-wpe-artifact-sonames.py \
+            --download-root downloaded --output "$PWD/raw-runtime" --unbundled \
+            > reports/materialized-path.txt
+          # Inspect the real compiled library again, with current GCC15 guards.
+          python3 scripts/verify-built-wpewebkit.py \
+            --library raw-runtime/lib/libWPEWebKit-2.0.so.1 \
+            --report reports/wpe-core-elf.txt
+          python3 scripts/bundle-rocknix-wpe-sdk-deps.py \
+            --runtime raw-runtime \
+            --sysroot audit-sysroot \
+            --sdk-stage portable-closure-stage \
+            --target-toolchain sdk/toolchain \
+            --output closed-runtime | tee reports/sdk-bundle.txt
+          python3 scripts/audit-wpe-runtime-closure.py \
+            --runtime closed-runtime \
+            --sysroot audit-sysroot \
+            --sdk-stage portable-closure-stage --strict | tee reports/closure.txt
+          (cd closed-runtime && sha256sum -c SHA256SUMS.txt)
+          grep -Fxq 'WPE_TARGET_LIBATOMIC16_BUNDLED=yes' closed-runtime/SDK-BUNDLE-REPORT.txt
+      - name: Package experimental offline candidate after every static gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q native-download/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip -d native-086
+          native=native-086/fire4nix-native-086-aarch64
+          test "$(sha256sum "$native" | cut -d' ' -f1)" = 4295f354873519802fc5817a1ee6d194489d1cc824fcd8e2cb65569d0fa0f1f4
+          python3 scripts/package-first-r36h-ports-candidate.py \
+            --runtime closed-runtime --native "$native" --installer installer \
+            --output delivery/Fire4Nix-R36H-Primeiro-Teste-Experimental.zip | tee reports/package.txt
+          (cd delivery && sha256sum *.zip > SHA256SUMS.txt)
+          printf '%s\n' 'SOURCE_BUILD_RUN=39929101615' \
+            'SOURCE_BUILD_SHA=f666dd2cee4ed5a3973338e3018f04eb4a8e84d1' \
+            'RECOVERY=POST_BUILD_SDK_BUNDLE_ONLY' 'WPE_RECOMPILED=no' \
+            'TARGET_EXECUTED=no' 'R36H_FIRST_FRAME_VERIFIED=no' \
+            'DEVICE_LOADER_LAYOUT_VERIFIED=no' \
+            > delivery/PROVENANCE.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Fire4Nix-R36H-Primeiro-Teste-Experimental
+          path: delivery/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fire4Nix-WPE-Recovery-Diagnostics
+          path: reports/
+          retention-days: 14

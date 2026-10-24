@@ -100,6 +100,38 @@ class DownloadedRuntimeAliasTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"REFUSE_TO_OVERWRITE"):
             wpe.materialize(self.download,self.out)
 
+    def raw_stage(self):
+        (self.runtime / "SDK-BUNDLE-REPORT.txt").unlink()
+        raw = self.download / "private-wpe-runtime"
+        self.runtime.rename(raw)
+        return raw
+
+    def test_raw_stage_requires_explicit_mode(self):
+        self.raw_stage()
+        with self.assertRaisesRegex(ValueError, "EXPECTED_EXACTLY_ONE"):
+            wpe.materialize(self.download, self.out)
+        result = wpe.materialize(self.download, self.out, unbundled=True)
+        self.assertEqual(len(result["repaired"]), 1)
+        self.assertFalse((self.out / "SDK-BUNDLE-REPORT.txt").exists())
+
+    def test_raw_stage_does_not_accept_forged_closure_report(self):
+        raw = self.raw_stage()
+        (raw / "SDK-BUNDLE-REPORT.txt").write_text("PASS")
+        with self.assertRaisesRegex(ValueError, "UNBUNDLED_RUNTIME_HAS_SDK_REPORT"):
+            wpe.materialize(self.download, self.out, unbundled=True)
+        self.assertFalse(self.out.exists())
+
+    def test_closed_mode_still_requires_sdk_report(self):
+        (self.runtime / "SDK-BUNDLE-REPORT.txt").unlink()
+        with self.assertRaisesRegex(ValueError, "INCOMPLETE_WPE_RUNTIME"):
+            wpe.materialize(self.download, self.out)
+
+    def test_raw_stage_corrupted_hash_is_still_rejected(self):
+        raw = self.raw_stage()
+        (raw / "libexec/wpe-webkit-2.0/WPEWebProcess").write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "HASH_MISMATCH"):
+            wpe.materialize(self.download, self.out, unbundled=True)
+
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
