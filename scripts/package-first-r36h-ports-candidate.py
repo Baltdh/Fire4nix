@@ -162,6 +162,10 @@ def source_files(installer: Path) -> list[tuple[Path, str, bool]]:
     if not root_script.is_file():
         raise ValueError("MISSING_PORTS_ENTRY")
     result.append((root_script, "Fire4Nix-Direto.sh", True))
+    rescue = installer / "Fire4Nix-Grafico-Resgate.sh"
+    if not rescue.is_file() or rescue.is_symlink() or not rescue.stat().st_size:
+        raise ValueError("MISSING_GRAPHICS_RESCUE_SCRIPT")
+    result.append((rescue, "Fire4Nix-Grafico-Resgate.sh", True))
     # The diagnostic Ports kit expects these three entry-point scripts beside
     # the Fire4Nix/ directory. Shipping only Fire4Nix/Fire4Nix-Teste.sh would
     # make the ZIP unable to expose Fire4Nix-Tela-101.sh after extraction.
