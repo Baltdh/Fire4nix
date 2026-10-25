@@ -118,6 +118,7 @@ echo 'PORTS_EXPERIMENTAL_TESTKIT=PASS_FROM_ZIP_ANY_CWD_NO_WEBKIT_COPIED'
 # CMake emits in-runtime SONAME aliases, which should become regular ZIP
 # members; ZIP symlinks and escaping aliases would be dangerous on FAT/SD.
 ln -s libWPEWebKit-2.0.so.1 "$runtime/lib/libWPEWebKit-2.0.so"
+ln -s libWPEWebKit-2.0.so.1 "$runtime/lib/libWPEWebKit-2.0.so.1.11.4"
 python3 "$packer" --runtime "$runtime" --native "$native" \
   --installer "$root/installer" --output "$out/aliases.zip" >/dev/null
 python3 - "$out/aliases.zip" <<'PY'
@@ -125,12 +126,19 @@ import sys, zipfile
 with zipfile.ZipFile(sys.argv[1]) as z:
     alias='Fire4Nix/runtime/lib/libWPEWebKit-2.0.so'
     actual='Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1'
-    assert alias in z.namelist()
-    assert z.read(alias)==z.read(actual)
-    assert (z.getinfo(alias).external_attr >> 16 & 0o170000) == 0o100000
-print('PORTS_SAFE_WPE_SONAME_ALIAS=PASS_REGULAR_FILE_CONTENT')
+    assert actual in z.namelist()
+    assert alias not in z.namelist(), 'Unneeded linker SONAME alias duplicates huge ELF on FAT'
+    assert 'Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1.11.4' not in z.namelist()
+    source_manifest=z.read('Fire4Nix/runtime/SHA256SUMS.txt').decode()
+    assert 'lib/libWPEWebKit-2.0.so.1' in source_manifest
+    assert 'lib/libWPEWebKit-2.0.so.1.11.4' not in source_manifest
+    assert 'lib/libWPEWebKit-2.0.so\n' not in source_manifest
+    package_manifest=z.read('PACOTE-SHA256SUMS.txt').decode()
+    assert 'Fire4Nix/runtime/SHA256SUMS.txt' in package_manifest
+    assert alias not in package_manifest
+print('PORTS_SAFE_WPE_SONAME_ALIAS=PASS_DEDUP_AND_CHECKSUMS')
 PY
-rm "$runtime/lib/libWPEWebKit-2.0.so"
+rm "$runtime/lib/libWPEWebKit-2.0.so" "$runtime/lib/libWPEWebKit-2.0.so.1.11.4"
 ln -s /etc/passwd "$runtime/lib/libWPEWebKit-2.0.so"
 if python3 "$packer" --runtime "$runtime" --native "$native" \
   --installer "$root/installer" --output "$out/escape-fail.zip" > /dev/null 2>&1; then
