@@ -1,0 +1,31 @@
+name: R36H rescue EGL recovery mocked regression
+on:
+  push:
+    branches: ['fix/r36h-rescue-script-v2']
+    paths:
+      - 'installer/Fire4Nix-Grafico-Resgate.sh'
+      - 'native/tests/test_r36h_rescue_graphics.py'
+      - '.github/workflows/r36h-rescue-graphics-regression.yml'
+  pull_request:
+    paths:
+      - 'installer/Fire4Nix-Grafico-Resgate.sh'
+      - 'native/tests/test_r36h_rescue_graphics.py'
+      - '.github/workflows/r36h-rescue-graphics-regression.yml'
+permissions:
+  contents: read
+jobs:
+  host-mocked-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Syntax and simulated renderer failure paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n installer/Fire4Nix-Grafico-Resgate.sh
+          python3 native/tests/test_r36h_rescue_graphics.py
+          echo 'RECOVERY_LOGIC=PASS_MOCK_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo 'R36H_FIRST_FRAME_VERIFIED=no' >> "$GITHUB_STEP_SUMMARY"
