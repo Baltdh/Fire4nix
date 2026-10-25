@@ -54,6 +54,9 @@ import sys, zipfile
 with zipfile.ZipFile(sys.argv[1]) as z:
     names=set(z.namelist())
     assert 'Fire4Nix-Direto.sh' in names
+    assert 'Fire4Nix-Grafico-Resgate.sh' in names
+    assert z.getinfo('Fire4Nix-Grafico-Resgate.sh').external_attr >> 16 & 0o111
+    assert b'--live-auto' in z.read('Fire4Nix-Grafico-Resgate.sh')
     for entry in ('Habilitar-Teste-Ports.sh', 'Fire4Nix-Teste.sh',
                   'Diagnosticar-Fire4Nix.sh'):
         assert entry in names, 'Missing standalone diagnostic: ' + entry
