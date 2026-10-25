@@ -24,7 +24,7 @@ class RescueTests(unittest.TestCase):
             p.write_text('mock\n')
         shutil.copyfile(SRC, self.home / SRC.name)
         (self.app / 'Fire4Nix-Iniciar.sh').write_text("""#!/bin/sh
-echo mock_url="$3"
+echo mock_url="$2"
 echo mock_mode=$1 cpu=${WEBKIT_SKIA_ENABLE_CPU_RENDERING:-unset} mali=${MALI_DEFAULT_DISPLAY:-unset} fallback=${FIRE4NIX_WPE_DEFAULT_EGL:-unset}
 case "$1" in --check-library|--check-platform) exit 0;; esac
 if [ "$MOCK_NATIVE_ONLY" = 1 ] && [ "$WEBKIT_SKIA_ENABLE_CPU_RENDERING" = "" ]; then
