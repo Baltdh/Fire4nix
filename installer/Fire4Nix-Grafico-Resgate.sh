@@ -1,11 +1,17 @@
 #!/bin/sh
-# Fire4Nix / ROCKNIX ARM64: offline graphical recovery and evidence, v2.
+# Fire4Nix / ROCKNIX ARM64: offline graphical recovery and evidence, v3.
 # No firmware, graphics-stack, /usr, or native WebKit changes.
 set -u
+umask 077
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
-APP=${FIRE4NIX_ROOT:-$HERE/Fire4Nix}
-if [ ! -f "$APP/Fire4Nix-Iniciar.sh" ] && [ -f "$HERE/Fire4Nix-Iniciar.sh" ]; then
-    APP=$HERE
+# An explicit root is authoritative: never silently launch another package.
+if [ "${FIRE4NIX_ROOT+x}" = x ]; then
+    APP=$FIRE4NIX_ROOT
+else
+    APP="$HERE/Fire4Nix"
+    if [ ! -f "$APP/Fire4Nix-Iniciar.sh" ] && [ -f "$HERE/Fire4Nix-Iniciar.sh" ]; then
+        APP=$HERE
+    fi
 fi
 MODE=${1:---auto}
 case "$MODE" in
@@ -19,13 +25,32 @@ case "$MODE" in
         exit 0 ;;
     *) printf 'unsupported_mode=%s\n' "$MODE" >&2; exit 2 ;;
 esac
-if [ ! -s "$APP/bin/fire4nix-native-aarch64" ] ||
+if [ -z "$APP" ] || [ ! -f "$APP/Fire4Nix-Iniciar.sh" ] ||
+   [ ! -s "$APP/bin/fire4nix-native-aarch64" ] ||
    [ ! -s "$APP/runtime/lib/libWPEWebKit-2.0.so.1" ] ||
    [ ! -s "$APP/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" ] ||
    [ ! -s "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" ]; then
     printf 'FIRE4NIX_RESCUE=BLOCKED_MISSING_PACKAGE\nexpected_root=%s\n' "$APP" >&2
     exit 127
 fi
+APP=$(CDPATH= cd -- "$APP" && pwd -P) || exit 127
+# Bound smoke/ABI checks even if native initialization hangs before GLib timers.
+# Interactive modes deliberately keep running until the user closes the page.
+LIMIT=${FIRE4NIX_RESCUE_TIMEOUT:-30}
+case "$LIMIT" in
+    ''|*[!0-9]*) printf 'FIRE4NIX_RESCUE=INVALID_TIMEOUT\n' >&2; exit 2 ;;
+esac
+if [ "${#LIMIT}" -gt 3 ] || [ "$LIMIT" -lt 1 ] || [ "$LIMIT" -gt 300 ]; then
+    printf 'FIRE4NIX_RESCUE=INVALID_TIMEOUT\n' >&2
+    exit 2
+fi
+case "$MODE" in
+    --live|--live-software|--live-auto) ;;
+    *) command -v timeout >/dev/null 2>&1 || {
+        printf 'FIRE4NIX_RESCUE=BLOCKED_TIMEOUT_UNAVAILABLE\n' >&2
+        exit 127
+    } ;;
+esac
 if [ ! -s "$APP/www/primeiro-teste.html" ] && [ "$MODE" != --diagnose ]; then
     printf 'FIRE4NIX_RESCUE=BLOCKED_MISSING_OFFLINE_HTML\nexpected_root=%s\n' "$APP" >&2
     exit 127
@@ -35,23 +60,40 @@ if ! mkdir -p "$APP/logs" 2>/dev/null || [ ! -w "$APP/logs" ]; then
 else
     LOG_BASE="$APP/logs"
 fi
-LOG="$LOG_BASE/Fire4Nix-Grafico-Resgate-ultimo.txt"
-if ! : > "$LOG" 2>/dev/null; then
+LOG=$(mktemp "$LOG_BASE/Fire4Nix-Grafico-Resgate-log-XXXXXX") || {
     printf 'FIRE4NIX_RESCUE=LOG_UNWRITABLE\n' >&2
     exit 73
-fi
+}
 PAGE="file://$APP/www/primeiro-teste.html"
 # The ROCKNIX Mali driver passed EGL_DEFAULT_DISPLAY with native Wayland.
 # Users can explicitly set a different display or disable the patched fallback.
 if [ -z "${MALI_DEFAULT_DISPLAY+x}" ]; then MALI_DEFAULT_DISPLAY=wayland; fi
 if [ -z "${FIRE4NIX_WPE_DEFAULT_EGL+x}" ]; then FIRE4NIX_WPE_DEFAULT_EGL=1; fi
 export MALI_DEFAULT_DISPLAY FIRE4NIX_WPE_DEFAULT_EGL
-printf 'version=2\nroot=%s\nmode=%s\nnetwork_required=no\n' "$APP" "$MODE" >> "$LOG"
+printf 'version=3\nroot=%s\nmode=%s\nnetwork_required=no\n' "$APP" "$MODE" >> "$LOG"
 printf 'first_frame_verified=no\nmali_default_display=%s\nwpe_default_egl_fallback=%s\n' \
     "$MALI_DEFAULT_DISPLAY" "$FIRE4NIX_WPE_DEFAULT_EGL" >> "$LOG"
+publish_report() {
+    destination=$1
+    snapshot=$(mktemp "$(dirname "$destination")/.fire4nix-rescue-report-XXXXXX") || return 1
+    if cp "$LOG" "$snapshot" && mv -f "$snapshot" "$destination"; then
+        return 0
+    fi
+    rm -f "$snapshot"
+    return 1
+}
 report_copy() {
+    # Publish a complete snapshot; concurrent sessions keep independent evidence.
+    publish_report "$LOG_BASE/Fire4Nix-Grafico-Resgate-ultimo.txt" || true
     if [ -d /storage ] && [ -w /storage ]; then
-        cp "$LOG" /storage/Fire4Nix-Grafico-Resgate-ultimo.txt 2>/dev/null || true
+        publish_report /storage/Fire4Nix-Grafico-Resgate-ultimo.txt || true
+    fi
+}
+launch_native() {
+    if [ "$1" = --open ]; then
+        sh "$APP/Fire4Nix-Iniciar.sh" "$@"
+    else
+        timeout "$LIMIT" sh "$APP/Fire4Nix-Iniciar.sh" "$@"
     fi
 }
 run_variant() {
@@ -61,13 +103,13 @@ run_variant() {
     if [ "$variant" = software ]; then
         (
             export WEBKIT_SKIA_ENABLE_CPU_RENDERING=1
-            sh "$APP/Fire4Nix-Iniciar.sh" "$flag" "$PAGE"
+            launch_native "$flag" "$PAGE"
         ) >> "$LOG" 2>&1
         trial_status=$?
     else
         (
             unset WEBKIT_SKIA_ENABLE_CPU_RENDERING
-            sh "$APP/Fire4Nix-Iniciar.sh" "$flag" "$PAGE"
+            launch_native "$flag" "$PAGE"
         ) >> "$LOG" 2>&1
         trial_status=$?
     fi
@@ -85,11 +127,13 @@ classify() {
         134) CLASS=process_aborted_sigabrt; RETRY=yes ;;
         139) CLASS=process_crashed_sigsegv; RETRY=yes ;;
         3) CLASS=page_load_failed; RETRY=no ;;
+        130|143) CLASS=interrupted; RETRY=no ;;
+        137) CLASS=killed_sigkill; RETRY=no ;;
         *) CLASS=other_process_error; RETRY=no ;;
     esac
     if [ "$RETRY" = no ] && [ "$1" -ne 0 ]; then
         case "$1" in
-          69|126|127|3) ;;
+          69|126|127|3|130|137|143) ;;
           *)
             if sed -n "/^trial=$variant native_flag=/,\$p" "$LOG" | \
                grep -Eiq 'Could not create EGL display|EGL_BAD_|EGL.*initializ|web-process-terminated|WPE display disconnected'; then
@@ -103,12 +147,18 @@ status=0
 case "$MODE" in
     --diagnose)
         printf 'diagnostic=check_library\n' >> "$LOG"
-        sh "$APP/Fire4Nix-Iniciar.sh" --check-library >> "$LOG" 2>&1 || status=$?
+        launch_native --check-library >> "$LOG" 2>&1 || status=$?
         if [ "$status" -eq 0 ]; then
             printf 'diagnostic=check_platform\n' >> "$LOG"
-            sh "$APP/Fire4Nix-Iniciar.sh" --check-platform >> "$LOG" 2>&1 || status=$?
+            launch_native --check-platform >> "$LOG" 2>&1 || status=$?
         fi
-        CLASS=abi_only_no_frame_proof
+        if [ "$status" -eq 0 ]; then
+            CLASS=abi_only_no_frame_proof
+        else
+            variant=diagnostic
+            classify "$status"
+            CLASS=diagnostic_failed_$CLASS
+        fi
         RETRY=no ;;
     --normal) run_variant normal --smoke || status=$?; classify "$status" ;;
     --software) run_variant software --smoke || status=$?; classify "$status" ;;

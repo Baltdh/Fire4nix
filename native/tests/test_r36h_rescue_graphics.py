@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 SRC = Path(__file__).resolve().parents[2] / 'installer/Fire4Nix-Grafico-Resgate.sh'
@@ -59,6 +60,13 @@ esac
                 p, log = self.launch(gpu=code)
                 self.assertEqual(p.returncode, int(code))
                 self.assertNotIn('trial=software native_flag=', log)
+    def test_interrupt_is_not_restarted_even_after_graphics_message(self):
+        for code in ('130','137','143'):
+            with self.subTest(code=code):
+                p, log = self.launch(gpu=code, MOCK_EGL_ERROR='1')
+                self.assertEqual(p.returncode,int(code))
+                self.assertNotIn('trial=software native_flag=',log)
+
     def test_signature_recovers_other_error(self):
         p, log = self.launch(gpu='5', MOCK_EGL_ERROR='1')
         self.assertEqual(p.returncode, 0)
@@ -91,6 +99,70 @@ esac
         self.assertIn('mock_mode=--check-platform', log)
         self.assertNotIn('mock_mode=--smoke', log)
         self.assertIn('GRAPHICAL_HARDWARE_STATUS=UNVERIFIED', log)
+    def test_explicit_missing_root_never_falls_back(self):
+        p, _ = self.launch(FIRE4NIX_ROOT=str(self.home / 'missing'))
+        self.assertEqual(p.returncode, 127)
+        self.assertIn('BLOCKED_MISSING_PACKAGE', p.stderr)
+
+    def test_relative_root_becomes_absolute_page_uri(self):
+        (self.app / 'Fire4Nix-Iniciar.sh').write_text('#!/bin/sh\nprintf "page=%s\\n" "$2"\nexit 0\n')
+        relative = os.path.relpath(self.app, '/')
+        p, log = self.launch(gpu='0', FIRE4NIX_ROOT=relative)
+        self.assertEqual(p.returncode, 0)
+        self.assertIn('page=file://' + str(self.app) + '/www/primeiro-teste.html', log)
+
+    def test_sessions_keep_separate_logs(self):
+        self.launch(gpu='0')
+        self.launch(gpu='3')
+        logs = sorted((self.app/'logs').glob('Fire4Nix-Grafico-Resgate-log-*'))
+        self.assertEqual(len(logs), 2)
+        self.assertEqual(sorted('FIRE4NIX_RESCUE_EXIT=0' in p.read_text() for p in logs), [False, True])
+
+    def test_concurrent_sessions_do_not_mix_report_contents(self):
+        (self.app / 'Fire4Nix-Iniciar.sh').write_text('#!/bin/sh\necho session=$MOCK_SESSION\nsleep 0.2\nexit "$MOCK_GPU_EXIT"\n')
+        jobs=[]
+        for session, code in (('first','0'),('second','3')):
+            env={**os.environ,'MOCK_SESSION':session,'MOCK_GPU_EXIT':code}
+            jobs.append(subprocess.Popen(['sh',str(self.home/SRC.name),'--normal'],
+                        env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True))
+        for job in jobs:
+            job.communicate(timeout=10)
+        self.assertEqual([j.returncode for j in jobs],[0,3])
+        logs=list((self.app/'logs').glob('Fire4Nix-Grafico-Resgate-log-*'))
+        self.assertEqual(len(logs),2)
+        for log in logs:
+            text=log.read_text()
+            self.assertNotEqual('session=first' in text,'session=second' in text)
+            self.assertEqual(text.count('FIRE4NIX_RESCUE_EXIT='),1)
+        latest=(self.app/'logs/Fire4Nix-Grafico-Resgate-ultimo.txt').read_text()
+        self.assertIn(latest,[p.read_text() for p in logs])
+
+    def test_failed_diagnosis_is_not_reported_as_abi_success(self):
+        (self.app / 'Fire4Nix-Iniciar.sh').write_text('#!/bin/sh\nexit 127\n')
+        p, log = self.launch('--diagnose')
+        self.assertEqual(p.returncode, 127)
+        self.assertIn('final_classification=diagnostic_failed_missing_or_unexecutable_runtime', log)
+        self.assertNotIn('final_classification=abi_only_no_frame_proof', log)
+
+    def test_hung_smoke_has_external_timeout(self):
+        (self.app / 'Fire4Nix-Iniciar.sh').write_text('#!/bin/sh\nexec sleep 3\n')
+        start = time.monotonic()
+        p, log = self.launch('--normal', FIRE4NIX_RESCUE_TIMEOUT='1')
+        self.assertEqual(p.returncode, 124)
+        self.assertLess(time.monotonic()-start, 2.5)
+        self.assertIn('final_classification=page_load_timeout', log)
+
+    def test_live_session_has_no_smoke_timeout(self):
+        (self.app / 'Fire4Nix-Iniciar.sh').write_text('#!/bin/sh\nsleep 2\nexit 0\n')
+        p, _ = self.launch('--live', FIRE4NIX_RESCUE_TIMEOUT='1')
+        self.assertEqual(p.returncode, 0)
+
+    def test_invalid_timeout_is_rejected_before_launch(self):
+        for value in ('0', '-1', 'abc', '1.2', '999999999999999999999999'):
+            with self.subTest(value=value):
+                p, _ = self.launch(FIRE4NIX_RESCUE_TIMEOUT=value)
+                self.assertEqual(p.returncode, 2)
+
     def test_missing_runtime_prevents_execution(self):
         (self.app / 'runtime/libexec/wpe-webkit-2.0/WPEWebProcess').unlink()
         p, _ = self.launch()

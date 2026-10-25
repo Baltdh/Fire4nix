@@ -32,13 +32,28 @@ DIAG_SCRIPT="$HERE/Diagnosticar-Fire4Nix.sh"
 
 installed_root=""
 for dir in "$ROOT" \
+  "$HERE/../Fire4Nix" \
+  "${FIRE4NIX_ROMS:-/no-roms}/ports/Fire4Nix" \
   "${FIRE4NIX_ROMS:-/no-roms}/ports/fire4nix-completo" \
+  /storage/games-internal/roms/ports/Fire4Nix \
+  /storage/games-external/roms/ports/Fire4Nix \
+  /storage/roms/ports/Fire4Nix \
   /storage/games-internal/roms/ports/fire4nix-completo \
   /storage/games-external/roms/ports/fire4nix-completo \
   /storage/roms/ports/fire4nix-completo; do
   if [ -s "$dir/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
-     [ -f "$dir/Fire4Nix-Iniciar.sh" ]; then installed_root="$dir"; break; fi
+     [ -f "$dir/Fire4Nix-Iniciar.sh" ]; then
+    installed_root=$(CDPATH= cd -- "$dir" && pwd -P) || exit 127
+    break
+  fi
 done
+
+# The standalone kit has no copied runtime. Diagnose the same installed
+# library that will be used by its visual test, preserving explicit overrides.
+if [ -n "$installed_root" ] && [ -z "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" ]; then
+  FIRE4NIX_DIAGNOSTIC_RUNTIME="$installed_root/runtime"
+  export FIRE4NIX_DIAGNOSTIC_RUNTIME
+fi
 
 exit_visual=NA
 exit_selftest=NA
