@@ -211,6 +211,22 @@ def make(runtime: Path, native: Path, installer: Path, output: Path) -> dict:
         raise ValueError("GPU_OFF_RUNTIME_CONTAINS_GPU_PROCESS")
     files = ensure_tree(runtime)
     verify_checksums(runtime)
+    # The ROCKNIX runtime ships WPE as a SONAME plus two regular-file aliases.
+    # Fat/ZIP cannot retain its source symlinks: packing all three needlessly
+    # triples a 156 MB ELF on SD. The native executable and both helpers use
+    # only SONAME libWPEWebKit-2.0.so.1. Drop aliases ONLY on exact SHA256 match.
+    primary_wpe = runtime / "lib/libWPEWebKit-2.0.so.1"
+    primary_sha = sha256_file(primary_wpe)
+    redundant_aliases = {
+        alias for alias in ("lib/libWPEWebKit-2.0.so", "lib/libWPEWebKit-2.0.so.1.11.4")
+        if (runtime / alias).is_file() and sha256_file(runtime / alias) == primary_sha
+    }
+    # Preserve an internally consistent installed SHA256SUMS after pruning.
+    # The original source runtime remains intact and fully hash-verified.
+    trimmed_runtime_hashes = "\n".join(
+        line for line in (runtime / "SHA256SUMS.txt").read_text().splitlines()
+        if line.split("  ", 1)[1] not in redundant_aliases
+    ) + "\n"
     if not native.is_file() or native.is_symlink() or native.name != "fire4nix-native-086-aarch64":
         raise ValueError("GENUINE_NATIVE_086_ELF_REQUIRED")
     if not installer.is_dir():
@@ -224,7 +240,9 @@ def make(runtime: Path, native: Path, installer: Path, output: Path) -> dict:
     added.append((native, f"{ROOT_PREFIX}/bin/fire4nix-native-aarch64", True))
     added += [(f, f"{ROOT_PREFIX}/runtime/{f.relative_to(runtime).as_posix()}",
                f.relative_to(runtime).as_posix() in RUNTIME_EXECUTABLES)
-              for f in files]
+              for f in files
+              if f.relative_to(runtime).as_posix() not in redundant_aliases
+              and f.relative_to(runtime).as_posix() != "SHA256SUMS.txt"]
     names = [z[1] for z in added]
     if len(set(names)) != len(names):
         raise ValueError("DUPLICATE_ZIP_ENTRY")
@@ -257,6 +275,12 @@ def make(runtime: Path, native: Path, installer: Path, output: Path) -> dict:
                     import shutil
                     shutil.copyfileobj(source, target, 1024 * 1024)
                 digest_lines.append(f"{sha256_file(path)}  {dst}")
+            # This manifest includes only the actual ZIP members, not source
+            # SDK symlinks materialized as duplicate ELFs by ZIP packaging.
+            manifest_data = trimmed_runtime_hashes.encode("utf-8")
+            manifest_name = f"{ROOT_PREFIX}/runtime/SHA256SUMS.txt"
+            z.writestr(manifest_name, manifest_data)
+            digest_lines.append(f"{hashlib.sha256(manifest_data).hexdigest()}  {manifest_name}")
             z.writestr("LEIA-ME-PRIMEIRO.txt", notes)
             z.writestr("PACOTE-SHA256SUMS.txt", "\n".join(digest_lines) + "\n")
     except BaseException:
