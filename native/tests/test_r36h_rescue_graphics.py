@@ -24,8 +24,19 @@ class RescueTests(unittest.TestCase):
             p.write_text('mock\n')
         shutil.copyfile(SRC, self.home / SRC.name)
         (self.app / 'Fire4Nix-Iniciar.sh').write_text("""#!/bin/sh
+echo mock_url="$3"
 echo mock_mode=$1 cpu=${WEBKIT_SKIA_ENABLE_CPU_RENDERING:-unset} mali=${MALI_DEFAULT_DISPLAY:-unset} fallback=${FIRE4NIX_WPE_DEFAULT_EGL:-unset}
 case "$1" in --check-library|--check-platform) exit 0;; esac
+if [ "$MOCK_NATIVE_ONLY" = 1 ] && [ "$WEBKIT_SKIA_ENABLE_CPU_RENDERING" = "" ]; then
+    echo 'Could not create EGL display: no supported platform available' > "$FIRE4NIX_LOG_DIR/Fire4Nix-2026-log-ABCDEF"
+    i=0
+    while [ "$i" -lt 60 ]; do
+        echo "noise-$i" >> "$FIRE4NIX_LOG_DIR/Fire4Nix-2026-log-ABCDEF"
+        i=$((i+1))
+    done
+    tail -n 40 "$FIRE4NIX_LOG_DIR/Fire4Nix-2026-log-ABCDEF"
+    exit "$MOCK_GPU_EXIT"
+fi
 case "${WEBKIT_SKIA_ENABLE_CPU_RENDERING:-}" in
   1) exit "${MOCK_CPU_EXIT:-0}";;
   *) if [ "${MOCK_EGL_ERROR:-0}" = 1 ]; then echo 'Could not create EGL display: no supported platform available'; fi
@@ -91,6 +102,26 @@ esac
         self.assertIn('mock_mode=--check-platform', log)
         self.assertNotIn('mock_mode=--smoke', log)
         self.assertIn('GRAPHICAL_HARDWARE_STATUS=UNVERIFIED', log)
+    def test_escape_spaces_in_file_uri(self):
+        p, log = self.launch(gpu='0')
+        self.assertEqual(p.returncode, 0)
+        self.assertIn('mock_url=file://', log)
+        self.assertIn('fire4nix%20rescue%20paths%20with%20spaces', log)
+        self.assertNotIn('mock_url=file://'+str(self.home), log)
+
+    def test_recover_hidden_egl_error_from_complete_native_log(self):
+        p, log = self.launch(gpu='5', cpu='0', MOCK_NATIVE_ONLY='1')
+        self.assertEqual(p.returncode, 0)
+        self.assertIn('native_log_captured=Fire4Nix-2026-log-ABCDEF', log)
+        self.assertIn('initial_classification=graphics_signature_in_log', log)
+        self.assertIn('trial=software native_flag=--smoke', log)
+        self.assertIn('noise-59', log)
+
+    def test_hidden_egl_error_not_reused_in_cpu_trial(self):
+        p, log = self.launch(gpu='5', cpu='6', MOCK_NATIVE_ONLY='1')
+        self.assertEqual(p.returncode, 6)
+        self.assertIn('final_classification=other_process_error', log)
+
     def test_missing_runtime_prevents_execution(self):
         (self.app / 'runtime/libexec/wpe-webkit-2.0/WPEWebProcess').unlink()
         p, _ = self.launch()
