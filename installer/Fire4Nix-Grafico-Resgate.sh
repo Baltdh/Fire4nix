@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix / ROCKNIX ARM64: offline graphical recovery and evidence, v2.
+# Fire4Nix / ROCKNIX ARM64: offline graphical recovery and evidence, v2.1.
 # No firmware, graphics-stack, /usr, or native WebKit changes.
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
@@ -40,13 +40,15 @@ if ! : > "$LOG" 2>/dev/null; then
     printf 'FIRE4NIX_RESCUE=LOG_UNWRITABLE\n' >&2
     exit 73
 fi
-PAGE="file://$APP/www/primeiro-teste.html"
+# Percent-encode reserved URI characters in the SD mount path.
+URI_PATH=$(printf '%s' "$APP/www/primeiro-teste.html" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/#/%23/g' -e 's/?/%3F/g')
+PAGE="file://$URI_PATH"
 # The ROCKNIX Mali driver passed EGL_DEFAULT_DISPLAY with native Wayland.
 # Users can explicitly set a different display or disable the patched fallback.
 if [ -z "${MALI_DEFAULT_DISPLAY+x}" ]; then MALI_DEFAULT_DISPLAY=wayland; fi
 if [ -z "${FIRE4NIX_WPE_DEFAULT_EGL+x}" ]; then FIRE4NIX_WPE_DEFAULT_EGL=1; fi
 export MALI_DEFAULT_DISPLAY FIRE4NIX_WPE_DEFAULT_EGL
-printf 'version=2\nroot=%s\nmode=%s\nnetwork_required=no\n' "$APP" "$MODE" >> "$LOG"
+printf 'version=2.1\nroot=%s\nmode=%s\nnetwork_required=no\n' "$APP" "$MODE" >> "$LOG"
 printf 'first_frame_verified=no\nmali_default_display=%s\nwpe_default_egl_fallback=%s\n' \
     "$MALI_DEFAULT_DISPLAY" "$FIRE4NIX_WPE_DEFAULT_EGL" >> "$LOG"
 report_copy() {
@@ -58,19 +60,34 @@ run_variant() {
     variant=$1
     flag=$2
     printf '\ntrial=%s native_flag=%s\n' "$variant" "$flag" >> "$LOG"
+    # Native WebKit messages are in a second log. Capture the whole log,
+    # not just the last 40 lines printed by the launcher on exit.
+    attempt_dir=$(mktemp -d "$LOG_BASE/Fire4Nix-EGL-attempt-XXXXXX") || {
+        printf 'error=unable_to_create_native_log_dir\n' >> "$LOG"
+        return 73
+    }
     if [ "$variant" = software ]; then
         (
+            export FIRE4NIX_LOG_DIR="$attempt_dir"
             export WEBKIT_SKIA_ENABLE_CPU_RENDERING=1
             sh "$APP/Fire4Nix-Iniciar.sh" "$flag" "$PAGE"
         ) >> "$LOG" 2>&1
         trial_status=$?
     else
         (
+            export FIRE4NIX_LOG_DIR="$attempt_dir"
             unset WEBKIT_SKIA_ENABLE_CPU_RENDERING
             sh "$APP/Fire4Nix-Iniciar.sh" "$flag" "$PAGE"
         ) >> "$LOG" 2>&1
         trial_status=$?
     fi
+    for native_log in "$attempt_dir"/Fire4Nix-*-log-*; do
+        [ -f "$native_log" ] && [ ! -L "$native_log" ] || continue
+        printf 'native_log_captured=%s\n' "$(basename "$native_log")" >> "$LOG"
+        cat "$native_log" >> "$LOG"
+        rm -f "$native_log"
+    done
+    rmdir "$attempt_dir" 2>/dev/null || true
     printf 'trial=%s exit=%s\n' "$variant" "$trial_status" >> "$LOG"
     return "$trial_status"
 }
