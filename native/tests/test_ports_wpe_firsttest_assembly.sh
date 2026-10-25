@@ -135,7 +135,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     assert 'lib/libWPEWebKit-2.0.so\n' not in source_manifest
     package_manifest=z.read('PACOTE-SHA256SUMS.txt').decode()
     assert 'Fire4Nix/runtime/SHA256SUMS.txt' in package_manifest
-    assert alias not in package_manifest
+    assert not any(row.endswith("  "+alias) for row in package_manifest.splitlines())
 print('PORTS_SAFE_WPE_SONAME_ALIAS=PASS_DEDUP_AND_CHECKSUMS')
 PY
 rm "$runtime/lib/libWPEWebKit-2.0.so" "$runtime/lib/libWPEWebKit-2.0.so.1.11.4"
