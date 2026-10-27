@@ -8,7 +8,9 @@ import io
 from pathlib import Path
 from unittest import TestCase, main, mock
 
-FILE = Path(__file__).resolve().parents[2] / "diagnostics/Fire4Nix-EGL-R36H.py"
+ROOT = Path(__file__).resolve().parents[2]
+FILE = ROOT / "diagnostics/Fire4Nix-EGL-R36H.py"
+PACKAGE_FILE = ROOT / "installer/Fire4Nix-EGL-R36H.py"
 SPEC = importlib.util.spec_from_file_location("fire4nix_egl_probe", FILE)
 probe = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(probe)
@@ -56,6 +58,10 @@ class Library:
 
 
 class EGLProbeTests(TestCase):
+    def test_packaged_probe_matches_source_probe(self):
+        self.assertTrue(PACKAGE_FILE.is_file(), "EGL probe must ship in the isolated package")
+        self.assertEqual(PACKAGE_FILE.read_bytes(), FILE.read_bytes())
+
     def perform(self, **kwargs):
         egl = Library(**kwargs)
         out = io.StringIO()
