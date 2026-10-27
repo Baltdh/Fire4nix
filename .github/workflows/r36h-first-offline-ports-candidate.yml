@@ -11,6 +11,10 @@ on:
       - 'installer/www/primeiro-teste.html'
       - 'installer/www/inicio.html'
       - 'installer/Fire4Nix-Teste.sh'
+      - 'installer/Executar-Teste-Isolado.sh'
+      - 'installer/Fire4Nix-EGL-R36H.py'
+      - 'diagnostics/Fire4Nix-EGL-R36H.py'
+      - 'native/tests/test_r36h_egl_probe.py'
       - 'native/tests/test_first_r36h_offline_visual.py'
       - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
@@ -94,6 +98,7 @@ jobs:
           bash -n native/tests/test_ports_wpe_firsttest_assembly.sh
           bash native/tests/test_ports_wpe_firsttest_assembly.sh
           python3 native/tests/test_first_r36h_offline_visual.py
+          python3 native/tests/test_r36h_egl_probe.py
           node --check native/tests/test_first_r36h_offline_js.cjs
           node native/tests/test_first_r36h_offline_js.cjs
           sh -n installer/Fire4Nix-Teste.sh
