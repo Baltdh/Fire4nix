@@ -166,6 +166,13 @@ def source_files(installer: Path) -> list[tuple[Path, str, bool]]:
     if not rescue.is_file() or rescue.is_symlink() or not rescue.stat().st_size:
         raise ValueError("MISSING_GRAPHICS_RESCUE_SCRIPT")
     result.append((rescue, "Fire4Nix-Grafico-Resgate.sh", True))
+    # Ship the isolated, checksum-gated test and its sibling EGL probe as a
+    # matched pair. The runner deliberately uses HERE/Fire4Nix-EGL-R36H.py.
+    for name in ("Executar-Teste-Isolado.sh", "Fire4Nix-EGL-R36H.py"):
+        file = installer / name
+        if not file.is_file() or file.is_symlink() or not file.stat().st_size:
+            raise ValueError("MISSING_ISOLATED_TEST_COMPONENT:" + name)
+        result.append((file, name, name.endswith(".sh")))
     # The diagnostic Ports kit expects these three entry-point scripts beside
     # the Fire4Nix/ directory. Shipping only Fire4Nix/Fire4Nix-Teste.sh would
     # make the ZIP unable to expose Fire4Nix-Tela-101.sh after extraction.
