@@ -6,11 +6,16 @@ on:
     paths:
       - 'scripts/package-first-r36h-ports-candidate.py'
       - 'native/tests/test_ports_packager_streaming_sha256.py'
+      - 'native/tests/test_isolated_egl_package.py'
       - 'native/tests/test_ports_wpe_gcc15_atomic_gate.py'
       - 'native/tests/test_ports_wpe_firsttest_assembly.sh'
       - 'installer/www/primeiro-teste.html'
       - 'installer/www/inicio.html'
       - 'installer/Fire4Nix-Teste.sh'
+      - 'installer/Executar-Teste-Isolado.sh'
+      - 'installer/Fire4Nix-EGL-R36H.py'
+      - 'diagnostics/Fire4Nix-EGL-R36H.py'
+      - 'native/tests/test_r36h_egl_probe.py'
       - 'native/tests/test_first_r36h_offline_visual.py'
       - 'native/tests/test_first_r36h_offline_js.cjs'
       - 'scripts/resolve-wpe-runtime-download.py'
@@ -85,6 +90,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/package-first-r36h-ports-candidate.py
           python3 native/tests/test_ports_packager_streaming_sha256.py
+          python3 native/tests/test_isolated_egl_package.py
           python3 native/tests/test_ports_wpe_gcc15_atomic_gate.py
           python3 -m py_compile scripts/resolve-wpe-runtime-download.py
           python3 native/tests/test_wpe_runtime_download_resolver.py
@@ -94,6 +100,7 @@ jobs:
           bash -n native/tests/test_ports_wpe_firsttest_assembly.sh
           bash native/tests/test_ports_wpe_firsttest_assembly.sh
           python3 native/tests/test_first_r36h_offline_visual.py
+          python3 native/tests/test_r36h_egl_probe.py
           node --check native/tests/test_first_r36h_offline_js.cjs
           node native/tests/test_first_r36h_offline_js.cjs
           sh -n installer/Fire4Nix-Teste.sh
