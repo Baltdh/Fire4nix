@@ -364,7 +364,9 @@ jobs:
           grep -Fq '[FIRE4NIX-NAV] navigation=PASS' logs/wpe-headless-navigation.log
           grep -Fq '[FIRE4NIX-NAV] history_back=PASS' logs/wpe-headless-navigation.log
           grep -Fq '[FIRE4NIX-NAV] history_forward=PASS' logs/wpe-headless-navigation.log
-          echo 'WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD' | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -Fq '[FIRE4NIX-NAV] page_reload=PASS' logs/wpe-headless-navigation.log
+          grep -Fq '[FIRE4NIX-NAV] reload_cycles=2' logs/wpe-headless-navigation.log
+          echo 'WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD_TWO_RELOADS' | tee -a "$GITHUB_STEP_SUMMARY"
           cat logs/local-servers.log
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
