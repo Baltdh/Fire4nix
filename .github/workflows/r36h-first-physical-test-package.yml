@@ -1,0 +1,211 @@
+name: Fire4Nix R36H first physical test package
+
+on:
+  push:
+    branches:
+      - codex/r36h-first-physical-test-20261030
+    paths:
+      - 'installer/Fire4Nix-Iniciar.sh'
+      - 'installer/Fire4Nix-Primeiro-Teste-R36.sh'
+      - 'installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt'
+      - 'installer/Fire4Nix-Teste.sh'
+      - 'installer/Diagnosticar-Fire4Nix.sh'
+      - 'installer/Fire4Nix-Inspecionar-ELF.sh'
+      - '.github/workflows/r36h-first-physical-test-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  assemble-r36h-first-test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download pinned ROCKNIX WPE 2.54.1 runtime artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 40033262653
+          github-token: ${{ github.token }}
+          name: Fire4Nix-R36H-Mali-EGL-Experimental
+          path: ${{ runner.temp }}/wpe-artifact
+
+      - name: Download pinned Fire4Nix ARM64 launcher
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 41138107872
+          github-token: ${{ github.token }}
+          name: Fire4Nix-0.86-R36H-ARM64-Native-Test
+          path: ${{ runner.temp }}/native-artifact
+
+      - name: Verify and extract source artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wpe-outer" "$RUNNER_TEMP/wpe-package"
+          mkdir -p "$RUNNER_TEMP/native-package" "$RUNNER_TEMP/package"
+          (cd "$RUNNER_TEMP/wpe-artifact" && sha256sum -c SHA256SUMS.txt)
+          unzip -q "$RUNNER_TEMP/wpe-artifact/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-outer"
+          unzip -q "$RUNNER_TEMP/wpe-outer/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-package"
+          unzip -q "$RUNNER_TEMP/native-artifact/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-package"
+          (cd "$RUNNER_TEMP/native-package" && sha256sum -c SHA256SUMS.txt)
+          test -s "$RUNNER_TEMP/wpe-package/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+          test -s "$RUNNER_TEMP/wpe-package/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
+          test -s "$RUNNER_TEMP/wpe-package/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+          test -s "$RUNNER_TEMP/wpe-package/Fire4Nix/runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
+          test -s "$RUNNER_TEMP/wpe-package/Fire4Nix/runtime/share/wpe-webkit-2.0/inspector.gresource"
+          test -s "$RUNNER_TEMP/native-package/fire4nix-native-086-aarch64"
+          (cd "$RUNNER_TEMP/wpe-package/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
+          cp -a "$RUNNER_TEMP/wpe-package/." "$RUNNER_TEMP/package/"
+
+      - name: Integrate newest launcher and first-test scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg="$RUNNER_TEMP/package"
+          cp "$RUNNER_TEMP/native-package/fire4nix-native-086-aarch64" \
+            "$pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          cp installer/Fire4Nix-Iniciar.sh "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
+          cp installer/Fire4Nix-Primeiro-Teste-R36.sh "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          cp installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
+          cp installer/Fire4Nix-Teste.sh "$pkg/Fire4Nix-Teste.sh"
+          cp installer/Fire4Nix-Teste.sh "$pkg/Fire4Nix/Fire4Nix-Teste.sh"
+          cp installer/Diagnosticar-Fire4Nix.sh "$pkg/Diagnosticar-Fire4Nix.sh"
+          cp installer/Diagnosticar-Fire4Nix.sh "$pkg/Fire4Nix/Diagnosticar-Fire4Nix.sh"
+          cp installer/Fire4Nix-Inspecionar-ELF.sh "$pkg/Fire4Nix/Fire4Nix-Inspecionar-ELF.sh"
+          chmod +x "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" \
+            "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh" \
+            "$pkg/Fire4Nix-Primeiro-Teste-R36.sh" \
+            "$pkg/Fire4Nix-Direto.sh" "$pkg/Fire4Nix-Teste.sh" \
+            "$pkg/Habilitar-Teste-Ports.sh" "$pkg/Diagnosticar-Fire4Nix.sh" \
+            "$pkg/Fire4Nix/Fire4Nix-Teste.sh" \
+            "$pkg/Fire4Nix/Diagnosticar-Fire4Nix.sh" \
+            "$pkg/Fire4Nix/Fire4Nix-Inspecionar-ELF.sh"
+
+      - name: Audit native binary against pinned WPE 2.54.1 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg="$RUNNER_TEMP/package"
+          bin="$pkg/Fire4Nix/bin/fire4nix-native-aarch64"
+          lib="$pkg/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+          readelf -h "$bin" | grep -Eq 'Class:[[:space:]]+ELF64'
+          readelf -h "$bin" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          readelf -h "$lib" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          readelf -d "$bin" | grep -Fq 'libgobject-2.0.so.0'
+          readelf -d "$bin" | grep -Fq 'libglib-2.0.so.0'
+          max_glibc="$(readelf --version-info "$bin" | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
+          echo "NATIVE_GLIBC_MAX=$max_glibc"
+          test "$(printf '%s\n' "$max_glibc" 2.34 | sort -V | tail -n 1)" = 2.34
+          readelf --dyn-syms -W "$lib" | awk '$7!="UND" {print $8}' | sed 's/@.*//' | sort -u > "$RUNNER_TEMP/wpe-exports.txt"
+          cat > "$RUNNER_TEMP/wpe-required-symbols.txt" <<'EOF'
+          jsc_value_to_string
+          webkit_get_major_version
+          webkit_get_micro_version
+          webkit_get_minor_version
+          webkit_settings_get_type
+          webkit_web_view_can_go_back
+          webkit_web_view_can_go_forward
+          webkit_web_view_evaluate_javascript
+          webkit_web_view_evaluate_javascript_finish
+          webkit_web_view_get_type
+          webkit_web_view_get_uri
+          webkit_web_view_get_wpe_view
+          webkit_web_view_go_back
+          webkit_web_view_go_forward
+          webkit_web_view_load_uri
+          webkit_web_view_reload
+          webkit_web_view_set_settings
+          wpe_event_get_event_type
+          wpe_event_get_modifiers
+          wpe_event_keyboard_get_keyval
+          wpe_toplevel_fullscreen
+          wpe_toplevel_get_state
+          wpe_toplevel_set_title
+          wpe_toplevel_unfullscreen
+          wpe_view_get_display
+          wpe_view_get_toplevel
+          EOF
+          while IFS= read -r symbol; do
+            grep -Fxq "$symbol" "$RUNNER_TEMP/wpe-exports.txt" || {
+              echo "MISSING_WPE_SYMBOL=$symbol" >&2
+              exit 21
+            }
+          done < "$RUNNER_TEMP/wpe-required-symbols.txt"
+          echo 'NATIVE_WPE_2_54_1_REQUIRED_SYMBOLS=26_OF_26'
+          strings "$bin" | grep -Fq 'Fire4Nix native WPEPlatform 1.05'
+          grep -Fxq 'GPU_PROCESS_PROFILE=disabled_verified_wayland' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
+          grep -Fxq 'WPE_INSTALLED_ASSETS_PROFILE=strict' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
+          grep -Fxq 'WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
+          echo 'R36H_DEVICE_ABI_VERIFIED=no'
+          echo 'R36H_FIRST_FRAME_VERIFIED=no'
+
+      - name: Run packaging script, shell syntax and manifest checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg="$RUNNER_TEMP/package"
+          for script in \
+            "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh" \
+            "$pkg/Fire4Nix-Primeiro-Teste-R36.sh" \
+            "$pkg/Fire4Nix-Direto.sh" \
+            "$pkg/Fire4Nix-Teste.sh" \
+            "$pkg/Fire4Nix/Fire4Nix-Teste.sh" \
+            "$pkg/Fire4Nix/Diagnosticar-Fire4Nix.sh"; do
+            sh -n "$script"
+          done
+          grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
+          grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
+          python3 -m py_compile scripts/package-first-r36h-ports-candidate.py 2>/dev/null || true
+          (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
+          rm -f "$pkg/PACOTE-SHA256SUMS.txt"
+          (cd "$pkg" && find . -type f ! -path './PACOTE-SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > PACOTE-SHA256SUMS.txt)
+          (cd "$pkg" && sha256sum -c PACOTE-SHA256SUMS.txt > "$RUNNER_TEMP/package-manifest-check.txt")
+          tail -n 3 "$RUNNER_TEMP/package-manifest-check.txt"
+          cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<'EOF'
+          FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
+          WPE_RUNTIME_VERSION=2.54.1
+          WPE_RUNTIME_ARTIFACT_RUN=40033262653
+          NATIVE_LAUNCHER_VERSION=1.05
+          NATIVE_LAUNCHER_ARTIFACT_RUN=41138107872
+          NATIVE_SOURCE_COMMIT=99c09459bc67bee5e7ab50255dd5dbbbc6df07c3
+          NATIVE_GLIBC_MAX=2.34
+          WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
+          ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY
+          R36H_DEVICE_ABI_VERIFIED=no
+          R36H_WAYLAND_EGL_VERIFIED=no
+          R36H_FIRST_FRAME_VERIFIED=no
+          R36H_INTERACTIVE_BROWSING_VERIFIED=no
+          SYSTEM_FILES_MODIFIED=no
+          FIRMWARE_MODIFIED=no
+          EOF
+          chmod 0644 "$pkg/STATUS-PRIMEIRO-TESTE.txt"
+
+      - name: Build and verify ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          zip -9 -qr delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip "$RUNNER_TEMP/package"
+          unzip -t delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip | tail -1
+          sha256sum delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip > delivery/SHA256SUMS.txt
+          cp "$RUNNER_TEMP/package/STATUS-PRIMEIRO-TESTE.txt" delivery/
+          du -h delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip
+          cat delivery/STATUS-PRIMEIRO-TESTE.txt >> "$GITHUB_STEP_SUMMARY"
+          echo 'PACKAGE_ZIP=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish R36H first-test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-Primeiro-Teste-20261030
+          path: delivery/
+          if-no-files-found: error
+          retention-days: 30
