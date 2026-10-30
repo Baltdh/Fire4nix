@@ -146,6 +146,16 @@ jobs:
           # public DNS, remote availability and third-party certificate changes.
           mkdir -p "$RUNNER_TEMP/fire4nix-web-root"
           cp installer/www/primeiro-teste.html "$RUNNER_TEMP/fire4nix-web-root/index.html"
+          cat > "$RUNNER_TEMP/fire4nix-web-root/nav-start.html" <<'EOF'
+          <!doctype html><html><head><meta charset="utf-8"><title>Fire4Nix Nav Start</title></head>
+          <body><p id="nav-state">START_JS_PENDING</p><a id="nav-next" href="/nav-target.html">Next</a>
+          <script>document.getElementById('nav-state').textContent='START_JS_OK';</script></body></html>
+          EOF
+          cat > "$RUNNER_TEMP/fire4nix-web-root/nav-target.html" <<'EOF'
+          <!doctype html><html><head><meta charset="utf-8"><title>Fire4Nix Nav Target</title></head>
+          <body><p id="nav-state">TARGET_JS_PENDING</p><a id="nav-back" href="/nav-start.html">Back</a>
+          <script>document.getElementById('nav-state').textContent='TARGET_JS_OK';</script></body></html>
+          EOF
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
             -keyout "$RUNNER_TEMP/fire4nix-test-ca.key" \
             -out "$RUNNER_TEMP/fire4nix-test-ca.crt" \
@@ -258,6 +268,29 @@ jobs:
 
           run_network_fixture HTTP "http://127.0.0.1:18765/index.html"
           run_network_fixture HTTPS "https://localhost:18766/index.html"
+
+          navigation_rc=0
+          env -u WPE_DISPLAY \
+            WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$webkit_exec_path" \
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            FIRE4NIX_LOW_MEMORY=1 \
+            FIRE4NIX_NAV_TARGET_URL="http://127.0.0.1:18765/nav-target.html" \
+            HOME="$RUNNER_TEMP/fire4nix-home" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+            timeout --signal=TERM --kill-after=10s 100s \
+            build/headless/fire4nix-native-headless --verify-navigation \
+            "http://127.0.0.1:18765/nav-start.html" \
+            > logs/wpe-headless-navigation.log 2>&1 || navigation_rc=$?
+          cat logs/wpe-headless-navigation.log
+          if [ "$navigation_rc" -ne 0 ]; then
+            echo "WPE_NAVIGATION=FAIL_EXIT_$navigation_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit "$navigation_rc"
+          fi
+          grep -Fq '[FIRE4NIX-NAV] navigation=PASS' logs/wpe-headless-navigation.log
+          grep -Fq '[FIRE4NIX-NAV] history_back=PASS' logs/wpe-headless-navigation.log
+          grep -Fq '[FIRE4NIX-NAV] history_forward=PASS' logs/wpe-headless-navigation.log
+          echo 'WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD' | tee -a "$GITHUB_STEP_SUMMARY"
           cat logs/local-servers.log
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
