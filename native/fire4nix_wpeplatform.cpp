@@ -119,6 +119,7 @@ static void offlineEvaluationFinished(GObject* object, GAsyncResult* result, gpo
         g_printerr("[FIRE4NIX-VERIFY] offline_dom=PASS\n");
         g_printerr("[FIRE4NIX-VERIFY] inline_javascript=PASS\n");
         g_printerr("[FIRE4NIX-VERIFY] computed_css=PASS\n");
+        g_printerr("[FIRE4NIX-VERIFY] button_event=PASS\n");
         app->exitCode = 0;
     }
     if (value && app->jscValueUnref) app->jscValueUnref(value);
@@ -146,11 +147,14 @@ static void loadChanged(GObject*, int event, gpointer data) {
             static const char script[] =
                 "(() => { const s = document.querySelector('#js-state');"
                 " const css = getComputedStyle(document.body);"
+                " const button = document.querySelector('#test-button');"
+                " const count = document.querySelector('#click-count');"
+                " if (button) button.click();"
                 " return document.title === 'Fire4Nix | Primeiro teste offline'"
                 " && !!s && s.textContent.trim() === 'JS OK'"
                 " && document.querySelectorAll('.swatch').length === 3"
                 " && css.backgroundColor === 'rgb(16, 24, 39)'"
-                " && document.querySelector('#test-button') !== null; })()";
+                " && !!button && !!count && count.textContent.trim() === 'Cliques: 1'; })()";
             stage("evaluating offline DOM, JavaScript and computed CSS");
             app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
                                     nullptr, offlineEvaluationFinished, app);
