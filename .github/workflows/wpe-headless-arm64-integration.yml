@@ -76,6 +76,9 @@ jobs:
           webkit_exec_path="$(dirname "$web_process")"
           test -x "$webkit_exec_path/WPENetworkProcess"
           mkdir -p "$RUNNER_TEMP/fire4nix-home" "$RUNNER_TEMP/fire4nix-cache"
+          test -s installer/www/primeiro-teste.html
+          echo 'WPE_HEADLESS_FIXTURE_FILE=present'
+          sha256sum installer/www/primeiro-teste.html
           page="file://$GITHUB_WORKSPACE/installer/www/primeiro-teste.html"
           set +e
           env -u WPE_DISPLAY \
