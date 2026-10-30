@@ -1,0 +1,110 @@
+name: Fire4Nix build isolated R36H test package
+
+on:
+  push:
+    branches:
+      - codex/r36h-isolated-test-package-20261030
+    paths:
+      - '.github/workflows/r36h-isolated-test-package.yml'
+      - 'scripts/package-first-r36h-ports-candidate.py'
+      - 'installer/**'
+      - 'native/tests/test_isolated_egl_package.py'
+      - 'native/tests/test_r36h_egl_probe.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  assemble-isolated-test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download verified WPE 2.54.1 ROCKNIX package artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 40033262653
+          github-token: ${{ github.token }}
+          name: Fire4Nix-R36H-Mali-EGL-Experimental
+          path: ${{ runner.temp }}/wpe-artifact
+
+      - name: Download pinned ARM64 native 0.86 launcher
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 40637432607
+          github-token: ${{ github.token }}
+          name: Fire4Nix-0.86-R36H-ARM64-Native-Test
+          path: ${{ runner.temp }}/native-artifact
+
+      - name: Verify nested source artifacts and extract exact runtime inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wpe-outer" "$RUNNER_TEMP/wpe-source"
+          mkdir -p "$RUNNER_TEMP/native-outer" "$RUNNER_TEMP/native-source"
+          (cd "$RUNNER_TEMP/wpe-artifact" && sha256sum -c SHA256SUMS.txt)
+          unzip -q "$RUNNER_TEMP/wpe-artifact/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-outer"
+          unzip -q "$RUNNER_TEMP/wpe-outer/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-source"
+          unzip -q "$RUNNER_TEMP/native-artifact/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-outer"
+          unzip -q "$RUNNER_TEMP/native-outer/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-source"
+          (cd "$RUNNER_TEMP/native-source" && sha256sum -c SHA256SUMS.txt)
+          runtime="$RUNNER_TEMP/wpe-source/Fire4Nix/runtime"
+          native="$RUNNER_TEMP/native-source/fire4nix-native-086-aarch64"
+          test -s "$runtime/lib/libWPEWebKit-2.0.so.1"
+          test -s "$runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
+          test -s "$runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+          test "$(sha256sum "$native" | cut -d' ' -f1)" = 4295f354873519802fc5817a1ee6d194489d1cc824fcd8e2cb65569d0fa0f1f4
+          readelf -h "$native" | grep -Eq 'Machine:.*AArch64'
+          echo "FIRE4NIX_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          echo "FIRE4NIX_NATIVE=$native" >> "$GITHUB_ENV"
+
+      - name: Validate isolated runner, EGL probe and package builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/package-first-r36h-ports-candidate.py
+          python3 -m py_compile installer/Fire4Nix-EGL-R36H.py
+          python3 native/tests/test_isolated_egl_package.py
+          python3 native/tests/test_r36h_egl_probe.py
+          sh -n installer/Executar-Teste-Isolado.sh
+          sh -n installer/Fire4Nix-Grafico-Resgate.sh
+
+      - name: Assemble relocatable offline Ports package with current isolated test kit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          python3 scripts/package-first-r36h-ports-candidate.py \
+            --runtime "$FIRE4NIX_RUNTIME" \
+            --native "$FIRE4NIX_NATIVE" \
+            --installer installer \
+            --output delivery/Fire4Nix-R36H-Teste-Isolado-20261030.zip
+          cat > delivery/STATUS.txt <<'EOF'
+          FIRE4NIX_PACKAGE=ISOLATED_R36H_TEST
+          WPE_VERSION=2.54.1
+          WPE_SOURCE_RUN_ID=40033262653
+          NATIVE_SOURCE_RUN_ID=40637432607
+          R36H_FIRST_FRAME_VERIFIED=no
+          R36H_INSTALLABLE_VERIFIED=no
+          TLS_HTTPS_VERIFIED=no
+          DEVICE_EGL_VERIFIED=no
+          DEVICE_WAYLAND_FRAME_VERIFIED=no
+          EOF
+          (cd delivery && sha256sum Fire4Nix-R36H-Teste-Isolado-20261030.zip > SHA256SUMS.txt)
+          unzip -t delivery/Fire4Nix-R36H-Teste-Isolado-20261030.zip
+          cat delivery/STATUS.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish isolated test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-R36H-Teste-Isolado-20261030
+          path: delivery/
+          if-no-files-found: error
+          retention-days: 14
