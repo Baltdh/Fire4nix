@@ -212,12 +212,13 @@ static void navigationEvaluationFinished(GObject* object, GAsyncResult* result, 
             g_printerr("[FIRE4NIX-NAV] navigation=PASS\n");
             g_printerr("[FIRE4NIX-NAV] history_back=PASS\n");
             g_printerr("[FIRE4NIX-NAV] history_forward=PASS\n");
+            app->navigationPhase = 4; // complete only after forward page has finished and passed
             app->exitCode = 0;
         }
     }
     g_free(report);
     if (value && app->jscValueUnref) app->jscValueUnref(value);
-    if (app->failed || app->exitCode || app->navigationPhase == 3) {
+    if (app->failed || app->exitCode || app->navigationPhase == 4) {
         if (app->loop) g_main_loop_quit(app->loop);
     }
 }
