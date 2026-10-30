@@ -164,12 +164,8 @@ jobs:
           grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
-          python3 -m py_compile scripts/package-first-r36h-ports-candidate.py 2>/dev/null || true
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
-          rm -f "$pkg/PACOTE-SHA256SUMS.txt"
-          (cd "$pkg" && find . -type f ! -path './PACOTE-SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > PACOTE-SHA256SUMS.txt)
-          (cd "$pkg" && sha256sum -c PACOTE-SHA256SUMS.txt > "$RUNNER_TEMP/package-manifest-check.txt")
-          tail -n 3 "$RUNNER_TEMP/package-manifest-check.txt"
+          cp "$RUNNER_TEMP/wpe-outer/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
           cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<'EOF'
           FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
           WPE_RUNTIME_VERSION=2.54.1
@@ -188,6 +184,10 @@ jobs:
           FIRMWARE_MODIFIED=no
           EOF
           chmod 0644 "$pkg/STATUS-PRIMEIRO-TESTE.txt"
+          rm -f "$pkg/PACOTE-SHA256SUMS.txt"
+          (cd "$pkg" && find . -type f ! -path './PACOTE-SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > PACOTE-SHA256SUMS.txt)
+          (cd "$pkg" && sha256sum -c PACOTE-SHA256SUMS.txt > "$RUNNER_TEMP/package-manifest-check.txt")
+          tail -n 3 "$RUNNER_TEMP/package-manifest-check.txt"
 
       - name: Build and verify ZIP
         shell: bash
