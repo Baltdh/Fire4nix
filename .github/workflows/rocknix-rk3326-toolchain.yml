@@ -49,18 +49,42 @@ jobs:
         env:
           FIRE4NIX_ROCKNIX_SOURCE: ${{ github.workspace }}/rocknix-source
         run: bash fire4nix/scripts/build-rocknix-rk3326-toolchain.sh
+      - name: Record pinned target support libraries and ELF loader candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$GITHUB_WORKSPACE/rocknix-source/build.ROCKNIX-RK3326.aarch64/toolchain"
+          sysroot="$sdk/aarch64-rocknix-linux-gnu/sysroot"
+          support="$sdk/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1"
+          test -s "$support"
+          readelf -h "$support" | grep -Eq 'Class:.*ELF64'
+          readelf -h "$support" | grep -Eq 'Machine:.*AArch64'
+          readelf -d "$support" | grep -Fq 'Library soname: [libgcc_s.so.1]'
+          echo 'TARGET_LIBGCC_S=PASS_ELF64_AARCH64' | tee toolchain-reports/target-runtime-support.txt
+          find "$sysroot" \( -type f -o -type l \) -name 'ld-linux-aarch64.so.1' -print \
+            | sort > toolchain-reports/sysroot-loader-candidates.txt
+          if [ -s toolchain-reports/sysroot-loader-candidates.txt ]; then
+            while IFS= read -r loader; do
+              echo "SYSROOT_LOADER_PATH=$loader" | tee -a toolchain-reports/target-runtime-support.txt
+              if [ -L "$loader" ]; then
+                echo "SYSROOT_LOADER_LINK=$(readlink "$loader")" | tee -a toolchain-reports/target-runtime-support.txt
+              fi
+            done < toolchain-reports/sysroot-loader-candidates.txt
+          else
+            echo 'SYSROOT_LOADER_PATH=missing_from_compiler_sysroot' | tee -a toolchain-reports/target-runtime-support.txt
+          fi
       - name: Preserve diagnostics even on build failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ROCKNIX-RK3326-toolchain-build-diagnostics
           path: toolchain-reports/
-          retention-days: 14
+          retention-days: 30
       - name: Preserve successful host toolchain checkpoint (not for R36H install)
         uses: actions/upload-artifact@v4
         with:
           name: ROCKNIX-RK3326-toolchain-HOST-ONLY
           path: rocknix-toolchain-host-only.tar.xz
           compression-level: 0
-          retention-days: 7
+          retention-days: 30
           if-no-files-found: error
