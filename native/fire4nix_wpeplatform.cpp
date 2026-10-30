@@ -42,6 +42,7 @@ struct App {
     bool verifyOffline = false;
     bool verifyNavigation = false;
     unsigned navigationPhase = 0;
+    unsigned navigationReloads = 0;
     bool loaded = false;
     bool failed = false;
     int exitCode = 0;
@@ -208,17 +209,42 @@ static void navigationEvaluationFinished(GObject* object, GAsyncResult* result, 
                 app->goForward(app->view);
             }
         } else if (app->navigationPhase == 3) {
-            stage("navigation, back and forward history verification passed");
-            g_printerr("[FIRE4NIX-NAV] navigation=PASS\n");
-            g_printerr("[FIRE4NIX-NAV] history_back=PASS\n");
-            g_printerr("[FIRE4NIX-NAV] history_forward=PASS\n");
-            app->navigationPhase = 4; // complete only after forward page has finished and passed
-            app->exitCode = 0;
+            if (!app->reload) {
+                stage("browser reload API unavailable");
+                app->exitCode = 78;
+                app->failed = true;
+            } else {
+                app->navigationPhase = 4;
+                app->navigationReloads = 1;
+                app->loaded = false;
+                stage("navigation: reload page cycle 1");
+                app->reload(app->view);
+            }
+        } else if (app->navigationPhase == 4) {
+            if (!app->reload) {
+                stage("browser reload API unavailable");
+                app->exitCode = 78;
+                app->failed = true;
+            } else if (app->navigationReloads < 2) {
+                app->navigationReloads++;
+                app->loaded = false;
+                stage("navigation: reload page cycle 2");
+                app->reload(app->view);
+            } else {
+                stage("navigation, back, forward and two reload cycles passed");
+                g_printerr("[FIRE4NIX-NAV] navigation=PASS\n");
+                g_printerr("[FIRE4NIX-NAV] history_back=PASS\n");
+                g_printerr("[FIRE4NIX-NAV] history_forward=PASS\n");
+                g_printerr("[FIRE4NIX-NAV] page_reload=PASS\n");
+                g_printerr("[FIRE4NIX-NAV] reload_cycles=2\n");
+                app->navigationPhase = 5;
+                app->exitCode = 0;
+            }
         }
     }
     g_free(report);
     if (value && app->jscValueUnref) app->jscValueUnref(value);
-    if (app->failed || app->exitCode || app->navigationPhase == 4) {
+    if (app->failed || app->exitCode || app->navigationPhase == 5) {
         if (app->loop) g_main_loop_quit(app->loop);
     }
 }
