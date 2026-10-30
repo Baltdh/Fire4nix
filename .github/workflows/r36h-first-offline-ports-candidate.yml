@@ -2,7 +2,7 @@ name: Fire4Nix assemble first experimental offline R36H Ports candidate
 
 on:
   push:
-    branches: ['build/r36h-first-offline-ports-candidate-20261022', 'fix/r36h-first-test-accept-gcc15-build-20261023', 'audit/r36h-wpe-gcc15-atomic-elf-gates-current-main-20261023']
+    branches: ['build/r36h-first-offline-ports-candidate-20261022', 'fix/r36h-first-test-accept-gcc15-build-20261023', 'audit/r36h-wpe-gcc15-atomic-elf-gates-current-main-20261023', 'codex/r36h-isolated-test-package-20261030']
     paths:
       - 'scripts/package-first-r36h-ports-candidate.py'
       - 'native/tests/test_ports_packager_streaming_sha256.py'
@@ -214,7 +214,7 @@ jobs:
           retention-days: 14
 
   assemble-isolated-test-package:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/r36h-isolated-test-package-20261030'
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/r36h-isolated-test-package-20261030') || (github.event_name == 'push' && github.ref_name == 'codex/r36h-isolated-test-package-20261030')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 35
     steps:
