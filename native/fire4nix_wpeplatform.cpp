@@ -1,9 +1,10 @@
-// Fire4Nix R36H v1.01 - resilient native WPEPlatform launcher.
+// Fire4Nix v1.02 - WPEPlatform launcher with an executable headless DOM/CSS/JS gate.
 // Build on AArch64 Linux against GLib/GObject; load the *user-installed* WPE2.0
 // runtime with dlopen. Never pull GTK/Qt libraries into the launcher.
 #include <glib.h>
 #include <glib-object.h>
 #include <glib-unix.h>
+#include <gio/gio.h>
 #include <dlfcn.h>
 #include <csignal>
 #include <cstdio>
@@ -26,6 +27,10 @@ using GetEventKeyval = unsigned (*)(gpointer);
 using NavigateAction = void (*)(gpointer);
 using CanNavigate = gboolean (*)(gpointer);
 using ToplevelGetState = unsigned (*)(gpointer);
+using EvaluateJavaScript = void (*)(gpointer, const char*, gssize, const char*, const char*, GCancellable*, GAsyncReadyCallback, gpointer);
+using EvaluateJavaScriptFinish = gpointer (*)(gpointer, GAsyncResult*, GError**);
+using JSCValueToBoolean = gboolean (*)(gpointer);
+using JSCValueUnref = void (*)(gpointer);
 
 struct App {
     GMainLoop* loop = nullptr;
@@ -34,6 +39,7 @@ struct App {
     LoadUri loadUri = nullptr;
     GetUri getUri = nullptr;
     bool smoke = false;
+    bool verifyOffline = false;
     bool loaded = false;
     bool failed = false;
     int exitCode = 0;
@@ -52,6 +58,10 @@ struct App {
     CanNavigate canGoBack = nullptr;
     CanNavigate canGoForward = nullptr;
     ToplevelGetState getToplevelState = nullptr;
+    EvaluateJavaScript evaluateJavaScript = nullptr;
+    EvaluateJavaScriptFinish evaluateJavaScriptFinish = nullptr;
+    JSCValueToBoolean jscValueToBoolean = nullptr;
+    JSCValueUnref jscValueUnref = nullptr;
     ToplevelFullscreen fullscreen = nullptr;
     ToplevelFullscreen unfullscreen = nullptr;
 };
@@ -89,6 +99,32 @@ static gboolean smokeQuit(gpointer data) {
     if (app->loop) g_main_loop_quit(app->loop);
     return G_SOURCE_REMOVE;
 }
+static void offlineEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    if (error) {
+        g_printerr("[FIRE4NIX-VERIFY] JavaScript evaluation failed: %s\n", error->message);
+        g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else if (!value || !app->jscValueToBoolean ||
+               !app->jscValueToBoolean(value)) {
+        stage("offline DOM/CSS/JavaScript verification failed");
+        app->exitCode = 4;
+        app->failed = true;
+    } else {
+        stage("offline DOM, JavaScript and computed CSS verification passed");
+        g_printerr("[FIRE4NIX-VERIFY] offline_dom=PASS\n");
+        g_printerr("[FIRE4NIX-VERIFY] inline_javascript=PASS\n");
+        g_printerr("[FIRE4NIX-VERIFY] computed_css=PASS\n");
+        app->exitCode = 0;
+    }
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->loop) g_main_loop_quit(app->loop);
+}
+
 static void loadChanged(GObject*, int event, gpointer data) {
     App* app = static_cast<App*>(data);
     const char* url = app->getUri ? app->getUri(app->view) : nullptr;
@@ -96,6 +132,30 @@ static void loadChanged(GObject*, int event, gpointer data) {
     // WebKitLoadEvent: STARTED=0, REDIRECTED=1, COMMITTED=2, FINISHED=3.
     if (event == 3) {
         app->loaded = true;
+        if (app->verifyOffline) {
+            if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+                !app->jscValueToBoolean || !app->jscValueUnref) {
+                stage("offline verification API unavailable in this WPE runtime");
+                app->exitCode = 78;
+                app->failed = true;
+                g_idle_add(smokeQuit, app);
+                return;
+            }
+            // Verify the actual WPE page DOM, inline JS result and computed CSS.
+            // This is a real browser-engine integration test, not a GPU/frame test.
+            static const char script[] =
+                "(() => { const s = document.querySelector('#js-state');"
+                " const css = getComputedStyle(document.body);"
+                " return document.title === 'Fire4Nix | Primeiro teste offline'"
+                " && !!s && s.textContent.trim() === 'JS OK'"
+                " && document.querySelectorAll('.swatch').length === 3"
+                " && css.backgroundColor === 'rgb(16, 24, 39)'"
+                " && document.querySelector('#test-button') !== null; })()";
+            stage("evaluating offline DOM, JavaScript and computed CSS");
+            app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                                    nullptr, offlineEvaluationFinished, app);
+            return;
+        }
         if (app->smoke) {
             if (!app->failed) app->exitCode = 0;
             else if (!app->exitCode) app->exitCode = 3;
@@ -224,7 +284,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 1.01: [--selftest|--check-library|--check-platform|--smoke] [URL]");
+        puts("Fire4Nix native WPEPlatform 1.02: [--selftest|--check-library|--check-platform|--smoke|--verify-offline] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -238,14 +298,17 @@ int main(int argc, char** argv) {
     const bool onlyLibrary = argc > 1 && !strcmp(argv[1], "--check-library");
     const bool onlyPlatform = argc > 1 && !strcmp(argv[1], "--check-platform");
     const bool smoke = argc > 1 && !strcmp(argv[1], "--smoke");
+    const bool verifyOffline = argc > 1 && !strcmp(argv[1], "--verify-offline");
     const char* url = "about:blank";
     for (int i=1; i<argc; ++i) {
-        if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") && strcmp(argv[i],"--smoke") &&
+        if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") &&
+            strcmp(argv[i],"--smoke") && strcmp(argv[i],"--verify-offline") &&
             argv[i][0] != '-') { url=argv[i]; break; }
     }
     stage("dlopen libWPEWebKit-2.0.so.1");
     App app;
-    app.smoke = smoke;
+    app.smoke = smoke || verifyOffline;
+    app.verifyOffline = verifyOffline;
     app.initialUrl = url;
     app.webkit = dlopen("libWPEWebKit-2.0.so.1", RTLD_NOW | RTLD_GLOBAL);
     if (!app.webkit) {
@@ -278,6 +341,14 @@ int main(int argc, char** argv) {
         dlclose(app.webkit);
         return 0;
     }
+    app.evaluateJavaScript = symbol<EvaluateJavaScript>(app.webkit, "webkit_web_view_evaluate_javascript");
+    app.evaluateJavaScriptFinish = symbol<EvaluateJavaScriptFinish>(app.webkit, "webkit_web_view_evaluate_javascript_finish");
+    app.jscValueToBoolean = symbol<JSCValueToBoolean>(RTLD_DEFAULT, "jsc_value_to_boolean");
+    if (!app.jscValueToBoolean)
+        app.jscValueToBoolean = symbol<JSCValueToBoolean>(app.webkit, "jsc_value_to_boolean");
+    app.jscValueUnref = symbol<JSCValueUnref>(RTLD_DEFAULT, "jsc_value_unref");
+    if (!app.jscValueUnref)
+        app.jscValueUnref = symbol<JSCValueUnref>(app.webkit, "jsc_value_unref");
     stage("WPE core symbol probes begin");
     auto webViewType = symbol<GetType>(app.webkit, "webkit_web_view_get_type");
     auto getWPEView = symbol<GetWPEView>(app.webkit, "webkit_web_view_get_wpe_view");
@@ -439,7 +510,8 @@ int main(int argc, char** argv) {
     g_unix_signal_add(SIGTERM, signalQuit, &app);
     if (app.smoke) app.smokeTimeoutSource = g_timeout_add_seconds(30, timeoutQuit, &app);
     g_printerr("[FIRE4NIX-NATIVE] mode=%s low_memory=%d url=%s platform=%s\n",
-               app.smoke ? "smoke" : "interactive", lowMemory() ? 1 : 0, url,
+               app.verifyOffline ? "verify-offline" : (app.smoke ? "smoke" : "interactive"),
+               lowMemory() ? 1 : 0, url,
                g_getenv("WPE_PLATFORM") ? g_getenv("WPE_PLATFORM") : "default");
     app.loadUri(app.view, url);
     stage("entering GLib main loop");
