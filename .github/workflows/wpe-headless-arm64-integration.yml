@@ -1,0 +1,114 @@
+name: WPE WebKit real headless ARM64 integration
+
+on:
+  push:
+    branches:
+      - codex/wpe-headless-arm64-integration-20261030
+    paths:
+      - 'native/fire4nix_wpeplatform.cpp'
+      - 'native/tests/test_headless_integration_contract.py'
+      - 'installer/www/primeiro-teste.html'
+      - '.github/workflows/wpe-headless-arm64-integration.yml'
+  pull_request:
+    paths:
+      - 'native/fire4nix_wpeplatform.cpp'
+      - 'native/tests/test_headless_integration_contract.py'
+      - 'installer/www/primeiro-teste.html'
+      - '.github/workflows/wpe-headless-arm64-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless-arm64:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:unstable
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Debian ARM64 WPE 2.54.2 and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates build-essential pkg-config python3 \
+            libglib2.0-dev libwpewebkit-2.0-dev
+          version="$(dpkg-query -W -f='${Version}' libwpewebkit-2.0-1)"
+          echo "WPE_PACKAGE_VERSION=$version"
+          case "$version" in
+            2.54.2*) ;;
+            *) echo "Expected Debian WPE 2.54.2, got $version" >&2; exit 20 ;;
+          esac
+          pkg-config --modversion wpe-webkit-2.0
+          pkg-config --exists wpe-platform-2.0
+          echo 'WPE_HEADLESS_TEST_ENGINE=REAL_DEBIAN_ARM64_PACKAGE_2.54.2'
+
+      - name: Run host-side contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 native/tests/test_headless_integration_contract.py
+          python3 -m py_compile native/tests/test_headless_integration_contract.py
+
+      - name: Compile Fire4Nix native launcher for ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/headless logs
+          g++ -std=c++17 -O2 -g -Wall -Wextra -Werror \
+            native/fire4nix_wpeplatform.cpp \
+            $(pkg-config --cflags --libs glib-2.0 gobject-2.0 gio-2.0) \
+            -ldl -o build/headless/fire4nix-native-headless
+          file build/headless/fire4nix-native-headless
+          readelf -h build/headless/fire4nix-native-headless | grep -q AArch64
+          build/headless/fire4nix-native-headless --selftest
+
+      - name: Run real WPE 2.54.2 headless browser against offline HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          web_process="$(find /usr -type f -name WPEWebProcess -print -quit)"
+          test -n "$web_process" && test -x "$web_process"
+          webkit_exec_path="$(dirname "$web_process")"
+          test -x "$webkit_exec_path/WPENetworkProcess"
+          mkdir -p "$RUNNER_TEMP/fire4nix-home" "$RUNNER_TEMP/fire4nix-cache"
+          page="file://$GITHUB_WORKSPACE/installer/www/primeiro-teste.html"
+          set +e
+          env -u WPE_DISPLAY \
+            WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$webkit_exec_path" \
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            FIRE4NIX_LOW_MEMORY=1 \
+            HOME="$RUNNER_TEMP/fire4nix-home" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+            timeout --signal=TERM --kill-after=10s 100s \
+            build/headless/fire4nix-native-headless --verify-offline "$page" \
+            > logs/wpe-headless-offline.log 2>&1
+          rc=$?
+          set -e
+          cat logs/wpe-headless-offline.log
+          if [ "$rc" -ne 0 ]; then
+            echo "WPE_HEADLESS_OFFLINE=FAIL_EXIT_$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit "$rc"
+          fi
+          grep -Fq '[FIRE4NIX-VERIFY] offline_dom=PASS' logs/wpe-headless-offline.log
+          grep -Fq '[FIRE4NIX-VERIFY] inline_javascript=PASS' logs/wpe-headless-offline.log
+          grep -Fq '[FIRE4NIX-VERIFY] computed_css=PASS' logs/wpe-headless-offline.log
+          echo 'WPE_HEADLESS_OFFLINE=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve headless logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fire4Nix-WPE-Headless-ARM64-Logs
+          path: |
+            logs/
+            build/headless/
+          if-no-files-found: warn
+          retention-days: 14
