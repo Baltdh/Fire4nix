@@ -56,6 +56,10 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "Fire4Nix Nav Target|TARGET_JS_OK|true",
             "[FIRE4NIX-NAV] history_back=PASS",
             "[FIRE4NIX-NAV] history_forward=PASS",
+            "[FIRE4NIX-NAV] page_reload=PASS",
+            "[FIRE4NIX-NAV] reload_cycles=2",
+            "navigationReloads",
+            "navigationPhase == 5",
         ):
             self.assertIn(token, source)
 
@@ -98,7 +102,9 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "nav-start.html",
             "nav-target.html",
             "--verify-navigation",
-            "WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD",
+            "WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD_TWO_RELOADS",
+            "page_reload=PASS",
+            "reload_cycles=2",
             "history_back=PASS",
             "history_forward=PASS",
             'echo "WPE_$label=PASS_REAL_WPE_NETWORK_DOM_JS_CSS_CLICK"',
