@@ -61,11 +61,14 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "runs-on: ubuntu-24.04-arm",
             "image: debian:unstable",
             "libwpewebkit-2.0-dev",
+            "libglib2.0-bin shared-mime-info",
+            "WPE_HEADLESS_MIME_DATABASE=SHARED_MIME_INFO_PRESENT",
+            'test "$mime_type" = "text/html"',
             "2.54.2",
             "WPE_PLATFORM=headless",
             "--verify-offline",
             "WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK",
-            "WPE_FILE_URI=PASS",
+            "WPE_FILE_URI=PASS_REAL_HTML_JS_CSS_CLICK",
             "data:text/html;base64,",
         ):
             self.assertIn(token, workflow)
