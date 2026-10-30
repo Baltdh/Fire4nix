@@ -17,6 +17,8 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "webkit_web_view_evaluate_javascript",
             "webkit_web_view_evaluate_javascript_finish",
             "jsc_value_to_boolean",
+            "app.jscValueUnref = &g_object_unref",
+            "there is no jsc_value_unref() API",
             "offlineEvaluationFinished",
             "offline DOM, JavaScript and computed CSS verification passed",
             "rgb(16, 24, 39)",
