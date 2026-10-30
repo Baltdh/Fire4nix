@@ -165,6 +165,22 @@ jobs:
           <body><p id="nav-state">TARGET_JS_PENDING</p><a id="nav-back" href="/nav-start.html">Back</a>
           <script>document.getElementById('nav-state').textContent='TARGET_JS_OK';</script></body></html>
           EOF
+          cat > "$RUNNER_TEMP/fire4nix-web-root/form-page.html" <<'EOF'
+          <!doctype html><html><head><meta charset="utf-8"><title>Fire4Nix Form Page</title></head>
+          <body><p id="form-state">FORM_PAGE_JS_PENDING</p>
+          <form id="post-form" action="/submit-form" method="POST">
+            <input type="hidden" name="proof" value="FIRE4NIX_POST_OK">
+            <input id="payload" name="payload" value="">
+            <button type="submit">Enviar teste</button>
+          </form>
+          <script>document.getElementById('form-state').textContent='FORM_PAGE_JS_OK';</script></body></html>
+          EOF
+          cat > "$RUNNER_TEMP/fire4nix-web-root/form-result.html" <<'EOF'
+          <!doctype html><html><head><meta charset="utf-8"><title>Fire4Nix Form Result</title></head>
+          <body><p id="server-result">FORM_POST_OK</p>
+          <p id="js-state">FORM_RESULT_JS_PENDING</p>
+          <script>document.getElementById('js-state').textContent='FORM_RESULT_JS_OK';</script></body></html>
+          EOF
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
             -keyout "$RUNNER_TEMP/fire4nix-test-ca.key" \
             -out "$RUNNER_TEMP/fire4nix-test-ca.crt" \
@@ -222,6 +238,22 @@ jobs:
                       self.end_headers()
                       return
                   return super().do_GET()
+              def do_POST(self):
+                  from urllib.parse import parse_qs
+                  length = int(self.headers.get("Content-Length", "0"))
+                  body = self.rfile.read(length).decode("utf-8", "replace")
+                  fields = parse_qs(body, keep_blank_values=True)
+                  valid = (self.path == "/submit-form"
+                           and fields.get("proof") == ["FIRE4NIX_POST_OK"]
+                           and fields.get("payload") == ["FIRE4NIX_FIELD"])
+                  print(f"LOCAL_SERVER_POST path={self.path} bytes={length} valid={valid}", flush=True)
+                  if not valid:
+                      self.send_error(400, "Unexpected Fire4Nix test form payload")
+                      return
+                  self.send_response(303)
+                  self.send_header("Location", "/form-result.html")
+                  self.send_header("Content-Length", "0")
+                  self.end_headers()
               def log_message(self, fmt, *args):
                   print("LOCAL_SERVER " + (fmt % args), flush=True)
 
@@ -367,6 +399,33 @@ jobs:
           grep -Fq '[FIRE4NIX-NAV] page_reload=PASS' logs/wpe-headless-navigation.log
           grep -Fq '[FIRE4NIX-NAV] reload_cycles=2' logs/wpe-headless-navigation.log
           echo 'WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD_TWO_RELOADS' | tee -a "$GITHUB_STEP_SUMMARY"
+
+          form_rc=0
+          env -u WPE_DISPLAY \
+            WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$webkit_exec_path" \
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            FIRE4NIX_LOW_MEMORY=1 \
+            HOME="$RUNNER_TEMP/fire4nix-home" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+            timeout --signal=TERM --kill-after=10s 100s \
+            build/headless/fire4nix-native-headless --verify-form \
+            "http://127.0.0.1:18765/form-page.html" \
+            > logs/wpe-headless-form-storage.log 2>&1 || form_rc=$?
+          cat logs/wpe-headless-form-storage.log
+          if [ "$form_rc" -ne 0 ]; then
+            echo "WPE_FORM_STORAGE=FAIL_EXIT_$form_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit "$form_rc"
+          fi
+          grep -Fq '[FIRE4NIX-FORM] form_page=PASS' logs/wpe-headless-form-storage.log
+          grep -Fq '[FIRE4NIX-FORM] submission=STARTED' logs/wpe-headless-form-storage.log
+          grep -Fq '[FIRE4NIX-FORM] form_post=PASS' logs/wpe-headless-form-storage.log
+          grep -Fq '[FIRE4NIX-FORM] local_storage=PASS' logs/wpe-headless-form-storage.log
+          grep -Fq '[FIRE4NIX-FORM] session_storage=PASS' logs/wpe-headless-form-storage.log
+          grep -Fq '[FIRE4NIX-FORM] storage_after_reload=PASS' logs/wpe-headless-form-storage.log
+          grep -Fq 'LOCAL_SERVER_POST path=/submit-form' logs/local-servers.log
+          grep -Fq 'valid=True' logs/local-servers.log
+          echo 'WPE_FORM_STORAGE=PASS_REAL_POST_LOCAL_AND_SESSION_STORAGE_RELOAD' | tee -a "$GITHUB_STEP_SUMMARY"
           cat logs/local-servers.log
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
