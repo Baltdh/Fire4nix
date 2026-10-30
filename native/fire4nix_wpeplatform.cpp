@@ -29,7 +29,7 @@ using CanNavigate = gboolean (*)(gpointer);
 using ToplevelGetState = unsigned (*)(gpointer);
 using EvaluateJavaScript = void (*)(gpointer, const char*, gssize, const char*, const char*, GCancellable*, GAsyncReadyCallback, gpointer);
 using EvaluateJavaScriptFinish = gpointer (*)(gpointer, GAsyncResult*, GError**);
-using JSCValueToBoolean = gboolean (*)(gpointer);
+using JSCValueToString = gchar* (*)(gpointer);
 using JSCValueUnref = void (*)(gpointer);
 
 struct App {
@@ -60,7 +60,7 @@ struct App {
     ToplevelGetState getToplevelState = nullptr;
     EvaluateJavaScript evaluateJavaScript = nullptr;
     EvaluateJavaScriptFinish evaluateJavaScriptFinish = nullptr;
-    JSCValueToBoolean jscValueToBoolean = nullptr;
+    JSCValueToString jscValueToString = nullptr;
     JSCValueUnref jscValueUnref = nullptr;
     ToplevelFullscreen fullscreen = nullptr;
     ToplevelFullscreen unfullscreen = nullptr;
@@ -109,18 +109,38 @@ static void offlineEvaluationFinished(GObject* object, GAsyncResult* result, gpo
         g_error_free(error);
         app->exitCode = 4;
         app->failed = true;
-    } else if (!value || !app->jscValueToBoolean ||
-               !app->jscValueToBoolean(value)) {
-        stage("offline DOM/CSS/JavaScript verification failed");
-        app->exitCode = 4;
-        app->failed = true;
     } else {
-        stage("offline DOM, JavaScript and computed CSS verification passed");
-        g_printerr("[FIRE4NIX-VERIFY] offline_dom=PASS\n");
-        g_printerr("[FIRE4NIX-VERIFY] inline_javascript=PASS\n");
-        g_printerr("[FIRE4NIX-VERIFY] computed_css=PASS\n");
-        g_printerr("[FIRE4NIX-VERIFY] button_event=PASS\n");
-        app->exitCode = 0;
+        gchar* report = value && app->jscValueToString ?
+            app->jscValueToString(value) : nullptr;
+        if (!report) {
+            stage("offline verifier returned no diagnostic string");
+            app->exitCode = 4;
+            app->failed = true;
+        } else {
+            g_printerr("[FIRE4NIX-VERIFY] detail=%s\n", report);
+            const bool titleOK = strstr(report, "title=PASS") != nullptr;
+            const bool scriptOK = strstr(report, "inline_js=PASS") != nullptr;
+            const bool domOK = strstr(report, "swatches=3") != nullptr;
+            const bool cssOK = strstr(report, "background=rgb(16, 24, 39)") != nullptr;
+            const bool clickOK = strstr(report, "click_count=Cliques: 1") != nullptr;
+            if (titleOK && scriptOK && domOK && cssOK && clickOK) {
+                stage("offline DOM, JavaScript, click and computed CSS verification passed");
+                g_printerr("[FIRE4NIX-VERIFY] offline_dom=PASS\n");
+                g_printerr("[FIRE4NIX-VERIFY] inline_javascript=PASS\n");
+                g_printerr("[FIRE4NIX-VERIFY] computed_css=PASS\n");
+                g_printerr("[FIRE4NIX-VERIFY] button_event=PASS\n");
+                app->exitCode = 0;
+            } else {
+                stage("offline DOM/CSS/JavaScript verification failed; see detail fields");
+                g_printerr("[FIRE4NIX-VERIFY] title=%s inline_javascript=%s dom=%s css=%s button=%s\n",
+                    titleOK ? "PASS" : "FAIL", scriptOK ? "PASS" : "FAIL",
+                    domOK ? "PASS" : "FAIL", cssOK ? "PASS" : "FAIL",
+                    clickOK ? "PASS" : "FAIL");
+                app->exitCode = 4;
+                app->failed = true;
+            }
+            g_free(report);
+        }
     }
     if (value && app->jscValueUnref) app->jscValueUnref(value);
     if (app->loop) g_main_loop_quit(app->loop);
@@ -135,7 +155,7 @@ static void loadChanged(GObject*, int event, gpointer data) {
         app->loaded = true;
         if (app->verifyOffline) {
             if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
-                !app->jscValueToBoolean || !app->jscValueUnref) {
+                !app->jscValueToString || !app->jscValueUnref) {
                 stage("offline verification API unavailable in this WPE runtime");
                 app->exitCode = 78;
                 app->failed = true;
@@ -150,11 +170,13 @@ static void loadChanged(GObject*, int event, gpointer data) {
                 " const button = document.querySelector('#test-button');"
                 " const count = document.querySelector('#click-count');"
                 " if (button) button.click();"
-                " return document.title === 'Fire4Nix | Primeiro teste offline'"
-                " && !!s && s.textContent.trim() === 'JS OK'"
-                " && document.querySelectorAll('.swatch').length === 3"
-                " && css.backgroundColor === 'rgb(16, 24, 39)'"
-                " && !!button && !!count && count.textContent.trim() === 'Cliques: 1'; })()";
+                " const checks = [];"
+                " checks.push('title=' + (document.title === 'Fire4Nix | Primeiro teste offline' ? 'PASS' : 'FAIL'));"
+                " checks.push('inline_js=' + (!!s && s.textContent.trim() === 'JS OK' ? 'PASS' : 'FAIL'));"
+                " checks.push('swatches=' + document.querySelectorAll('.swatch').length);"
+                " checks.push('background=' + css.backgroundColor);"
+                " checks.push('click_count=' + (count ? count.textContent.trim() : 'MISSING'));"
+                " return checks.join(';'); })()";
             stage("evaluating offline DOM, JavaScript and computed CSS");
             app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
                                     nullptr, offlineEvaluationFinished, app);
@@ -347,9 +369,9 @@ int main(int argc, char** argv) {
     }
     app.evaluateJavaScript = symbol<EvaluateJavaScript>(app.webkit, "webkit_web_view_evaluate_javascript");
     app.evaluateJavaScriptFinish = symbol<EvaluateJavaScriptFinish>(app.webkit, "webkit_web_view_evaluate_javascript_finish");
-    app.jscValueToBoolean = symbol<JSCValueToBoolean>(RTLD_DEFAULT, "jsc_value_to_boolean");
-    if (!app.jscValueToBoolean)
-        app.jscValueToBoolean = symbol<JSCValueToBoolean>(app.webkit, "jsc_value_to_boolean");
+    app.jscValueToString = symbol<JSCValueToString>(RTLD_DEFAULT, "jsc_value_to_string");
+    if (!app.jscValueToString)
+        app.jscValueToString = symbol<JSCValueToString>(app.webkit, "jsc_value_to_string");
     // JSCValue derives from GObject. Its transfer-full result must be
     // released with g_object_unref(); there is no jsc_value_unref() API.
     app.jscValueUnref = &g_object_unref;
