@@ -21,6 +21,8 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "offline DOM, JavaScript and computed CSS verification passed",
             "rgb(16, 24, 39)",
             "document.querySelectorAll('.swatch').length === 3",
+            "button.click()",
+            "count.textContent.trim() === 'Cliques: 1'",
             "app->exitCode = 4",
         ):
             self.assertIn(token, source)
