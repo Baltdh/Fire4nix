@@ -36,7 +36,7 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             ca-certificates build-essential pkg-config python3 file openssl \
-            libglib2.0-dev libglib2.0-bin shared-mime-info \
+            libglib2.0-dev libglib2.0-bin shared-mime-info glib-networking \
             libwpewebkit-2.0-dev
           version="$(dpkg-query -W -f='${Version}' libwpewebkit-2.0-1)"
           echo "WPE_PACKAGE_VERSION=$version"
@@ -51,6 +51,9 @@ jobs:
             sed -n 's/^[[:space:]]*standard::content-type: //p' | head -n 1)"
           echo "WPE_FILE_FIXTURE_MIME=$mime_type"
           test "$mime_type" = "text/html"
+          dpkg-query -W -f='${Status}' glib-networking | grep -Fq 'install ok installed'
+          gio modules --help >/dev/null 2>&1 || true
+          echo 'WPE_HEADLESS_TLS_BACKEND=GLIB_NETWORKING_INSTALLED'
           echo 'WPE_HEADLESS_MIME_DATABASE=SHARED_MIME_INFO_PRESENT'
           echo 'WPE_HEADLESS_TEST_ENGINE=REAL_DEBIAN_ARM64_PACKAGE_2.54.2'
 
