@@ -80,6 +80,21 @@ class HeadlessIntegrationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_persistent_local_storage_survives_browser_process_restart(self):
+        source = SOURCE.read_text()
+        for token in (
+            "--verify-storage",
+            "startPersistentStorageEvaluation",
+            "persistentStorageEvaluationFinished",
+            "localStorage.getItem('fire4nix-form-local')",
+            "sessionStorage.getItem('fire4nix-form-session')",
+            "LOCAL_OK|EMPTY",
+            "local_storage_after_process_restart=PASS",
+            "session_storage_new_context=EMPTY_AS_EXPECTED",
+            "persistent_profile=PASS",
+        ):
+            self.assertIn(token, source)
+
     def test_page_is_a_self_contained_offline_fixture(self):
         page = PAGE.read_text()
         for token in (
@@ -109,6 +124,12 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "run_network_fixture HTTP",
             "run_network_fixture HTTPS",
             "--verify-form",
+            "--verify-storage",
+            "XDG_DATA_HOME=",
+            "fire4nix-data",
+            "persistent-storage-restart.log",
+            "WPE_PERSISTENT_STORAGE=PASS_ACROSS_PROCESS_RESTART_SESSION_ISOLATED",
+            "session_storage_new_context=EMPTY_AS_EXPECTED",
             "form-page.html",
             "form-result.html",
             "def do_POST(self)",
