@@ -7,7 +7,9 @@ on:
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
       - 'installer/Fire4Nix-Primeiro-Teste-R36.sh'
+      - 'installer/Fire4Nix-EGL-R36H.py'
       - 'installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt'
+      - 'native/tests/test_first_test_graphics_probe.sh'
       - 'installer/Fire4Nix-Teste.sh'
       - 'installer/Diagnosticar-Fire4Nix.sh'
       - 'installer/Fire4Nix-Inspecionar-ELF.sh'
@@ -104,6 +106,7 @@ jobs:
             "$pkg/Fire4Nix/bin/fire4nix-native-aarch64"
           cp installer/Fire4Nix-Iniciar.sh "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
           cp installer/Fire4Nix-Primeiro-Teste-R36.sh "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          cp installer/Fire4Nix-EGL-R36H.py "$pkg/Fire4Nix-EGL-R36H.py"
           cp installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
           cp installer/Fire4Nix-Teste.sh "$pkg/Fire4Nix-Teste.sh"
           cp installer/Fire4Nix-Teste.sh "$pkg/Fire4Nix/Fire4Nix-Teste.sh"
@@ -113,6 +116,7 @@ jobs:
           chmod +x "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" \
             "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh" \
             "$pkg/Fire4Nix-Primeiro-Teste-R36.sh" \
+            "$pkg/Fire4Nix-EGL-R36H.py" \
             "$pkg/Fire4Nix-Direto.sh" "$pkg/Fire4Nix-Teste.sh" \
             "$pkg/Habilitar-Teste-Ports.sh" "$pkg/Diagnosticar-Fire4Nix.sh" \
             "$pkg/Fire4Nix/Fire4Nix-Teste.sh" \
@@ -193,6 +197,15 @@ jobs:
             "$pkg/Fire4Nix/Diagnosticar-Fire4Nix.sh"; do
             sh -n "$script"
           done
+          python3 - "$pkg/Fire4Nix-EGL-R36H.py" <<'PYCODE'
+          import pathlib, sys
+          source = pathlib.Path(sys.argv[1]).read_text()
+          compile(source, sys.argv[1], "exec")
+          print("EGL_PROBE_PYTHON_SYNTAX=PASS")
+          PYCODE
+          sh native/tests/test_first_test_graphics_probe.sh
+          grep -Fq -- '--graphics-probe' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          test -s "$pkg/Fire4Nix-EGL-R36H.py"
           grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
@@ -209,6 +222,8 @@ jobs:
           WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
           ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY
           R36H_DEVICE_ABI_VERIFIED=no
+          R36H_EGL_DIAGNOSTIC_INCLUDED=yes
+          R36H_EGL_PROBE_EXECUTED_ON_DEVICE=no
           R36H_WAYLAND_EGL_VERIFIED=no
           R36H_FIRST_FRAME_VERIFIED=no
           R36H_INTERACTIVE_BROWSING_VERIFIED=no
