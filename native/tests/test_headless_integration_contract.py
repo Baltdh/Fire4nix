@@ -50,6 +50,8 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "app->loadUri(app->view, target)",
             "app->goBack(app->view)",
             "app->goForward(app->view)",
+            "app->navigationPhase = 4",
+            "app->navigationPhase == 4",
             "Fire4Nix Nav Start|START_JS_OK|true",
             "Fire4Nix Nav Target|TARGET_JS_OK|true",
             "[FIRE4NIX-NAV] history_back=PASS",
