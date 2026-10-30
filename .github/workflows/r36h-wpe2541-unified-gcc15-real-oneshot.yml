@@ -36,15 +36,18 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build pkg-config python3 perl ruby gperf bison flex \
-            unifdef wayland-protocols libwayland-bin binutils file ccache
+            unifdef wayland-protocols libwayland-bin binutils file patchelf ccache
           bash -n fire4nix/scripts/prepare-unified-rocknix-wpe2541.sh
           python3 fire4nix/native/tests/test_wpe2541_fourcc_patch.py
           python3 fire4nix/native/tests/test_wpe_unified_gcc15_libatomic_fourcc_contract.py
           bash -n fire4nix/scripts/build-wpe2541-subprocesses-rocknix.sh
           python3 -m py_compile fire4nix/scripts/bundle-rocknix-wpe-sdk-deps.py
+          python3 -m py_compile fire4nix/scripts/sanitize-rocknix-build-rpath.py
+          python3 -m py_compile fire4nix/scripts/prepare-rocknix-private-closure-sdk.py
           sh -n fire4nix/scripts/verify-unified-wpe-media-cache.sh
           test -x /usr/bin/unifdef
           test -x /usr/bin/wayland-scanner
+          test -x /usr/bin/patchelf
           test "$(command -v ccache)" = /usr/bin/ccache
           mkdir -p "$CCACHE_DIR"
       - name: Restore GCC15 cross-compiler object cache (never host libraries)
