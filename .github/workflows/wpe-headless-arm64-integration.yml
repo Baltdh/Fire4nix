@@ -36,7 +36,8 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             ca-certificates build-essential pkg-config python3 file \
-            libglib2.0-dev libwpewebkit-2.0-dev
+            libglib2.0-dev libglib2.0-bin shared-mime-info \
+            libwpewebkit-2.0-dev
           version="$(dpkg-query -W -f='${Version}' libwpewebkit-2.0-1)"
           echo "WPE_PACKAGE_VERSION=$version"
           case "$version" in
@@ -45,6 +46,12 @@ jobs:
           esac
           pkg-config --modversion wpe-webkit-2.0
           pkg-config --exists wpe-platform-2.0
+          mime_type="$(gio info --attributes=standard::content-type \
+            "$GITHUB_WORKSPACE/installer/www/primeiro-teste.html" | \
+            sed -n 's/^[[:space:]]*standard::content-type: //p' | head -n 1)"
+          echo "WPE_FILE_FIXTURE_MIME=$mime_type"
+          test "$mime_type" = "text/html"
+          echo 'WPE_HEADLESS_MIME_DATABASE=SHARED_MIME_INFO_PRESENT'
           echo 'WPE_HEADLESS_TEST_ENGINE=REAL_DEBIAN_ARM64_PACKAGE_2.54.2'
 
       - name: Run host-side contract tests
@@ -96,9 +103,12 @@ jobs:
           set -e
           cat logs/wpe-headless-file-url.log
           if [ "$file_rc" -eq 0 ] && grep -Fq '[FIRE4NIX-VERIFY] button_event=PASS' logs/wpe-headless-file-url.log; then
-            echo 'WPE_FILE_URI=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
+            echo 'WPE_FILE_URI=PASS_REAL_HTML_JS_CSS_CLICK' | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "WPE_FILE_URI=FAIL_EXIT_$file_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            grep -E '\[FIRE4NIX-VERIFY\] detail=|title=|inline_javascript=|computed_css=|button_event=' \
+              logs/wpe-headless-file-url.log || true
+            exit 31
           fi
 
           # The same trusted HTML over data: separates DOM/JS execution from
