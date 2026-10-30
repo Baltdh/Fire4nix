@@ -34,7 +34,7 @@ class HeadlessIntegrationContract(unittest.TestCase):
             'id="test-button"',
             'class="swatch"',
             "JS OK",
-            "document.body",
+            "document.createElement",
         ):
             self.assertIn(token, page)
         self.assertEqual(page.count('class="swatch"'), 3)
