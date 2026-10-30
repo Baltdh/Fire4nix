@@ -41,6 +41,22 @@ class HeadlessIntegrationContract(unittest.TestCase):
             self.assertIn(token, source)
         self.assertIn("#include <gio/gio.h>", source)
 
+    def test_native_browser_history_verification_uses_real_navigation_api(self):
+        source = SOURCE.read_text()
+        for token in (
+            "--verify-navigation",
+            "navigationEvaluationFinished",
+            "startNavigationEvaluation",
+            "app->loadUri(app->view, target)",
+            "app->goBack(app->view)",
+            "app->goForward(app->view)",
+            "Fire4Nix Nav Start|START_JS_OK|true",
+            "Fire4Nix Nav Target|TARGET_JS_OK|true",
+            "[FIRE4NIX-NAV] history_back=PASS",
+            "[FIRE4NIX-NAV] history_forward=PASS",
+        ):
+            self.assertIn(token, source)
+
     def test_page_is_a_self_contained_offline_fixture(self):
         page = PAGE.read_text()
         for token in (
@@ -69,6 +85,12 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "WPE_HEADLESS_MIME_DATABASE=SHARED_MIME_INFO_PRESENT",
             "run_network_fixture HTTP",
             "run_network_fixture HTTPS",
+            "nav-start.html",
+            "nav-target.html",
+            "--verify-navigation",
+            "WPE_NAVIGATION=PASS_TWO_PAGES_BACK_FORWARD",
+            "history_back=PASS",
+            "history_forward=PASS",
             'echo "WPE_$label=PASS_REAL_WPE_NETWORK_DOM_JS_CSS_CLICK"',
             "subjectAltName=DNS:localhost,IP:127.0.0.1",
             "WEBKIT_EXEC_PATH=",
