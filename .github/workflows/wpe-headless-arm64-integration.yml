@@ -86,6 +86,9 @@ jobs:
           webkit_exec_path="$(dirname "$web_process")"
           test -x "$webkit_exec_path/WPENetworkProcess"
           mkdir -p "$RUNNER_TEMP/fire4nix-home" "$RUNNER_TEMP/fire4nix-cache"
+          export XDG_DATA_HOME="$RUNNER_TEMP/fire4nix-data"
+          mkdir -p "$XDG_DATA_HOME"
+          echo "WPE_PERSISTENT_DATA_HOME=$XDG_DATA_HOME"
           test -s installer/www/primeiro-teste.html
           echo 'WPE_HEADLESS_FIXTURE_FILE=present'
           sha256sum installer/www/primeiro-teste.html
@@ -426,6 +429,36 @@ jobs:
           grep -Fq 'LOCAL_SERVER_POST path=/submit-form' logs/local-servers.log
           grep -Fq 'valid=True' logs/local-servers.log
           echo 'WPE_FORM_STORAGE=PASS_REAL_POST_LOCAL_AND_SESSION_STORAGE_RELOAD' | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # Start a second browser process with the same profile directories.
+          # localStorage must survive; sessionStorage must be isolated to the
+          # newly-created top-level browsing context.
+          sleep 2
+          storage_rc=0
+          env -u WPE_DISPLAY \
+            WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$webkit_exec_path" \
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            FIRE4NIX_LOW_MEMORY=1 \
+            HOME="$RUNNER_TEMP/fire4nix-home" \
+            XDG_DATA_HOME="$XDG_DATA_HOME" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+            timeout --signal=TERM --kill-after=10s 100s \
+            build/headless/fire4nix-native-headless --verify-storage \
+            "http://127.0.0.1:18765/form-result.html" \
+            > logs/wpe-headless-persistent-storage-restart.log 2>&1 || storage_rc=$?
+          cat logs/wpe-headless-persistent-storage-restart.log
+          if [ "$storage_rc" -ne 0 ]; then
+            echo "WPE_PERSISTENT_STORAGE=FAIL_EXIT_$storage_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit "$storage_rc"
+          fi
+          grep -Fq '[FIRE4NIX-STORAGE] local_storage_after_process_restart=PASS' \
+            logs/wpe-headless-persistent-storage-restart.log
+          grep -Fq '[FIRE4NIX-STORAGE] session_storage_new_context=EMPTY_AS_EXPECTED' \
+            logs/wpe-headless-persistent-storage-restart.log
+          echo 'WPE_PERSISTENT_STORAGE=PASS_ACROSS_PROCESS_RESTART_SESSION_ISOLATED' | tee -a "$GITHUB_STEP_SUMMARY"
+          find "$XDG_DATA_HOME" -maxdepth 5 -type f -printf '%p %s bytes\n' | head -40 \
+            | tee logs/persistent-profile-files.log
           cat logs/local-servers.log
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
