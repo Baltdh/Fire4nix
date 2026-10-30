@@ -146,13 +146,14 @@ jobs:
           # public DNS, remote availability and third-party certificate changes.
           mkdir -p "$RUNNER_TEMP/fire4nix-web-root"
           cp installer/www/primeiro-teste.html "$RUNNER_TEMP/fire4nix-web-root/index.html"
-          python3 - <<'PY'
+          COOKIE_FIXTURE_OUT="$RUNNER_TEMP/fire4nix-web-root/cookie-check.html" python3 - <<'PY'
+          import os
           from pathlib import Path
           source = Path("installer/www/primeiro-teste.html").read_text()
           old = 'status.textContent="JS OK";'
           new = "status.textContent=(document.cookie.indexOf('fire4nix_test=accepted')!==-1)?'JS OK':'JS FALHOU';"
           assert source.count(old) == 1, "offline fixture JS status assignment changed"
-          Path("$RUNNER_TEMP/fire4nix-web-root/cookie-check.html").write_text(source.replace(old, new))
+          Path(os.environ["COOKIE_FIXTURE_OUT"]).write_text(source.replace(old, new))
           PY
           cat > "$RUNNER_TEMP/fire4nix-web-root/nav-start.html" <<'EOF'
           <!doctype html><html><head><meta charset="utf-8"><title>Fire4Nix Nav Start</title></head>
