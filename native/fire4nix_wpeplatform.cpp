@@ -45,6 +45,7 @@ struct App {
     unsigned navigationReloads = 0;
     bool verifyForm = false;
     unsigned formPhase = 0;
+    bool verifyStorage = false;
     bool loaded = false;
     bool failed = false;
     int exitCode = 0;
@@ -435,6 +436,48 @@ static void startFormSetupEvaluation(App* app) {
                             nullptr, formSetupEvaluationFinished, app);
 }
 
+static void persistentStorageEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    gchar* report = (!error && value && app->jscValueToString) ?
+        app->jscValueToString(value) : nullptr;
+    if (error || !report || strcmp(report, "LOCAL_OK|EMPTY") != 0) {
+        g_printerr("[FIRE4NIX-STORAGE] process_restart_result=%s error=%s status=FAIL\n",
+                   report ? report : "(null)", error ? error->message : "none");
+        if (error) g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else {
+        g_printerr("[FIRE4NIX-STORAGE] local_storage_after_process_restart=PASS\n");
+        g_printerr("[FIRE4NIX-STORAGE] session_storage_new_context=EMPTY_AS_EXPECTED\n");
+        g_printerr("[FIRE4NIX-STORAGE] persistent_profile=PASS\n");
+        app->exitCode = 0;
+    }
+    g_free(report);
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->loop) g_main_loop_quit(app->loop);
+}
+
+static void startPersistentStorageEvaluation(App* app) {
+    static const char script[] =
+        "(() => { const local=localStorage.getItem('fire4nix-form-local')||'MISSING';"
+        " const session=sessionStorage.getItem('fire4nix-form-session')||'EMPTY';"
+        " return local+'|'+session; })()";
+    if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+        !app->jscValueToString || !app->jscValueUnref) {
+        stage("persistent storage verification API unavailable");
+        app->exitCode = 78;
+        app->failed = true;
+        if (app->loop) g_main_loop_quit(app->loop);
+        return;
+    }
+    stage("checking persistent localStorage and isolated sessionStorage in a new process");
+    app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                            nullptr, persistentStorageEvaluationFinished, app);
+}
+
 static void loadChanged(GObject*, int event, gpointer data) {
     App* app = static_cast<App*>(data);
     const char* url = app->getUri ? app->getUri(app->view) : nullptr;
@@ -442,6 +485,10 @@ static void loadChanged(GObject*, int event, gpointer data) {
     // WebKitLoadEvent: STARTED=0, REDIRECTED=1, COMMITTED=2, FINISHED=3.
     if (event == 3) {
         app->loaded = true;
+        if (app->verifyStorage) {
+            startPersistentStorageEvaluation(app);
+            return;
+        }
         if (app->verifyForm) {
             if (app->formPhase == 0)
                 startFormSetupEvaluation(app);
@@ -615,7 +662,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 1.04: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-navigation|--verify-form] [URL]");
+        puts("Fire4Nix native WPEPlatform 1.05: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-navigation|--verify-form|--verify-storage] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -632,19 +679,21 @@ int main(int argc, char** argv) {
     const bool verifyOffline = argc > 1 && !strcmp(argv[1], "--verify-offline");
     const bool verifyNavigation = argc > 1 && !strcmp(argv[1], "--verify-navigation");
     const bool verifyForm = argc > 1 && !strcmp(argv[1], "--verify-form");
+    const bool verifyStorage = argc > 1 && !strcmp(argv[1], "--verify-storage");
     const char* url = "about:blank";
     for (int i=1; i<argc; ++i) {
         if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") &&
             strcmp(argv[i],"--smoke") && strcmp(argv[i],"--verify-offline") &&
             strcmp(argv[i],"--verify-navigation") && strcmp(argv[i],"--verify-form") &&
-            argv[i][0] != '-') { url=argv[i]; break; }
+            strcmp(argv[i],"--verify-storage") && argv[i][0] != '-') { url=argv[i]; break; }
     }
     stage("dlopen libWPEWebKit-2.0.so.1");
     App app;
-    app.smoke = smoke || verifyOffline || verifyNavigation || verifyForm;
+    app.smoke = smoke || verifyOffline || verifyNavigation || verifyForm || verifyStorage;
     app.verifyOffline = verifyOffline;
     app.verifyNavigation = verifyNavigation;
     app.verifyForm = verifyForm;
+    app.verifyStorage = verifyStorage;
     app.initialUrl = url;
     app.webkit = dlopen("libWPEWebKit-2.0.so.1", RTLD_NOW | RTLD_GLOBAL);
     if (!app.webkit) {
