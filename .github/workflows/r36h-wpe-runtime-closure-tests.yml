@@ -5,6 +5,9 @@ on:
     paths:
       - 'scripts/audit-wpe-runtime-closure.py'
       - 'scripts/bundle-rocknix-wpe-sdk-deps.py'
+      - 'scripts/sanitize-rocknix-build-rpath.py'
+      - 'scripts/prepare-rocknix-private-closure-sdk.py'
+      - 'native/tests/test_wpe_unified_gcc15_libatomic_fourcc_contract.py'
       - 'scripts/prepare-unified-rocknix-wpe2541.sh'
       - 'scripts/build-wpe2541-subprocesses-rocknix.sh'
       - 'native/tests/test_wpe_runtime_elf_closure.py'
@@ -43,6 +46,9 @@ jobs:
           bash -n scripts/prepare-unified-rocknix-wpe2541.sh
           grep -Fq 'WPE_ROCKNIX_LIBATOMIC16=PASS_PINNED_GCC_TARGET_LIB64' scripts/prepare-unified-rocknix-wpe2541.sh
           python3 -m py_compile scripts/bundle-rocknix-wpe-sdk-deps.py
+          python3 -m py_compile scripts/sanitize-rocknix-build-rpath.py
+          python3 -m py_compile scripts/prepare-rocknix-private-closure-sdk.py
+          python3 native/tests/test_wpe_unified_gcc15_libatomic_fourcc_contract.py
           python3 scripts/bundle-rocknix-wpe-sdk-deps.py --help > /dev/null
           python3 -m py_compile native/tests/test_wpe_runtime_elf_closure.py
           python3 native/tests/test_wpe_runtime_elf_closure.py
