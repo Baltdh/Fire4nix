@@ -241,13 +241,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/wpe-outer" "$RUNNER_TEMP/wpe-source"
-          mkdir -p "$RUNNER_TEMP/native-outer" "$RUNNER_TEMP/native-source"
+          mkdir -p "$RUNNER_TEMP/wpe-source" "$RUNNER_TEMP/native-source"
+          # download-artifact already expands its own transport archive.
+          # Each directory therefore contains the inner ZIP we intentionally uploaded.
           (cd "$RUNNER_TEMP/wpe-artifact" && sha256sum -c SHA256SUMS.txt)
-          unzip -q "$RUNNER_TEMP/wpe-artifact/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-outer"
-          unzip -q "$RUNNER_TEMP/wpe-outer/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-source"
-          unzip -q "$RUNNER_TEMP/native-artifact/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-outer"
-          unzip -q "$RUNNER_TEMP/native-outer/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-source"
+          unzip -q "$RUNNER_TEMP/wpe-artifact/Fire4Nix-R36H-Mali-EGL-Experimental.zip" -d "$RUNNER_TEMP/wpe-source"
+          unzip -q "$RUNNER_TEMP/native-artifact/Fire4Nix-0.86-R36H-ARM64-Native-Test.zip" -d "$RUNNER_TEMP/native-source"
           (cd "$RUNNER_TEMP/native-source" && sha256sum -c SHA256SUMS.txt)
           runtime="$RUNNER_TEMP/wpe-source/Fire4Nix/runtime"
           native="$RUNNER_TEMP/native-source/fire4nix-native-086-aarch64"
