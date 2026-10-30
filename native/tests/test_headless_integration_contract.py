@@ -62,7 +62,9 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "2.54.2",
             "WPE_PLATFORM=headless",
             "--verify-offline",
-            "WPE_HEADLESS_OFFLINE=PASS",
+            "WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK",
+            "WPE_FILE_URI=PASS",
+            "data:text/html;base64,",
         ):
             self.assertIn(token, workflow)
         self.assertNotIn("mock_wpewebkit.cpp", workflow)
