@@ -52,7 +52,7 @@ jobs:
           echo "WPE_FILE_FIXTURE_MIME=$mime_type"
           test "$mime_type" = "text/html"
           dpkg-query -W -f='${Status}' glib-networking | grep -Fq 'install ok installed'
-          gio modules --help >/dev/null 2>&1 || true
+          test -s /usr/lib/aarch64-linux-gnu/gio/modules/libgiognutls.so
           echo 'WPE_HEADLESS_TLS_BACKEND=GLIB_NETWORKING_INSTALLED'
           echo 'WPE_HEADLESS_MIME_DATABASE=SHARED_MIME_INFO_PRESENT'
           echo 'WPE_HEADLESS_TEST_ENGINE=REAL_DEBIAN_ARM64_PACKAGE_2.54.2'
