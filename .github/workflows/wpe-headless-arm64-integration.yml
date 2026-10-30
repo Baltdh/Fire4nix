@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates build-essential pkg-config python3 file \
+            ca-certificates build-essential pkg-config python3 file openssl \
             libglib2.0-dev libglib2.0-bin shared-mime-info \
             libwpewebkit-2.0-dev
           version="$(dpkg-query -W -f='${Version}' libwpewebkit-2.0-1)"
@@ -138,6 +138,124 @@ jobs:
           grep -Fq '[FIRE4NIX-VERIFY] computed_css=PASS' logs/wpe-headless-data-url.log
           grep -Fq '[FIRE4NIX-VERIFY] button_event=PASS' logs/wpe-headless-data-url.log
           echo 'WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK' | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # Controlled localhost servers isolate WebKit networking and TLS from
+          # public DNS, remote availability and third-party certificate changes.
+          mkdir -p "$RUNNER_TEMP/fire4nix-web-root"
+          cp installer/www/primeiro-teste.html "$RUNNER_TEMP/fire4nix-web-root/index.html"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+            -keyout "$RUNNER_TEMP/fire4nix-test-ca.key" \
+            -out "$RUNNER_TEMP/fire4nix-test-ca.crt" \
+            -subj "/CN=Fire4Nix Local Test CA" \
+            -addext "basicConstraints=critical,CA:TRUE" \
+            -addext "keyUsage=critical,keyCertSign,cRLSign"
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "$RUNNER_TEMP/fire4nix-localhost.key" \
+            -out "$RUNNER_TEMP/fire4nix-localhost.csr" \
+            -subj "/CN=localhost"
+          cat > "$RUNNER_TEMP/fire4nix-server.ext" <<'EOF'
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature,keyEncipherment
+          extendedKeyUsage=serverAuth
+          subjectAltName=DNS:localhost,IP:127.0.0.1
+          EOF
+          openssl x509 -req -in "$RUNNER_TEMP/fire4nix-localhost.csr" \
+            -CA "$RUNNER_TEMP/fire4nix-test-ca.crt" \
+            -CAkey "$RUNNER_TEMP/fire4nix-test-ca.key" -CAcreateserial \
+            -out "$RUNNER_TEMP/fire4nix-localhost.crt" -days 2 -sha256 \
+            -extfile "$RUNNER_TEMP/fire4nix-server.ext"
+          install -m 0644 "$RUNNER_TEMP/fire4nix-test-ca.crt" \
+            /usr/local/share/ca-certificates/fire4nix-local-test-ca.crt
+          update-ca-certificates
+          cat > "$RUNNER_TEMP/fire4nix-local-servers.py" <<'PY'
+          import functools
+          import http.server
+          import os
+          import ssl
+          import sys
+          import threading
+
+          root, cert, key = sys.argv[1:4]
+          class Handler(http.server.SimpleHTTPRequestHandler):
+              def __init__(self, *args, **kwargs):
+                  super().__init__(*args, directory=root, **kwargs)
+              def guess_type(self, path):
+                  if path.lower().endswith(".html"):
+                      return "text/html"
+                  return super().guess_type(path)
+              def log_message(self, fmt, *args):
+                  print("LOCAL_SERVER " + (fmt % args), flush=True)
+
+          def serve(port, tls=False):
+              server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+              if tls:
+                  context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                  context.load_cert_chain(cert, key)
+                  server.socket = context.wrap_socket(server.socket, server_side=True)
+              print(f"LOCAL_SERVER_READY port={port} tls={tls}", flush=True)
+              server.serve_forever()
+
+          threads = [
+              threading.Thread(target=serve, args=(18765, False), daemon=True),
+              threading.Thread(target=serve, args=(18766, True), daemon=True),
+          ]
+          for thread in threads:
+              thread.start()
+          for thread in threads:
+              thread.join()
+          PY
+          python3 "$RUNNER_TEMP/fire4nix-local-servers.py" \
+            "$RUNNER_TEMP/fire4nix-web-root" \
+            "$RUNNER_TEMP/fire4nix-localhost.crt" \
+            "$RUNNER_TEMP/fire4nix-localhost.key" > logs/local-servers.log 2>&1 &
+          server_pid=$!
+          cleanup_servers() { kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; }
+          trap cleanup_servers EXIT
+          python3 - <<'PY'
+          import socket, time
+          for port in (18765, 18766):
+              for attempt in range(80):
+                  try:
+                      with socket.create_connection(("127.0.0.1", port), timeout=1):
+                          break
+                  except OSError:
+                      if attempt == 79:
+                          raise
+                      time.sleep(0.25)
+          print("WPE_LOCAL_SERVERS=READY_HTTP_AND_HTTPS")
+          PY
+
+          run_network_fixture() {
+            label="$1"
+            url="$2"
+            rc=0
+            env -u WPE_DISPLAY \
+              WPE_PLATFORM=headless \
+              WEBKIT_EXEC_PATH="$webkit_exec_path" \
+              WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+              FIRE4NIX_LOW_MEMORY=1 \
+              HOME="$RUNNER_TEMP/fire4nix-home" \
+              XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+              timeout --signal=TERM --kill-after=10s 100s \
+              build/headless/fire4nix-native-headless --verify-offline "$url" \
+              > "logs/wpe-headless-$label.log" 2>&1 || rc=$?
+            cat "logs/wpe-headless-$label.log"
+            if [ "$rc" -ne 0 ]; then
+              echo "WPE_$label=FAIL_EXIT_$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+              return "$rc"
+            fi
+            for marker in offline_dom inline_javascript computed_css button_event; do
+              grep -Fq "[FIRE4NIX-VERIFY] $marker=PASS" "logs/wpe-headless-$label.log" || {
+                echo "WPE_$label=FAIL_MISSING_$marker" | tee -a "$GITHUB_STEP_SUMMARY"
+                return 32
+              }
+            done
+            echo "WPE_$label=PASS_REAL_WPE_NETWORK_DOM_JS_CSS_CLICK" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+
+          run_network_fixture HTTP "http://127.0.0.1:18765/index.html"
+          run_network_fixture HTTPS "https://localhost:18766/index.html"
+          cat logs/local-servers.log
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
 
