@@ -63,6 +63,23 @@ class HeadlessIntegrationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_native_form_submission_and_storage_verification(self):
+        source = SOURCE.read_text()
+        for token in (
+            "--verify-form",
+            "startFormSetupEvaluation",
+            "startFormSubmission",
+            "form.requestSubmit()",
+            "application/x-www-form-urlencoded POST",
+            "startFormResultEvaluation",
+            "localStorage.setItem('fire4nix-form-local','LOCAL_OK')",
+            "sessionStorage.setItem('fire4nix-form-session','SESSION_OK')",
+            "storage_after_reload=PASS",
+            "form_and_storage=PASS",
+            "Fire4Nix Form Result|FORM_POST_OK|FORM_RESULT_JS_OK|LOCAL_OK|SESSION_OK",
+        ):
+            self.assertIn(token, source)
+
     def test_page_is_a_self_contained_offline_fixture(self):
         page = PAGE.read_text()
         for token in (
@@ -91,6 +108,15 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "WPE_HEADLESS_MIME_DATABASE=SHARED_MIME_INFO_PRESENT",
             "run_network_fixture HTTP",
             "run_network_fixture HTTPS",
+            "--verify-form",
+            "form-page.html",
+            "form-result.html",
+            "def do_POST(self)",
+            "LOCAL_SERVER_POST path=/submit-form",
+            "FIRE4NIX_POST_OK",
+            "FIRE4NIX_FIELD",
+            "WPE_FORM_STORAGE=PASS_REAL_POST_LOCAL_AND_SESSION_STORAGE_RELOAD",
+            "storage_after_reload=PASS",
             "Set-Cookie",
             "cookie-check.html",
             "/set-cookie",
