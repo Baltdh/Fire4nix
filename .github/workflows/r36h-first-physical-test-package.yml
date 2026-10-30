@@ -197,7 +197,7 @@ jobs:
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
-          cp "$RUNNER_TEMP/wpe-outer/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
+          cp "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
           cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<'EOF'
           FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
           WPE_RUNTIME_VERSION=2.54.1
