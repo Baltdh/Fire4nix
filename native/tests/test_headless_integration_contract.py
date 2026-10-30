@@ -16,7 +16,7 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "--verify-offline",
             "webkit_web_view_evaluate_javascript",
             "webkit_web_view_evaluate_javascript_finish",
-            "jsc_value_to_boolean",
+            "jsc_value_to_string",
             "app.jscValueUnref = &g_object_unref",
             "there is no jsc_value_unref() API",
             "offlineEvaluationFinished",
@@ -24,7 +24,11 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "rgb(16, 24, 39)",
             "document.querySelectorAll('.swatch').length === 3",
             "button.click()",
-            "count.textContent.trim() === 'Cliques: 1'",
+            "click_count=" + (count ? count.textContent.trim() : 'MISSING')",
+            "title=PASS",
+            "inline_js=PASS",
+            "background=rgb(16, 24, 39)",
+            "click_count=Cliques: 1",
             "app->exitCode = 4",
         ):
             self.assertIn(token, source)
