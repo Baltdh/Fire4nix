@@ -43,6 +43,8 @@ struct App {
     bool verifyNavigation = false;
     unsigned navigationPhase = 0;
     unsigned navigationReloads = 0;
+    bool verifyForm = false;
+    unsigned formPhase = 0;
     bool loaded = false;
     bool failed = false;
     int exitCode = 0;
@@ -273,6 +275,166 @@ static void startNavigationEvaluation(App* app) {
                             nullptr, navigationEvaluationFinished, app);
 }
 
+static void formResultEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    gchar* report = (!error && value && app->jscValueToString) ?
+        app->jscValueToString(value) : nullptr;
+    const char* expected =
+        "Fire4Nix Form Result|FORM_POST_OK|FORM_RESULT_JS_OK|LOCAL_OK|SESSION_OK";
+    if (error || !report || strcmp(report, expected) != 0) {
+        g_printerr("[FIRE4NIX-FORM] phase=%u result=%s error=%s status=FAIL\n",
+                   app->formPhase, report ? report : "(null)",
+                   error ? error->message : "none");
+        if (error) g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else if (app->formPhase == 2) {
+        g_printerr("[FIRE4NIX-FORM] form_post=PASS\n");
+        g_printerr("[FIRE4NIX-FORM] local_storage=PASS\n");
+        g_printerr("[FIRE4NIX-FORM] session_storage=PASS\n");
+        app->formPhase = 3;
+        app->loaded = false;
+        if (!app->reload) {
+            stage("form verification could not find WebKit reload API");
+            app->exitCode = 78;
+            app->failed = true;
+        } else {
+            stage("form verification: reloading POST result to verify storage");
+            app->reload(app->view);
+        }
+    } else if (app->formPhase == 3) {
+        g_printerr("[FIRE4NIX-FORM] storage_after_reload=PASS\n");
+        g_printerr("[FIRE4NIX-FORM] form_and_storage=PASS\n");
+        app->formPhase = 4;
+        app->exitCode = 0;
+    } else {
+        g_printerr("[FIRE4NIX-FORM] unexpected phase=%u\n", app->formPhase);
+        app->exitCode = 4;
+        app->failed = true;
+    }
+    g_free(report);
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->failed || app->formPhase == 4) {
+        if (app->loop) g_main_loop_quit(app->loop);
+    }
+}
+
+static void startFormResultEvaluation(App* app) {
+    static const char script[] =
+        "(() => { const result=document.querySelector('#server-result');"
+        " const state=document.querySelector('#js-state');"
+        " return [document.title,"
+        " result?result.textContent.trim():'MISSING',"
+        " state?state.textContent.trim():'MISSING',"
+        " localStorage.getItem('fire4nix-form-local')||'MISSING',"
+        " sessionStorage.getItem('fire4nix-form-session')||'MISSING'].join('|'); })()";
+    if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+        !app->jscValueToString || !app->jscValueUnref) {
+        stage("form result verification API unavailable");
+        app->exitCode = 78;
+        app->failed = true;
+        if (app->loop) g_main_loop_quit(app->loop);
+        return;
+    }
+    stage("evaluating submitted form result and browser storage");
+    app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                            nullptr, formResultEvaluationFinished, app);
+}
+
+static void formSubmitEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    gchar* report = (!error && value && app->jscValueToString) ?
+        app->jscValueToString(value) : nullptr;
+    if (error || !report || strcmp(report, "FORM_SUBMIT_STARTED") != 0) {
+        g_printerr("[FIRE4NIX-FORM] submit_result=%s error=%s status=FAIL\n",
+                   report ? report : "(null)", error ? error->message : "none");
+        if (error) g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else {
+        g_printerr("[FIRE4NIX-FORM] submission=STARTED\n");
+    }
+    g_free(report);
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->failed && app->loop) g_main_loop_quit(app->loop);
+}
+
+static void startFormSubmission(App* app) {
+    static const char script[] =
+        "(() => { const form=document.querySelector('#post-form');"
+        " const field=document.querySelector('#payload');"
+        " if (!form || !field) return 'FORM_MISSING';"
+        " localStorage.setItem('fire4nix-form-local','LOCAL_OK');"
+        " sessionStorage.setItem('fire4nix-form-session','SESSION_OK');"
+        " field.value='FIRE4NIX_FIELD';"
+        " form.requestSubmit();"
+        " return 'FORM_SUBMIT_STARTED'; })()";
+    if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+        !app->jscValueToString || !app->jscValueUnref) {
+        stage("form submission API unavailable");
+        app->exitCode = 78;
+        app->failed = true;
+        if (app->loop) g_main_loop_quit(app->loop);
+        return;
+    }
+    // Set the phase before requesting submission because load-changed may be
+    // emitted as soon as WebKit begins committing the POST response.
+    app->formPhase = 2;
+    app->loaded = false;
+    stage("submitting a real HTML form with application/x-www-form-urlencoded POST");
+    app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                            nullptr, formSubmitEvaluationFinished, app);
+}
+
+static void formSetupEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    gchar* report = (!error && value && app->jscValueToString) ?
+        app->jscValueToString(value) : nullptr;
+    if (error || !report || strcmp(report, "Fire4Nix Form Page|FORM_PAGE_JS_OK|true|true") != 0) {
+        g_printerr("[FIRE4NIX-FORM] setup_result=%s error=%s status=FAIL\n",
+                   report ? report : "(null)", error ? error->message : "none");
+        if (error) g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else {
+        g_printerr("[FIRE4NIX-FORM] form_page=PASS\n");
+        startFormSubmission(app);
+    }
+    g_free(report);
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->failed && app->loop) g_main_loop_quit(app->loop);
+}
+
+static void startFormSetupEvaluation(App* app) {
+    static const char script[] =
+        "(() => { const form=document.querySelector('#post-form');"
+        " const field=document.querySelector('#payload');"
+        " const status=document.querySelector('#form-state');"
+        " return [document.title,"
+        " status?status.textContent.trim():'MISSING',"
+        " !!form,!!field].join('|'); })()";
+    if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+        !app->jscValueToString || !app->jscValueUnref) {
+        stage("form setup verification API unavailable");
+        app->exitCode = 78;
+        app->failed = true;
+        if (app->loop) g_main_loop_quit(app->loop);
+        return;
+    }
+    stage("checking real HTML form before submission");
+    app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                            nullptr, formSetupEvaluationFinished, app);
+}
+
 static void loadChanged(GObject*, int event, gpointer data) {
     App* app = static_cast<App*>(data);
     const char* url = app->getUri ? app->getUri(app->view) : nullptr;
@@ -280,6 +442,13 @@ static void loadChanged(GObject*, int event, gpointer data) {
     // WebKitLoadEvent: STARTED=0, REDIRECTED=1, COMMITTED=2, FINISHED=3.
     if (event == 3) {
         app->loaded = true;
+        if (app->verifyForm) {
+            if (app->formPhase == 0)
+                startFormSetupEvaluation(app);
+            else if (app->formPhase == 2 || app->formPhase == 3)
+                startFormResultEvaluation(app);
+            return;
+        }
         if (app->verifyNavigation) {
             startNavigationEvaluation(app);
             return;
@@ -446,7 +615,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 1.03: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-navigation] [URL]");
+        puts("Fire4Nix native WPEPlatform 1.04: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-navigation|--verify-form] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -462,17 +631,20 @@ int main(int argc, char** argv) {
     const bool smoke = argc > 1 && !strcmp(argv[1], "--smoke");
     const bool verifyOffline = argc > 1 && !strcmp(argv[1], "--verify-offline");
     const bool verifyNavigation = argc > 1 && !strcmp(argv[1], "--verify-navigation");
+    const bool verifyForm = argc > 1 && !strcmp(argv[1], "--verify-form");
     const char* url = "about:blank";
     for (int i=1; i<argc; ++i) {
         if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") &&
             strcmp(argv[i],"--smoke") && strcmp(argv[i],"--verify-offline") &&
-            strcmp(argv[i],"--verify-navigation") && argv[i][0] != '-') { url=argv[i]; break; }
+            strcmp(argv[i],"--verify-navigation") && strcmp(argv[i],"--verify-form") &&
+            argv[i][0] != '-') { url=argv[i]; break; }
     }
     stage("dlopen libWPEWebKit-2.0.so.1");
     App app;
-    app.smoke = smoke || verifyOffline || verifyNavigation;
+    app.smoke = smoke || verifyOffline || verifyNavigation || verifyForm;
     app.verifyOffline = verifyOffline;
     app.verifyNavigation = verifyNavigation;
+    app.verifyForm = verifyForm;
     app.initialUrl = url;
     app.webkit = dlopen("libWPEWebKit-2.0.so.1", RTLD_NOW | RTLD_GLOBAL);
     if (!app.webkit) {
