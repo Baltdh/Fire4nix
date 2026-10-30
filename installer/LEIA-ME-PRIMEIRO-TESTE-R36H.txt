@@ -1,0 +1,65 @@
+FIRE4NIX R36H — PRIMEIRO TESTE FÍSICO
+=========================================
+
+PACOTE EXPERIMENTAL PARA ROCKNIX / R36H
+Este pacote combina o runtime WPE 2.54.1 compilado com SDK ROCKNIX e o
+launcher nativo Fire4Nix 1.05 ARM64. O WPE 2.54.2 foi usado separadamente
+na validação headless de integração contínua; ele NÃO foi copiado para cá.
+
+O que este pacote verifica:
+1. ELF ARM64 e selftest do launcher.
+2. Carregamento da biblioteca WPE privada.
+3. Presença das APIs WPEPlatform exigidas pelo launcher.
+4. Carregamento real da página HTML offline.
+5. DOM, JavaScript, CSS computado e evento de clique.
+6. Abertura interativa para confirmação manual da imagem na tela 640x480.
+
+INSTALAÇÃO NÃO DESTRUTIVA
+1. Extraia o conteúdo completo deste ZIP em uma pasta nova dentro de:
+   roms/ports/Fire4Nix-R36H-Primeiro-Teste-20261030
+2. Não misture com a pasta de uma instalação anterior.
+3. Não copie bibliotecas para /usr e não substitua arquivos do ROCKNIX.
+
+PRIMEIRO: TESTE DE MOTOR
+Abra o terminal do ROCKNIX dentro da sessão gráfica e execute:
+   cd /storage/games-internal/roms/ports/Fire4Nix-R36H-Primeiro-Teste-20261030
+   sh Fire4Nix-Primeiro-Teste-R36.sh --preflight
+
+O teste exige:
+- arquitetura aarch64;
+- libWPEWebKit-2.0.so.1 e subprocessos presentes;
+- API WPEPlatform disponível;
+- sessão Wayland ativa para o teste HTML;
+- página offline validada por JavaScript/DOM/CSS.
+
+DEPOIS: PRIMEIRO TESTE VISUAL
+Se o pré-teste terminar com ENGINE_FUNCTIONAL_TEST=PASS:
+   sh Fire4Nix-Primeiro-Teste-R36.sh --open
+
+A página Fire4Nix deverá abrir e permanecer na tela:
+- três blocos coloridos;
+- status "JS OK";
+- botão "Testar botão" atualizando o contador de cliques.
+
+Saia pelo atalho Ctrl+Q. Não conclua que houve sucesso visual apenas pelo
+código de saída: confirme os blocos coloridos e o texto na tela.
+
+RELATÓRIOS
+- /storage/Fire4Nix-Teste-Primeiro/Primeiro-Teste-R36H-ULTIMO.txt
+- /storage/Fire4Nix-ultimo-resultado.txt
+- logs detalhados adicionais na pasta Fire4Nix/logs.
+
+LIMITES CONHECIDOS
+- O pacote e a estrutura SD foram verificados; o R36H físico ainda não foi
+  executado nesta revisão.
+- EGL/Mali/Wayland real, primeiro frame e estabilidade prolongada continuam
+  pendentes até o teste no console.
+- O relatório do runtime informa fechamento estático de dependências com
+  SDK ROCKNIX; isso não equivale a prova de ABI de cada biblioteca do rootfs.
+- O teste headless ARM64 não prova o framebuffer nem o driver Mali do R36H.
+- O pacote não instala/atualiza firmware, kernel, DTB, drivers ou /usr.
+
+ROLLBACK
+Feche o navegador e remova somente a pasta nova
+Fire4Nix-R36H-Primeiro-Teste-20261030 de roms/ports.
+O pacote não sobrescreve a instalação anterior.
