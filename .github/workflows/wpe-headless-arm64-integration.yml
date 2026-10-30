@@ -98,6 +98,7 @@ jobs:
           grep -Fq '[FIRE4NIX-VERIFY] offline_dom=PASS' logs/wpe-headless-offline.log
           grep -Fq '[FIRE4NIX-VERIFY] inline_javascript=PASS' logs/wpe-headless-offline.log
           grep -Fq '[FIRE4NIX-VERIFY] computed_css=PASS' logs/wpe-headless-offline.log
+          grep -Fq '[FIRE4NIX-VERIFY] button_event=PASS' logs/wpe-headless-offline.log
           echo 'WPE_HEADLESS_OFFLINE=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
