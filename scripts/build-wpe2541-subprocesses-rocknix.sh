@@ -196,11 +196,40 @@ test -s "$runtime/lib/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so"
 # Resolve stage-only SONAMEs into a SECOND private runtime. Never copy
 # source-tree or Ubuntu host libraries into a release candidate. Every copied
 # AArch64 library is checked for ABI, SONAME, GLIBC, textrels and CI RPATH.
+# The immutable stage-1 SDK contains two known CI-only RUNPATHs and omits
+# GCC's shared support runtime from the merged /usr/lib tree. Build a private,
+# disposable closure stage: strip only the six exact approved RUNPATH copies,
+# then add the pinned ROCKNIX target libgcc_s. The original stage stays intact.
+stage="$root/stage1-artifact/stage1-combined"
+overlay="$work/private-rpath-overlay"
+private_sdk="$work/private-closure-sdk"
+python3 "$repo_root/scripts/sanitize-rocknix-build-rpath.py" \
+  --stage "$stage" --output "$overlay" \
+  > "$report/wpe-sdk-rpath-overlay.log" 2>&1 || {
+    echo 'WPE_PRIVATE_SDK_RPATH_OVERLAY=BLOCKED' | tee -a "$result"
+    tail -n 80 "$report/wpe-sdk-rpath-overlay.log"
+    exit 14
+  }
+grep -Fxq 'CI_RPATH_OVERLAY=PASS_STATIC_ABI_METADATA' "$report/wpe-sdk-rpath-overlay.log"
+python3 "$repo_root/scripts/prepare-rocknix-private-closure-sdk.py" \
+  --stage "$stage" \
+  --overlay "$overlay" \
+  --support "$sdk/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1" \
+  --out "$private_sdk" \
+  > "$report/wpe-private-closure-sdk.log" 2>&1 || {
+    echo 'WPE_PRIVATE_SDK_CLOSURE_STAGE=BLOCKED' | tee -a "$result"
+    tail -n 80 "$report/wpe-private-closure-sdk.log"
+    exit 14
+  }
+grep -Fxq 'ROCKNIX_PRIVATE_ELF_OVERLAY=PASS_6_RUNPATH_CLEAN_LIBRARIES' "$report/wpe-private-closure-sdk.log"
+grep -Fxq 'ROCKNIX_TARGET_LIBGCC=PASS_ELF64_AARCH64_GLIBC_MAX_2_41' "$report/wpe-private-closure-sdk.log"
+echo 'WPE_PRIVATE_SDK_CLOSURE_STAGE=PASS_RPATH_CLEAN_PLUS_TARGET_LIBGCC' | tee -a "$result"
+
 closed_runtime="$work/private-wpe-runtime-sdk-closed"
 python3 "$repo_root/scripts/bundle-rocknix-wpe-sdk-deps.py" \
   --runtime "$runtime" \
   --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
-  --sdk-stage "$root/stage1-artifact/stage1-combined" \
+  --sdk-stage "$private_sdk" \
   --target-toolchain "$sdk" \
   --output "$closed_runtime" \
   > "$report/wpe-sdk-dependency-bundle.log" 2>&1 || {
@@ -222,44 +251,7 @@ closure="$report/wpe-runtime-closure.txt"
 python3 "$repo_root/scripts/audit-wpe-runtime-closure.py" \
   --runtime "$runtime" \
   --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
-  --sdk-stage "$root/stage1-artifact/stage1-combined" \
-  --report "$closure" --strict \
-  > "$report/wpe-runtime-closure.log" 2>&1 || {
-    echo 'WPE_PRIVATE_RUNTIME_CLOSURE=BLOCKED' | tee -a "$result"
-    tail -n 90 "$report/wpe-runtime-closure.log"
-    exit 14
-  }
-grep -Fxq 'WPE_RUNTIME_CLOSURE=SDK_STATIC_CANDIDATES_ONLY' "$closure" || exit 14
-# Stage-1 SDK overlay libraries are not automatically shipped or provided by
-# the R36H. Do not misreport a dependency found only there as runtime-ready.
-if ! grep -Fxq 'WPE_STAGE_ONLY_DEPENDENCIES_COUNT=0' "$closure"; then
-  echo 'WPE_PRIVATE_RUNTIME_CLOSURE=STAGE_ONLY_DEPS_NOT_PACKAGED' | tee -a "$result"
-  grep '^WPE_STAGE_ONLY_DEPENDENCIES=' "$closure" | head -n 40 || true
-  exit 14
-fi
-echo 'WPE_PRIVATE_RUNTIME_CLOSURE=PASS_SDK_STATIC_SONAMES_NOT_DEVICE_ABI' | tee -a "$result"
-{
-  echo 'WPE_SUBPROCESS_BUILD=PASS_REAL_AARCH64'
-  echo 'WPE_PRIVATE_RUNTIME_STAGE=PASS_STATIC_GATES'
-  echo 'WPE_TRANSITIVE_ABI_PROVEN=no'
-  echo 'WPE_GRAPHICAL_RUNTIME_TESTED=no'
-  echo 'TARGET_EXECUTED=no'
-  echo 'R36H_INSTALLABLE=no'
-} | tee -a "$result"
-cat "$result" >> "$GITHUB_STEP_SUMMARY"
- "$closed_runtime/SDK-BUNDLE-REPORT.txt" >/dev/null
-echo 'WPE_PRIVATE_RUNTIME_SDK_DEPENDENCIES=BUNDLED_AND_STATIC_AUDITED' | tee -a "$result"
-runtime="$closed_runtime"
-(cd "$runtime" && sha256sum -c SHA256SUMS.txt)
-
-# A correct AArch64 library may still depend on libraries available only in
-# the temporary compilation SDK overlay, not on the physical console.
-# Classify the complete reachable NEEDED graph before declaring staging done.
-closure="$report/wpe-runtime-closure.txt"
-python3 "$repo_root/scripts/audit-wpe-runtime-closure.py" \
-  --runtime "$runtime" \
-  --sysroot "$sdk/aarch64-rocknix-linux-gnu/sysroot" \
-  --sdk-stage "$root/stage1-artifact/stage1-combined" \
+  --sdk-stage "$private_sdk" \
   --report "$closure" --strict \
   > "$report/wpe-runtime-closure.log" 2>&1 || {
     echo 'WPE_PRIVATE_RUNTIME_CLOSURE=BLOCKED' | tee -a "$result"
