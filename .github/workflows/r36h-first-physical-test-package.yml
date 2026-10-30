@@ -202,11 +202,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p delivery
-          zip -9 -qr delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip "$RUNNER_TEMP/package"
+          package_name=Fire4Nix-R36H-Primeiro-Teste-20261030
+          mv "$RUNNER_TEMP/package" "$RUNNER_TEMP/$package_name"
+          (cd "$RUNNER_TEMP" && zip -9 -qr "$GITHUB_WORKSPACE/delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip" "$package_name")
           unzip -t delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip | tail -1
           sha256sum delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip > delivery/SHA256SUMS.txt
-          cp "$RUNNER_TEMP/package/STATUS-PRIMEIRO-TESTE.txt" delivery/
+          cp "$RUNNER_TEMP/$package_name/STATUS-PRIMEIRO-TESTE.txt" delivery/
           du -h delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip
+          unzip -l delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip | head -15
           cat delivery/STATUS-PRIMEIRO-TESTE.txt >> "$GITHUB_STEP_SUMMARY"
           echo 'PACKAGE_ZIP=PASS' >> "$GITHUB_STEP_SUMMARY"
 
