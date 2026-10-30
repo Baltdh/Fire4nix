@@ -350,9 +350,9 @@ int main(int argc, char** argv) {
     app.jscValueToBoolean = symbol<JSCValueToBoolean>(RTLD_DEFAULT, "jsc_value_to_boolean");
     if (!app.jscValueToBoolean)
         app.jscValueToBoolean = symbol<JSCValueToBoolean>(app.webkit, "jsc_value_to_boolean");
-    app.jscValueUnref = symbol<JSCValueUnref>(RTLD_DEFAULT, "jsc_value_unref");
-    if (!app.jscValueUnref)
-        app.jscValueUnref = symbol<JSCValueUnref>(app.webkit, "jsc_value_unref");
+    // JSCValue derives from GObject. Its transfer-full result must be
+    // released with g_object_unref(); there is no jsc_value_unref() API.
+    app.jscValueUnref = &g_object_unref;
     stage("WPE core symbol probes begin");
     auto webViewType = symbol<GetType>(app.webkit, "webkit_web_view_get_type");
     auto getWPEView = symbol<GetWPEView>(app.webkit, "webkit_web_view_get_wpe_view");
