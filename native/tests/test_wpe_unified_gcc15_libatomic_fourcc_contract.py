@@ -13,6 +13,7 @@ CONFIG=ROOT/"scripts/prepare-unified-rocknix-wpe2541.sh"
 BUILD=ROOT/"scripts/build-wpe2541-subprocesses-rocknix.sh"
 RUNTIME=ROOT/"scripts/bundle-rocknix-wpe-sdk-deps.py"
 WF=ROOT/".github/workflows/r36h-wpe2541-processes-real-rk3326.yml"
+BUILD_WF=ROOT/".github/workflows/r36h-wpe2541-unified-gcc15-real-oneshot.yml"
 PATCH=ROOT/"scripts/patch-wpe2541-drm-fourcc.py"
 
 class WPEUnifiedProfileContract(unittest.TestCase):
@@ -22,6 +23,7 @@ class WPEUnifiedProfileContract(unittest.TestCase):
         cls.build=BUILD.read_text()
         cls.bundler=RUNTIME.read_text()
         cls.workflow=WF.read_text()
+        cls.build_workflow=BUILD_WF.read_text()
 
     def test_single_immutable_wpe_source_with_private_patch(self):
         self.assertIn("wpewebkit-2.54.1.tar.xz",self.cfg)
@@ -62,6 +64,19 @@ class WPEUnifiedProfileContract(unittest.TestCase):
         self.assertIn("WPE_ROCKNIX_GCC15_ATOMICS=NO_OUTLINE_VERIFIED_CMAKE_CACHE",self.workflow)
         self.assertIn("WPE_SOURCE_PATCH=WPE2541_WPE_SNAPSHOT_FOURCC_NO_LIBDRM_V1",self.workflow)
         self.assertIn("CCACHE_MAXSIZE: 768M",self.workflow)
+
+    def test_private_runtime_closure_stage_repairs_only_audited_inputs(self):
+        self.assertIn("scripts/sanitize-rocknix-build-rpath.py",self.build)
+        self.assertIn("scripts/prepare-rocknix-private-closure-sdk.py",self.build)
+        self.assertIn('--support "$sdk/aarch64-rocknix-linux-gnu/lib64/libgcc_s.so.1"',self.build)
+        self.assertEqual(self.build.count('--sdk-stage "$private_sdk"'),2)
+        self.assertIn("WPE_PRIVATE_SDK_CLOSURE_STAGE=PASS_RPATH_CLEAN_PLUS_TARGET_LIBGCC",self.build)
+        self.assertIn("CI_RPATH_OVERLAY=PASS_STATIC_ABI_METADATA",self.build)
+        self.assertIn("ROCKNIX_TARGET_LIBGCC=PASS_ELF64_AARCH64_GLIBC_MAX_2_41",self.build)
+        self.assertEqual(self.build.count('cat "$result" >> "$GITHUB_STEP_SUMMARY"'),1)
+        self.assertNotIn('"$closed_runtime/SDK-BUNDLE-REPORT.txt" >/dev/null',self.build)
+        self.assertIn("patchelf",self.build_workflow)
+        self.assertIn("prepare-rocknix-private-closure-sdk.py",self.build_workflow)
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
