@@ -40,6 +40,8 @@ struct App {
     GetUri getUri = nullptr;
     bool smoke = false;
     bool verifyOffline = false;
+    bool verifyNavigation = false;
+    unsigned navigationPhase = 0;
     bool loaded = false;
     bool failed = false;
     int exitCode = 0;
@@ -146,6 +148,104 @@ static void offlineEvaluationFinished(GObject* object, GAsyncResult* result, gpo
     if (app->loop) g_main_loop_quit(app->loop);
 }
 
+static void navigationEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    gchar* report = (!error && value && app->jscValueToString) ?
+        app->jscValueToString(value) : nullptr;
+    if (error || !report) {
+        g_printerr("[FIRE4NIX-NAV] phase=%u evaluation_error=%s\n",
+                   app->navigationPhase, error ? error->message : "empty result");
+        if (error) g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else {
+        const char* expected = nullptr;
+        if (app->navigationPhase == 0 || app->navigationPhase == 2)
+            expected = "Fire4Nix Nav Start|START_JS_OK|true";
+        else
+            expected = "Fire4Nix Nav Target|TARGET_JS_OK|true";
+        const bool passed = strcmp(report, expected) == 0;
+        g_printerr("[FIRE4NIX-NAV] phase=%u result=%s status=%s\n",
+                   app->navigationPhase, report, passed ? "PASS" : "FAIL");
+        if (!passed) {
+            app->exitCode = 4;
+            app->failed = true;
+        } else if (app->navigationPhase == 0) {
+            const char* target = g_getenv("FIRE4NIX_NAV_TARGET_URL");
+            if (!target || !*target || !app->loadUri) {
+                stage("navigation target URL missing");
+                app->exitCode = 4;
+                app->failed = true;
+            } else {
+                app->navigationPhase = 1;
+                app->loaded = false;
+                stage("navigation: loading second page");
+                app->loadUri(app->view, target);
+            }
+        } else if (app->navigationPhase == 1) {
+            if (!app->goBack || !app->canGoBack || !app->canGoBack(app->view)) {
+                stage("navigation history back unavailable");
+                app->exitCode = 4;
+                app->failed = true;
+            } else {
+                app->navigationPhase = 2;
+                app->loaded = false;
+                stage("navigation: invoking browser back");
+                app->goBack(app->view);
+            }
+        } else if (app->navigationPhase == 2) {
+            if (!app->goForward || !app->canGoForward || !app->canGoForward(app->view)) {
+                stage("navigation history forward unavailable");
+                app->exitCode = 4;
+                app->failed = true;
+            } else {
+                app->navigationPhase = 3;
+                app->loaded = false;
+                stage("navigation: invoking browser forward");
+                app->goForward(app->view);
+            }
+        } else if (app->navigationPhase == 3) {
+            stage("navigation, back and forward history verification passed");
+            g_printerr("[FIRE4NIX-NAV] navigation=PASS\n");
+            g_printerr("[FIRE4NIX-NAV] history_back=PASS\n");
+            g_printerr("[FIRE4NIX-NAV] history_forward=PASS\n");
+            app->exitCode = 0;
+        }
+    }
+    g_free(report);
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->failed || app->exitCode || app->navigationPhase == 3) {
+        if (app->loop) g_main_loop_quit(app->loop);
+    }
+}
+
+static void startNavigationEvaluation(App* app) {
+    if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+        !app->jscValueToString || !app->jscValueUnref) {
+        stage("navigation verification API unavailable");
+        app->exitCode = 78;
+        app->failed = true;
+        if (app->loop) g_main_loop_quit(app->loop);
+        return;
+    }
+    static const char startScript[] =
+        "(() => { const s=document.querySelector('#nav-state');"
+        " const a=document.querySelector('#nav-next');"
+        " return document.title+'|'+(s?s.textContent:'MISSING')+'|'+(!!a); })()";
+    static const char targetScript[] =
+        "(() => { const s=document.querySelector('#nav-state');"
+        " const a=document.querySelector('#nav-back');"
+        " return document.title+'|'+(s?s.textContent:'MISSING')+'|'+(!!a); })()";
+    const char* script = (app->navigationPhase == 0 || app->navigationPhase == 2) ?
+        startScript : targetScript;
+    stage("evaluating browser navigation and history state");
+    app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                            nullptr, navigationEvaluationFinished, app);
+}
+
 static void loadChanged(GObject*, int event, gpointer data) {
     App* app = static_cast<App*>(data);
     const char* url = app->getUri ? app->getUri(app->view) : nullptr;
@@ -153,6 +253,10 @@ static void loadChanged(GObject*, int event, gpointer data) {
     // WebKitLoadEvent: STARTED=0, REDIRECTED=1, COMMITTED=2, FINISHED=3.
     if (event == 3) {
         app->loaded = true;
+        if (app->verifyNavigation) {
+            startNavigationEvaluation(app);
+            return;
+        }
         if (app->verifyOffline) {
             if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
                 !app->jscValueToString || !app->jscValueUnref) {
@@ -315,7 +419,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 1.02: [--selftest|--check-library|--check-platform|--smoke|--verify-offline] [URL]");
+        puts("Fire4Nix native WPEPlatform 1.03: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-navigation] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -330,16 +434,18 @@ int main(int argc, char** argv) {
     const bool onlyPlatform = argc > 1 && !strcmp(argv[1], "--check-platform");
     const bool smoke = argc > 1 && !strcmp(argv[1], "--smoke");
     const bool verifyOffline = argc > 1 && !strcmp(argv[1], "--verify-offline");
+    const bool verifyNavigation = argc > 1 && !strcmp(argv[1], "--verify-navigation");
     const char* url = "about:blank";
     for (int i=1; i<argc; ++i) {
         if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") &&
             strcmp(argv[i],"--smoke") && strcmp(argv[i],"--verify-offline") &&
-            argv[i][0] != '-') { url=argv[i]; break; }
+            strcmp(argv[i],"--verify-navigation") && argv[i][0] != '-') { url=argv[i]; break; }
     }
     stage("dlopen libWPEWebKit-2.0.so.1");
     App app;
-    app.smoke = smoke || verifyOffline;
+    app.smoke = smoke || verifyOffline || verifyNavigation;
     app.verifyOffline = verifyOffline;
+    app.verifyNavigation = verifyNavigation;
     app.initialUrl = url;
     app.webkit = dlopen("libWPEWebKit-2.0.so.1", RTLD_NOW | RTLD_GLOBAL);
     if (!app.webkit) {
