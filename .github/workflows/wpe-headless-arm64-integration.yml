@@ -67,7 +67,7 @@ jobs:
           readelf -h build/headless/fire4nix-native-headless | grep -q AArch64
           build/headless/fire4nix-native-headless --selftest
 
-      - name: Run real WPE 2.54.2 headless browser against offline HTML
+      - name: Run real WPE 2.54.2 against local file and data-URI fixtures
         shell: bash
         run: |
           set -euo pipefail
@@ -80,6 +80,7 @@ jobs:
           echo 'WPE_HEADLESS_FIXTURE_FILE=present'
           sha256sum installer/www/primeiro-teste.html
           page="file://$GITHUB_WORKSPACE/installer/www/primeiro-teste.html"
+
           set +e
           env -u WPE_DISPLAY \
             WPE_PLATFORM=headless \
@@ -90,19 +91,43 @@ jobs:
             XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
             timeout --signal=TERM --kill-after=10s 100s \
             build/headless/fire4nix-native-headless --verify-offline "$page" \
-            > logs/wpe-headless-offline.log 2>&1
-          rc=$?
+            > logs/wpe-headless-file-url.log 2>&1
+          file_rc=$?
           set -e
-          cat logs/wpe-headless-offline.log
-          if [ "$rc" -ne 0 ]; then
-            echo "WPE_HEADLESS_OFFLINE=FAIL_EXIT_$rc" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit "$rc"
+          cat logs/wpe-headless-file-url.log
+          if [ "$file_rc" -eq 0 ] && grep -Fq '[FIRE4NIX-VERIFY] button_event=PASS' logs/wpe-headless-file-url.log; then
+            echo 'WPE_FILE_URI=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "WPE_FILE_URI=FAIL_EXIT_$file_rc" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
-          grep -Fq '[FIRE4NIX-VERIFY] offline_dom=PASS' logs/wpe-headless-offline.log
-          grep -Fq '[FIRE4NIX-VERIFY] inline_javascript=PASS' logs/wpe-headless-offline.log
-          grep -Fq '[FIRE4NIX-VERIFY] computed_css=PASS' logs/wpe-headless-offline.log
-          grep -Fq '[FIRE4NIX-VERIFY] button_event=PASS' logs/wpe-headless-offline.log
-          echo 'WPE_HEADLESS_OFFLINE=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # The same trusted HTML over data: separates DOM/JS execution from
+          # file-URL policy and sandbox filesystem access. This is a control
+          # experiment, not a substitute for the file:// test.
+          data_page="data:text/html;base64,$(base64 -w0 installer/www/primeiro-teste.html)"
+          set +e
+          env -u WPE_DISPLAY \
+            WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$webkit_exec_path" \
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            FIRE4NIX_LOW_MEMORY=1 \
+            HOME="$RUNNER_TEMP/fire4nix-home" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+            timeout --signal=TERM --kill-after=10s 100s \
+            build/headless/fire4nix-native-headless --verify-offline "$data_page" \
+            > logs/wpe-headless-data-url.log 2>&1
+          data_rc=$?
+          set -e
+          cat logs/wpe-headless-data-url.log
+          if [ "$data_rc" -ne 0 ]; then
+            echo "WPE_DATA_URI=FAIL_EXIT_$data_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit "$data_rc"
+          fi
+          grep -Fq '[FIRE4NIX-VERIFY] offline_dom=PASS' logs/wpe-headless-data-url.log
+          grep -Fq '[FIRE4NIX-VERIFY] inline_javascript=PASS' logs/wpe-headless-data-url.log
+          grep -Fq '[FIRE4NIX-VERIFY] computed_css=PASS' logs/wpe-headless-data-url.log
+          grep -Fq '[FIRE4NIX-VERIFY] button_event=PASS' logs/wpe-headless-data-url.log
+          echo 'WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
 
