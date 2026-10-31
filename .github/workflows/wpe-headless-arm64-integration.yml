@@ -506,7 +506,8 @@ jobs:
           bash native/tests/test_wayland_compositor_integration.sh \
             "$GITHUB_WORKSPACE/build/headless/fire4nix-native-headless" \
             "$GITHUB_WORKSPACE/installer/www/primeiro-teste.html" \
-            "$RUNNER_TEMP/fire4nix-weston-wayland"
+            "$RUNNER_TEMP/fire4nix-weston-wayland" \
+            "$GITHUB_WORKSPACE/installer/www/inicio.html"
 
       - name: Preserve headless logs
         if: always()
