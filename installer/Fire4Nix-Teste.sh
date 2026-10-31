@@ -41,17 +41,59 @@ for dir in "$ROOT" \
   /storage/games-internal/roms/ports/fire4nix-completo \
   /storage/games-external/roms/ports/fire4nix-completo \
   /storage/roms/ports/fire4nix-completo; do
-  if [ -s "$dir/runtime/lib/libWPEWebKit-2.0.so.1" ] &&
+  if [ -s "$dir/bin/fire4nix-native-aarch64" ] &&
      [ -f "$dir/Fire4Nix-Iniciar.sh" ]; then
     installed_root=$(CDPATH= cd -- "$dir" && pwd -P) || exit 127
     break
   fi
 done
 
-# The standalone kit has no copied runtime. Diagnose the same installed
-# library that will be used by its visual test, preserving explicit overrides.
-if [ -n "$installed_root" ] && [ -z "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" ]; then
-  FIRE4NIX_DIAGNOSTIC_RUNTIME="$installed_root/runtime"
+is_elf64_aarch64() {
+  file_path=$1
+  [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
+  command -v od >/dev/null 2>&1 || return 1
+  elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
+  set -- $elf_bytes
+  [ "$#" -ge 20 ] || return 1
+  [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
+  [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
+}
+
+installed_runtime_root=""
+invalid_runtime_candidate=""
+if [ -n "${FIRE4NIX_RUNTIME_ROOT:-}" ]; then
+  candidate=$FIRE4NIX_RUNTIME_ROOT
+  case "$candidate" in /*) ;; *) candidate="$installed_root/$candidate" ;; esac
+  if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+    installed_runtime_root=$(CDPATH= cd -- "$candidate" && pwd -P) || exit 127
+  else
+    invalid_runtime_candidate=$candidate
+  fi
+else
+  for candidate in "${installed_root:-$ROOT}/runtime" "$ROOT/runtime" \
+    /storage/games-internal/roms/tools/Fire4Nix/runtime \
+    /storage/games-external/roms/tools/Fire4Nix/runtime \
+    /storage/roms/tools/Fire4Nix/runtime \
+    /storage/games-internal/roms/ports/fire4nix-completo/runtime \
+    /storage/games-external/roms/ports/fire4nix-completo/runtime \
+    /storage/roms/ports/fire4nix-completo/runtime; do
+    if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+      installed_runtime_root=$(CDPATH= cd -- "$candidate" && pwd -P) || exit 127
+      break
+    elif [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ] && [ -z "$invalid_runtime_candidate" ]; then
+      invalid_runtime_candidate=$candidate
+    fi
+  done
+fi
+
+if [ -n "$installed_runtime_root" ]; then
+  export FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root"
+  if [ -z "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" ]; then
+    FIRE4NIX_DIAGNOSTIC_RUNTIME=$installed_runtime_root
+    export FIRE4NIX_DIAGNOSTIC_RUNTIME
+  fi
+elif [ -n "$invalid_runtime_candidate" ] && [ -z "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" ]; then
+  FIRE4NIX_DIAGNOSTIC_RUNTIME=$invalid_runtime_candidate
   export FIRE4NIX_DIAGNOSTIC_RUNTIME
 fi
 
@@ -63,7 +105,8 @@ exit_diagnostic=NA
   date '+test_date=%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || true
   echo "mode=$MODE"
   echo "package_root=$ROOT"
-  echo "installed_runtime_root=${installed_root:-not_found}"
+  echo "installed_runtime_root=${installed_runtime_root:-not_found}"
+  [ -n "$invalid_runtime_candidate" ] && echo "invalid_runtime_candidate=$invalid_runtime_candidate"
   echo "architecture=$(uname -m 2>/dev/null)"
   echo "kernel=$(uname -r 2>/dev/null)"
   if [ -s "$BIN" ]; then
@@ -96,8 +139,8 @@ exit_diagnostic=NA
     echo 'diagnostic_reason=missing_script'
   fi
   if [ "$MODE" = --visual ] || [ "$MODE" = --visual-live ]; then
-    if [ -z "$installed_root" ]; then
-      echo 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME'
+    if [ -z "$installed_root" ] || [ -z "$installed_runtime_root" ]; then
+      echo 'visual_test=SKIPPED_NO_VALID_WPE_RUNTIME'
       exit_visual=127
     else
       echo 'visual_test_page=primeiro-teste.html'
@@ -113,7 +156,7 @@ exit_diagnostic=NA
         # Unlike --smoke, keep the page open for the user. The launcher
         # manages gamepad mapping while the browser is running.
         # Do not impose a 25-second timeout on the physical display test.
-        sh "$installed_root/Fire4Nix-Iniciar.sh" --open \
+        FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" sh "$installed_root/Fire4Nix-Iniciar.sh" --open \
           "file://$installed_root/www/primeiro-teste.html" 2>&1
         exit_visual=$?
       else
@@ -121,7 +164,7 @@ exit_diagnostic=NA
         # Bounded page-load signal for automated diagnostics, never proof
         # of rendered pixels on the physical 640x480 LCD.
         if command -v timeout >/dev/null 2>&1; then
-          timeout 25 sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
+          timeout 25 env FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
             "file://$installed_root/www/primeiro-teste.html" 2>&1
           exit_visual=$?
         else
@@ -162,7 +205,7 @@ exit_diagnostic=NA
 cp "$REPORT" "$LATEST" 2>/dev/null || true
 {
   echo 'FIRE4NIX 1.01 / RESUMO PARA FOTO'
-  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_test_page=|visual_test_manual_checks=|visual_smoke_exit=|visual_live_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
+  grep -E '^(native_binary=|selftest_exit=|WPE_library=|WPE_runtime_source=|WPE_runtime_error=|invalid_wpe_runtime_candidate=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|wayland_socket=|visual_test_page=|visual_test_manual_checks=|visual_smoke_exit=|visual_live_exit=|visual_test=|visual_test_result=|GRAPHICAL_HARDWARE_STATUS=)' "$REPORT" | cut -c 1-101 || true
   echo 'FIM DO RESUMO'
 } > "$STATUS_FILE"
 if [ "$MODE" = --safe ] || [ "$MODE" = --screen ] ||
