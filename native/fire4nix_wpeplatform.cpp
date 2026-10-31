@@ -922,7 +922,7 @@ int main(int argc, char** argv) {
             }
         }
         if (fileError) {
-            g_printerr("[FIRE4NIX-NATIVE] local HTML read failed: %s\\n", fileError->message);
+            g_printerr("[FIRE4NIX-NATIVE] local HTML read failed: %s\n", fileError->message);
             g_error_free(fileError);
         }
         g_free(localPath);
