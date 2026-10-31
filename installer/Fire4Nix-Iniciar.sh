@@ -190,6 +190,22 @@ for lib in libc.so.6 ld-linux-aarch64.so.1 libwayland-client.so.0 \
         printf 'warning=private_system_or_gpu_library:%s\n' "$lib" >> "$LOG"
     fi
 done
+# WPE 2.54 may use Bubblewrap and xdg-dbus-proxy for WebProcess isolation.
+# Never disable the sandbox silently. The opt-in below is only for controlled
+# experiments on ROCKNIX images that lack those helpers.
+BWRAP_BIN=$(command -v bwrap 2>/dev/null || true)
+DBUS_PROXY_BIN=$(command -v xdg-dbus-proxy 2>/dev/null || true)
+if [ -n "$BWRAP_BIN" ] && [ -n "$DBUS_PROXY_BIN" ]; then
+    printf 'sandbox_helpers=bwrap_and_xdg_dbus_proxy_present\\n' >> "$LOG"
+elif [ "${WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS:-0}" = 1 ]; then
+    printf 'sandbox_mode=disabled_explicitly_by_environment\\n' >> "$LOG"
+elif [ "${FIRE4NIX_ALLOW_UNSANDBOXED:-0}" = 1 ]; then
+    export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+    printf 'warning=sandbox_disabled_by_explicit_user_opt_in\\n' >> "$LOG"
+else
+    printf 'warning=sandbox_unverified_bwrap_or_proxy_missing\\n' >> "$LOG"
+    printf 'hint=FIRE4NIX_ALLOW_UNSANDBOXED=1_only_for_controlled_testing\\n' >> "$LOG"
+fi
 export WEBKIT_EXEC_PATH="$CHILD"
 # Patched WPE keeps normal EGL paths first, then permits the device-probed
 # EGL_DEFAULT_DISPLAY fallback. Unpatched upstream ignores this variable.
