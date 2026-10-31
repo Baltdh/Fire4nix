@@ -5,6 +5,15 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
 T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\\x7fELF\\x02\\x01\\x01" + b"\\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 APP="$T/Fire4Nix"
 mkdir -p "$APP/bin" "$APP/runtime/lib" "$APP/runtime/libexec/wpe-webkit-2.0" "$T/logs"
 cp "$ROOT/installer/Fire4Nix-Iniciar.sh" "$APP/Fire4Nix-Iniciar.sh"
@@ -14,9 +23,9 @@ echo "MOCK_NATIVE_CALLED=$*" >> "$FIRE4NIX_TEST_NATIVE_TRACE"
 exit 0
 MOCK
 chmod +x "$APP/bin/fire4nix-native-aarch64"
-printf 'placeholder WPE not loaded\n' > "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
-printf 'web\n' > "$APP/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
-printf 'network\n' > "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+make_arm64_elf "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$APP/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
+make_arm64_elf "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
 export FIRE4NIX_TEST_NATIVE_TRACE="$T/native-call.txt"
 LAUNCHER="$APP/Fire4Nix-Iniciar.sh"
 run_ok() {
@@ -46,7 +55,7 @@ grep -Frq 'gpu_process_required=0' "$T/logs"
 # Both Web and Network subprocesses remain mandatory in GPU-off mode.
 rm "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
 run_fail 'Missing WebKit subprocess: WPENetworkProcess'
-printf 'network\n' > "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+make_arm64_elf "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
 # Unknown / contradictory profile text must not bypass the requirement.
 printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\nGPU_PROCESS_PROFILE=enabled_verified\n' > "$APP/runtime/BUILD-REPORT.txt"
 run_fail 'Invalid or conflicting WPE GPU process profile'
@@ -58,7 +67,7 @@ for profile in enabled_verified required_unverified; do
   echo "GPU_PROCESS_PROFILE=$profile" > "$APP/runtime/BUILD-REPORT.txt"
   run_fail 'Missing WebKit subprocess: WPEGPUProcess'
 done
-printf 'gpu\n' > "$APP/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
+make_arm64_elf "$APP/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
 run_ok
 grep -Frq 'gpu_process_required=1' "$T/logs"
 # File symlink profiles are rejected instead of followed outside runtime.
