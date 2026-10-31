@@ -169,7 +169,7 @@ exit_diagnostic=NA
           exit_visual=$?
         else
           sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
-            "file://$installed_root/www/primeiro-teste.html" 2>&1
+            "$installed_root/www/primeiro-teste.html" 2>&1
           exit_visual=$?
         fi
       fi
