@@ -68,10 +68,10 @@ printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\n' > "$APP/runtime/BUILD-R
 rm "$CHILD/WPENetworkProcess"
 ports_refuse
 grep -Fq 'WPENetworkProcess' "$P/Fire4Nix-PORTS-ultimo.txt"
-printf 'mock-network\n' > "$CHILD/WPENetworkProcess"
+make_arm64_elf "$CHILD/WPENetworkProcess"
 printf 'GPU_PROCESS_PROFILE=enabled_verified\n' > "$APP/runtime/BUILD-REPORT.txt"
 ports_refuse
-printf 'mock-gpu\n' > "$CHILD/WPEGPUProcess"
+make_arm64_elf "$CHILD/WPEGPUProcess"
 run_ports
 grep -Fxq 'real_browser_exit=0' "$P/Fire4Nix-PORTS-ultimo.txt"
 rm "$APP/runtime/BUILD-REPORT.txt"
