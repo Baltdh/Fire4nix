@@ -217,7 +217,7 @@ jobs:
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
           cp "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
-          native_sha="$(sha256sum "$bin" | awk '{print $1}')"
+          native_sha="$(sha256sum "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | awk '{print $1}')"
           cat > "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt" <<EOF
           NATIVE_LAUNCHER_WORKFLOW_RUN=41181670144
           NATIVE_LAUNCHER_ARTIFACT_ID=13035271896
