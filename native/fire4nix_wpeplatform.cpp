@@ -188,6 +188,7 @@ static void homeEvaluationFinished(GObject* object, GAsyncResult* result, gpoint
             stage("home UI DOM, virtual keyboard, D-pad focus, form guard and viewport verification passed");
             g_printerr("[FIRE4NIX-HOME] home_dom=PASS\n");
             g_printerr("[FIRE4NIX-HOME] virtual_keyboard=PASS\n");
+            g_printerr("[FIRE4NIX-HOME] keyboard_compact=PASS\n");
             g_printerr("[FIRE4NIX-HOME] form_submit_guard=PASS\n");
             g_printerr("[FIRE4NIX-HOME] shortcuts=PASS\n");
             g_printerr("[FIRE4NIX-HOME] viewport_css=PASS\n");
@@ -195,12 +196,12 @@ static void homeEvaluationFinished(GObject* object, GAsyncResult* result, gpoint
             app->exitCode = 0;
         } else {
             stage("home UI verification failed; see detail fields");
-            g_printerr("[FIRE4NIX-HOME] title=%s address=%s form=%s keyboard=%s key_input=%s shortcuts=%s css=%s viewport=%s focus=%s\n",
+            g_printerr("[FIRE4NIX-HOME] title=%s address=%s form=%s keyboard=%s compact=%s key_input=%s shortcuts=%s css=%s viewport=%s focus=%s\n",
                 titleOK ? "PASS" : "FAIL", addressOK ? "PASS" : "FAIL",
                 formOK ? "PASS" : "FAIL", keyboardOK ? "PASS" : "FAIL",
-                keyInputOK ? "PASS" : "FAIL", shortcutsOK ? "PASS" : "FAIL",
-                cssOK ? "PASS" : "FAIL", viewportOK ? "PASS" : "FAIL",
-                focusNavigationOK ? "PASS" : "FAIL");
+                keyboardCompactOK ? "PASS" : "FAIL", keyInputOK ? "PASS" : "FAIL",
+                shortcutsOK ? "PASS" : "FAIL", cssOK ? "PASS" : "FAIL",
+                viewportOK ? "PASS" : "FAIL", focusNavigationOK ? "PASS" : "FAIL");
             app->exitCode = 4;
             app->failed = true;
         }
@@ -595,6 +596,8 @@ static void loadChanged(GObject*, int event, gpointer data) {
                 " const compact=!!document.body.classList.contains('keyboard-open') && !!nav && getComputedStyle(nav).display==='none' && getComputedStyle(document.querySelector('footer')).display==='none';"
                 " checks.push('keyboard_toggle='+(opened && !!t && t.getAttribute('aria-expanded')==='true' && keyboardVisible?'PASS':'FAIL'));"
                 " checks.push('keyboard_compact='+(compact?'PASS':'FAIL'));"
+                " const keyboardScrollHeight=document.documentElement.scrollHeight;"
+                " const viewportWidth=window.innerWidth, viewportHeight=window.innerHeight;"
                 " checks.push('keyboard_input='+(typed?'PASS':'FAIL'));"
                 " checks.push('keyboard_keys='+keyCount);"
                 " if(t) t.focus();"
@@ -610,8 +613,8 @@ static void loadChanged(GObject*, int event, gpointer data) {
                 " const shortcutFocus=!!document.activeElement && document.activeElement.classList.contains('tile');"
                 " checks.push('focus_navigation='+(openDown && openRight && closedDown && shortcutFocus?'PASS':'FAIL'));"
                 " checks.push('shortcuts='+(nav?nav.querySelectorAll('a.tile').length:0));"
-                " checks.push('viewport='+window.innerWidth+'x'+window.innerHeight);"
-                " checks.push('scroll_height='+(document.documentElement?document.documentElement.scrollHeight:0));"
+                " checks.push('viewport='+viewportWidth+'x'+viewportHeight);"
+                " checks.push('scroll_height='+keyboardScrollHeight);"
                 " return checks.join(';'); })()";
             stage("evaluating actual Fire4Nix home page controls");
             app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
