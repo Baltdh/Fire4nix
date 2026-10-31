@@ -168,7 +168,7 @@ exit_diagnostic=NA
             "$installed_root/www/primeiro-teste.html" 2>&1
           exit_visual=$?
         else
-          sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
+          env FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
             "$installed_root/www/primeiro-teste.html" 2>&1
           exit_visual=$?
         fi
