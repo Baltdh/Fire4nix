@@ -820,7 +820,7 @@ int main(int argc, char** argv) {
         GError* uriError = nullptr;
         gchar* converted = g_filename_to_uri(url, nullptr, &uriError);
         if (!converted) {
-            g_printerr("[FIRE4NIX-NATIVE] local_path_to_uri_failed: %s\\n",
+            g_printerr("[FIRE4NIX-NATIVE] local_path_to_uri_failed: %s\n",
                        uriError ? uriError->message : "unknown error");
             if (uriError) g_error_free(uriError);
             return 2;
@@ -828,7 +828,7 @@ int main(int argc, char** argv) {
         normalizedLocalUrl = converted;
         g_free(converted);
         url = normalizedLocalUrl.c_str();
-        g_printerr("[FIRE4NIX-NATIVE] local_path_to_uri=PASS\\n");
+        g_printerr("[FIRE4NIX-NATIVE] local_path_to_uri=PASS\n");
     } else if (g_str_has_prefix(url, "file://")) {
         GError* uriError = nullptr;
         gchar* host = nullptr;
@@ -837,7 +837,7 @@ int main(int argc, char** argv) {
             GError* encodeError = nullptr;
             gchar* converted = g_filename_to_uri(localPath, nullptr, &encodeError);
             if (!converted) {
-                g_printerr("[FIRE4NIX-NATIVE] file_uri_normalization_failed: %s\\n",
+                g_printerr("[FIRE4NIX-NATIVE] file_uri_normalization_failed: %s\n",
                            encodeError ? encodeError->message : "unknown error");
                 if (encodeError) g_error_free(encodeError);
                 g_free(localPath);
@@ -853,7 +853,7 @@ int main(int argc, char** argv) {
             uriError = nullptr;
             const char* rawPath = url + strlen("file://");
             if (rawPath[0] != '/') {
-                g_printerr("[FIRE4NIX-NATIVE] invalid_local_file_uri\\n");
+                g_printerr("[FIRE4NIX-NATIVE] invalid_local_file_uri\n");
                 g_free(host);
                 return 2;
             }
@@ -862,7 +862,7 @@ int main(int argc, char** argv) {
             g_free(escapedPath);
             gchar* checkedPath = g_filename_from_uri(candidate, nullptr, &uriError);
             if (!checkedPath) {
-                g_printerr("[FIRE4NIX-NATIVE] file_uri_escape_failed: %s\\n",
+                g_printerr("[FIRE4NIX-NATIVE] file_uri_escape_failed: %s\n",
                            uriError ? uriError->message : "unknown error");
                 if (uriError) g_error_free(uriError);
                 g_free(candidate);
@@ -878,7 +878,7 @@ int main(int argc, char** argv) {
         g_free(localPath);
         g_free(host);
         if (!normalizedLocalUrl.empty())
-            g_printerr("[FIRE4NIX-NATIVE] file_uri_normalized=PASS\\n");
+            g_printerr("[FIRE4NIX-NATIVE] file_uri_normalized=PASS\n");
     }
 
     stage("dlopen libWPEWebKit-2.0.so.1");
