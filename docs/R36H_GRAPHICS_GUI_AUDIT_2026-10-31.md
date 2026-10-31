@@ -13,6 +13,7 @@ Alvo: R36H / RK3326 / AArch64 / ROCKNIX, painel lógico 640×480. Este documento
 - `installer/www/inicio.html` é a página inicial visual do produto: endereço/pesquisa, atalhos, teclado virtual e CSS responsivo.
 - O novo modo `--verify-home` testa essa página no próprio WPE: campo de endereço, submit sem navegação, teclado virtual, atalhos, CSS, viewport e foco por setas.
 - Ao abrir o teclado, a interface entra em modo compacto: oculta atalhos/rodapé, reduz margens e altura das teclas. O teste Wayland exige viewport real de 640×480 e ausência de overflow vertical enquanto o teclado está aberto.
+- Caminhos locais são aceitos diretamente como caminhos de arquivo e convertidos com `g_filename_to_uri`; caminhos `file://` mal escapados também são normalizados. Os testes usam diretórios com espaços para reproduzir o nome real do pacote Ports.
 - O teste `--verify-offline` verifica DOM, JavaScript, CSS computado e evento de clique.
 - A correção de HTML local usa `webkit_web_view_load_html()` para evitar depender da associação MIME `text/html` do sistema; a URI `file://` original é mantida como base para recursos relativos.
 
