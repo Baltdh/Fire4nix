@@ -149,7 +149,7 @@ jobs:
               exit 34
             }
           done
-          echo 'WPE_HOME_UI=PASS_REAL_DOM_KEYBOARD_FORM_SHORTCUTS' | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'WPE_HOME_UI=PASS_REAL_DOM_COMPACT_KEYBOARD_FORM_SHORTCUTS' | tee -a "$GITHUB_STEP_SUMMARY"
 
           # The same trusted HTML over data: separates DOM/JS execution from
           # file-URL policy and sandbox filesystem access. This is a control
