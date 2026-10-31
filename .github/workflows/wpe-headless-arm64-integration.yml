@@ -7,6 +7,7 @@ on:
     paths:
       - 'native/fire4nix_wpeplatform.cpp'
       - 'native/tests/test_headless_integration_contract.py'
+      - 'native/tests/test_wayland_compositor_integration.sh'
       - 'installer/www/primeiro-teste.html'
       - '.github/workflows/wpe-headless-arm64-integration.yml'
   pull_request:
@@ -37,7 +38,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             ca-certificates build-essential pkg-config python3 file openssl \
             libglib2.0-dev libglib2.0-bin shared-mime-info glib-networking \
-            libwpewebkit-2.0-dev
+            libwpewebkit-2.0-dev weston libegl1 libgles2 libgl1-mesa-dri
           version="$(dpkg-query -W -f='${Version}' libwpewebkit-2.0-1)"
           echo "WPE_PACKAGE_VERSION=$version"
           case "$version" in
@@ -63,6 +64,7 @@ jobs:
           set -euo pipefail
           python3 native/tests/test_headless_integration_contract.py
           python3 -m py_compile native/tests/test_headless_integration_contract.py
+          bash -n native/tests/test_wayland_compositor_integration.sh
 
       - name: Compile Fire4Nix native launcher for ARM64
         shell: bash
@@ -462,6 +464,17 @@ jobs:
           cat logs/local-servers.log
           echo 'WPE_HARDWARE_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'WPE_ROCKNIX_ABI_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
+
+
+      - name: Run real WPE Wayland backend against a headless Weston compositor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$(command -v weston)"
+          bash native/tests/test_wayland_compositor_integration.sh \
+            "$GITHUB_WORKSPACE/build/headless/fire4nix-native-headless" \
+            "$GITHUB_WORKSPACE/installer/www/primeiro-teste.html" \
+            "$RUNNER_TEMP/fire4nix-weston-wayland"
 
       - name: Preserve headless logs
         if: always()
