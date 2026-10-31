@@ -181,20 +181,22 @@ static void homeEvaluationFinished(GObject* object, GAsyncResult* result, gpoint
         const bool focusNavigationOK = strstr(report, "focus_navigation=PASS") != nullptr;
         if (titleOK && addressOK && formOK && keyboardOK && keyInputOK &&
             shortcutsOK && cssOK && viewportOK && focusNavigationOK) {
-            stage("home UI DOM, keyboard, form guard, shortcuts and viewport verification passed");
+            stage("home UI DOM, virtual keyboard, D-pad focus, form guard and viewport verification passed");
             g_printerr("[FIRE4NIX-HOME] home_dom=PASS\n");
             g_printerr("[FIRE4NIX-HOME] virtual_keyboard=PASS\n");
             g_printerr("[FIRE4NIX-HOME] form_submit_guard=PASS\n");
             g_printerr("[FIRE4NIX-HOME] shortcuts=PASS\n");
             g_printerr("[FIRE4NIX-HOME] viewport_css=PASS\n");
+            g_printerr("[FIRE4NIX-HOME] focus_navigation=PASS\n");
             app->exitCode = 0;
         } else {
             stage("home UI verification failed; see detail fields");
-            g_printerr("[FIRE4NIX-HOME] title=%s address=%s form=%s keyboard=%s key_input=%s shortcuts=%s css=%s viewport=%s\n",
+            g_printerr("[FIRE4NIX-HOME] title=%s address=%s form=%s keyboard=%s key_input=%s shortcuts=%s css=%s viewport=%s focus=%s\n",
                 titleOK ? "PASS" : "FAIL", addressOK ? "PASS" : "FAIL",
                 formOK ? "PASS" : "FAIL", keyboardOK ? "PASS" : "FAIL",
                 keyInputOK ? "PASS" : "FAIL", shortcutsOK ? "PASS" : "FAIL",
-                cssOK ? "PASS" : "FAIL", viewportOK ? "PASS" : "FAIL");
+                cssOK ? "PASS" : "FAIL", viewportOK ? "PASS" : "FAIL",
+                focusNavigationOK ? "PASS" : "FAIL");
             app->exitCode = 4;
             app->failed = true;
         }
