@@ -129,6 +129,7 @@ if [[ -n "$home_fixture" ]]; then
   for marker in \
     '[FIRE4NIX-HOME] home_dom=PASS' \
     '[FIRE4NIX-HOME] virtual_keyboard=PASS' \
+    '[FIRE4NIX-HOME] keyboard_compact=PASS' \
     '[FIRE4NIX-HOME] form_submit_guard=PASS' \
     '[FIRE4NIX-HOME] shortcuts=PASS' \
     '[FIRE4NIX-HOME] viewport_css=PASS' \
