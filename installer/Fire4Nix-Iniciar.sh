@@ -341,7 +341,7 @@ fi
 case "$MODE" in
   --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;
   --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
-  --verify-offline) "$BIN" --verify-offline "$URL" >> "$LOG" 2>&1; code=$? ;;
+  --verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage) "$BIN" "$MODE" "$URL" >> "$LOG" 2>&1; code=$? ;;
   --open) "$BIN" "$URL" >> "$LOG" 2>&1; code=$? ;;
 esac
 exit "$code"
