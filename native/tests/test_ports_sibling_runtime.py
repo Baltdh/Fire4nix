@@ -37,7 +37,7 @@ class SiblingRuntime(unittest.TestCase):
             report=(base/'reports/Fire4Nix-Ultimo-Teste.txt').read_text()
             self.assertIn('installed_runtime_root='+str(app),report)
             self.assertIn('WPE_runtime_source='+str(app/'runtime'),report)
-            self.assertIn('TEST_PAGE=file://'+str(app/'www/primeiro-teste.html'),report)
+            self.assertIn('TEST_PAGE='+str(app/'www/primeiro-teste.html'),report)
             self.assertFalse((ports/'.Fire4Nix-Teste-101/Fire4Nix/runtime').exists())
 
 if __name__=='__main__': unittest.main()
