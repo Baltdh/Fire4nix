@@ -9,7 +9,7 @@ make_arm64_elf() {
   python3 - "$1" <<'PY'
 import struct
 import sys
-ident = b"\\x7fELF\\x02\\x01\\x01" + b"\\x00" * 9
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
 header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
 with open(sys.argv[1], "wb") as stream:
     stream.write(ident + header)
@@ -34,9 +34,9 @@ make_runtime "$PKG/runtime"
 cat > "$PKG/bin/fire4nix-native-aarch64" <<'NATIVE'
 #!/bin/sh
 {
-  printf 'native_called=yes\\n'
-  printf 'native_ld_library_path=%s\\n' "${LD_LIBRARY_PATH:-}"
-  printf 'native_webkit_exec_path=%s\\n' "${WEBKIT_EXEC_PATH:-}"
+  printf 'native_called=yes\n'
+  printf 'native_ld_library_path=%s\n' "${LD_LIBRARY_PATH:-}"
+  printf 'native_webkit_exec_path=%s\n' "${WEBKIT_EXEC_PATH:-}"
 } >> "${FIRE4NIX_TEST_TRACE:?}"
 exit 0
 NATIVE
