@@ -1,0 +1,101 @@
+#!/bin/sh
+# Regression tests for runtime selection and ELF64 AArch64 preflight.
+set -eu
+REPO=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
+T=$(mktemp -d)
+trap 'rm -rf "$T"' 0
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct
+import sys
+ident = b"\\x7fELF\\x02\\x01\\x01" + b"\\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+with open(sys.argv[1], "wb") as stream:
+    stream.write(ident + header)
+PY
+}
+
+make_runtime() {
+  root=$1
+  mkdir -p "$root/lib" "$root/libexec/wpe-webkit-2.0"
+  make_arm64_elf "$root/lib/libWPEWebKit-2.0.so.1"
+  for process in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
+    make_arm64_elf "$root/libexec/wpe-webkit-2.0/$process"
+  done
+}
+
+PKG="$T/package/Fire4Nix"
+mkdir -p "$PKG/bin" "$PKG/config" "$T/logs"
+cp "$REPO/installer/Fire4Nix-Iniciar.sh" "$PKG/Fire4Nix-Iniciar.sh"
+cp "$REPO/installer/Diagnosticar-Fire4Nix.sh" "$T/package/Diagnosticar-Fire4Nix.sh"
+make_runtime "$PKG/runtime"
+
+cat > "$PKG/bin/fire4nix-native-aarch64" <<'NATIVE'
+#!/bin/sh
+{
+  printf 'native_called=yes\\n'
+  printf 'native_ld_library_path=%s\\n' "${LD_LIBRARY_PATH:-}"
+  printf 'native_webkit_exec_path=%s\\n' "${WEBKIT_EXEC_PATH:-}"
+} >> "${FIRE4NIX_TEST_TRACE:?}"
+exit 0
+NATIVE
+chmod +x "$PKG/bin/fire4nix-native-aarch64"
+
+# Default runtime is package-local; inherited Ports paths are discarded.
+TRACE="$T/native-trace.txt"
+FIRE4NIX_TEST_TRACE="$TRACE" \
+FIRE4NIX_LOG_DIR="$T/logs" \
+LD_LIBRARY_PATH=/storage/games-internal/roms/tools/Fire4Nix/runtime/lib \
+  sh "$PKG/Fire4Nix-Iniciar.sh" --check-library > "$T/valid.log" 2>&1
+grep -Fxq 'native_called=yes' "$TRACE"
+grep -Fxq "native_ld_library_path=$PKG/runtime/lib" "$TRACE"
+grep -Fxq "native_webkit_exec_path=$PKG/runtime/libexec/wpe-webkit-2.0" "$TRACE"
+grep -Fq 'library_path_mode=isolated_discarded_inherited_paths' "$T/valid.log"
+grep -Fq "runtime_root=$PKG/runtime" "$T/valid.log"
+
+# An explicitly selected second-SD runtime is supported, but is validated
+# before the native loader is entered.
+make_runtime "$T/external-runtime"
+: > "$TRACE"
+FIRE4NIX_RUNTIME_ROOT="$T/external-runtime" \
+FIRE4NIX_TEST_TRACE="$TRACE" \
+FIRE4NIX_LOG_DIR="$T/logs" \
+  sh "$PKG/Fire4Nix-Iniciar.sh" --check-library > "$T/external.log" 2>&1
+grep -Fxq "native_ld_library_path=$T/external-runtime/lib" "$TRACE"
+grep -Fq "runtime_root=$T/external-runtime" "$T/external.log"
+
+# A corrupt or foreign library must fail before dlopen/native execution.
+printf 'not an ELF shared object' > "$PKG/runtime/lib/libWPEWebKit-2.0.so.1"
+: > "$TRACE"
+set +e
+FIRE4NIX_TEST_TRACE="$TRACE" FIRE4NIX_LOG_DIR="$T/logs" \
+  sh "$PKG/Fire4Nix-Iniciar.sh" --check-library > "$T/invalid.log" 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 79 ]
+[ ! -s "$TRACE" ]
+grep -Fq 'not a valid ELF64 AArch64 object' "$T/invalid.log"
+
+# The diagnostic must not call a non-empty text file a working WPE library.
+mkdir -p "$T/bad-runtime/lib" "$T/roms/tools/Fire4Nix/runtime/lib"
+printf 'invalid header' > "$T/bad-runtime/lib/libWPEWebKit-2.0.so.1"
+FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/bad-runtime" \
+FIRE4NIX_DIAGNOSTIC_OUT="$T/invalid-report.txt" \
+  sh "$T/package/Diagnosticar-Fire4Nix.sh" > "$T/invalid-diagnostic.log" 2>&1
+grep -Fxq 'WPE_library=invalid_elf' "$T/invalid-report.txt"
+grep -Fxq "WPE_runtime_source=$T/bad-runtime" "$T/invalid-report.txt"
+grep -Fxq 'WPE_runtime_error=not_elf64_little_endian_aarch64' "$T/invalid-report.txt"
+grep -Fxq 'WPEPlatform_preflight=skipped_invalid_runtime_elf' "$T/invalid-report.txt"
+
+# Without an explicit override, an invalid local runtime is skipped and a
+# valid external tools runtime can be selected. A valid ELF header is required.
+make_arm64_elf "$T/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+FIRE4NIX_ROMS="$T/roms" \
+FIRE4NIX_DIAGNOSTIC_OUT="$T/fallback-report.txt" \
+  sh "$T/package/Diagnosticar-Fire4Nix.sh" --safe > "$T/fallback.log" 2>&1
+grep -Fxq 'WPE_library=present' "$T/fallback-report.txt"
+grep -Fxq "WPE_runtime_source=$T/roms/tools/Fire4Nix/runtime" "$T/fallback-report.txt"
+grep -Fq "invalid_wpe_runtime_candidate=$PKG/runtime" "$T/fallback-report.txt" || true
+
+echo 'PASS: ELF64 AArch64 gate, split-SD runtime selection and stale LD_LIBRARY_PATH isolation.'
