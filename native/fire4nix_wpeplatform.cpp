@@ -6,6 +6,11 @@
 #include <glib-unix.h>
 #include <gio/gio.h>
 #include <dlfcn.h>
+#include <elf.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -13,6 +18,72 @@
 #include <string>
 
 namespace {
+static bool validateElf64Aarch64SharedObject(const char* path) {
+    const int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        g_printerr("[FIRE4NIX-ELF] runtime_open_failed path=%s error=%s\n",
+                   path, strerror(errno));
+        return false;
+    }
+    auto reject = [&](const char* reason) {
+        g_printerr("[FIRE4NIX-ELF] runtime_elf_rejected path=%s reason=%s\n",
+                   path, reason);
+        close(fd);
+        return false;
+    };
+    struct stat st {};
+    if (fstat(fd, &st) != 0 || st.st_size < static_cast<off_t>(sizeof(Elf64_Ehdr)))
+        return reject("file_too_small_or_stat_failed");
+    Elf64_Ehdr header {};
+    if (pread(fd, &header, sizeof(header), 0) != static_cast<ssize_t>(sizeof(header)))
+        return reject("short_elf_header");
+    if (memcmp(header.e_ident, ELFMAG, SELFMAG) != 0)
+        return reject("bad_elf_magic");
+    if (header.e_ident[EI_CLASS] != ELFCLASS64 ||
+        header.e_ident[EI_DATA] != ELFDATA2LSB ||
+        header.e_ident[EI_VERSION] != EV_CURRENT)
+        return reject("wrong_elf_class_endian_or_ident_version");
+    if (header.e_type != ET_DYN || header.e_machine != EM_AARCH64 ||
+        header.e_version != EV_CURRENT || header.e_ehsize != sizeof(Elf64_Ehdr))
+        return reject("not_aarch64_elf64_shared_object");
+    if (header.e_phnum == 0 || header.e_phnum == PN_XNUM ||
+        header.e_phnum > 4096 || header.e_phentsize != sizeof(Elf64_Phdr))
+        return reject("invalid_program_header_table");
+    const std::uint64_t fileBytes = static_cast<std::uint64_t>(st.st_size);
+    const std::uint64_t tableBytes =
+        static_cast<std::uint64_t>(header.e_phnum) * sizeof(Elf64_Phdr);
+    if (header.e_phoff > fileBytes || tableBytes > fileBytes - header.e_phoff)
+        return reject("program_header_table_out_of_bounds");
+    bool hasLoad = false;
+    bool hasDynamic = false;
+    for (unsigned i = 0; i < header.e_phnum; ++i) {
+        Elf64_Phdr phdr {};
+        const off_t offset = static_cast<off_t>(
+            header.e_phoff + static_cast<std::uint64_t>(i) * sizeof(Elf64_Phdr));
+        if (pread(fd, &phdr, sizeof(phdr), offset) != static_cast<ssize_t>(sizeof(phdr)))
+            return reject("short_program_header");
+        if (phdr.p_type == PT_LOAD || phdr.p_type == PT_DYNAMIC) {
+            if (phdr.p_offset > fileBytes || phdr.p_filesz > fileBytes - phdr.p_offset)
+                return reject("load_segment_out_of_bounds");
+        }
+        if (phdr.p_type == PT_LOAD) {
+            if (phdr.p_filesz > phdr.p_memsz)
+                return reject("load_segment_filesz_exceeds_memsz");
+            hasLoad = true;
+        } else if (phdr.p_type == PT_DYNAMIC) {
+            hasDynamic = true;
+        }
+    }
+    close(fd);
+    if (!hasLoad || !hasDynamic) {
+        g_printerr("[FIRE4NIX-ELF] runtime_elf_rejected path=%s reason=missing_load_or_dynamic_segment\n",
+                   path);
+        return false;
+    }
+    g_printerr("[FIRE4NIX-ELF] runtime_elf64_aarch64_shared_object=PASS path=%s\n", path);
+    return true;
+}
+
 using LoadUri = void (*)(gpointer, const char*);
 using LoadHtml = void (*)(gpointer, const char*, const char*);
 using GetType = GType (*)();
@@ -890,7 +961,20 @@ int main(int argc, char** argv) {
     app.verifyForm = verifyForm;
     app.verifyStorage = verifyStorage;
     app.initialUrl = url;
-    app.webkit = dlopen("libWPEWebKit-2.0.so.1", RTLD_NOW | RTLD_GLOBAL);
+    const char* libraryToLoad = "libWPEWebKit-2.0.so.1";
+    std::string explicitLibraryPath;
+    const char* runtimeRoot = g_getenv("FIRE4NIX_RUNTIME_ROOT");
+    if (runtimeRoot && *runtimeRoot) {
+        explicitLibraryPath = runtimeRoot;
+        while (!explicitLibraryPath.empty() && explicitLibraryPath.back() == '/')
+            explicitLibraryPath.pop_back();
+        explicitLibraryPath += "/lib/libWPEWebKit-2.0.so.1";
+        if (!validateElf64Aarch64SharedObject(explicitLibraryPath.c_str()))
+            return 79;
+        libraryToLoad = explicitLibraryPath.c_str();
+    }
+    g_printerr("[FIRE4NIX-NATIVE] runtime_library=%s\n", libraryToLoad);
+    app.webkit = dlopen(libraryToLoad, RTLD_NOW | RTLD_GLOBAL);
     if (!app.webkit) {
         g_printerr("[FIRE4NIX-NATIVE] loader error: %s\n", dlerror());
         return 127;
