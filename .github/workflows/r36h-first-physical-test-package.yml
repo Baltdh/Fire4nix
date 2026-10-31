@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - codex/r36h-first-physical-test-20261030
+      - codex/r36h-file-html-mime-fix-20261031
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/fire4nix_wpeplatform.cpp'
+      - 'native/tests/test_local_html_mime_fallback.sh'
       - 'installer/Fire4Nix-Primeiro-Teste-R36.sh'
       - 'installer/Fire4Nix-EGL-R36H.py'
       - 'installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt'
@@ -40,7 +43,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 41138107872
+          run-id: 41181500677
           github-token: ${{ github.token }}
           name: Fire4Nix-0.86-R36H-ARM64-Native-Test
           path: ${{ runner.temp }}/native-artifact
@@ -143,6 +146,7 @@ jobs:
           readelf --dyn-syms -W "$lib" | awk '$7!="UND" {print $8}' | sed 's/@.*//' | sort -u > "$RUNNER_TEMP/wpe-exports.txt"
           cat > "$RUNNER_TEMP/wpe-required-symbols.txt" <<'EOF'
           jsc_value_to_string
+          webkit_web_view_load_html
           webkit_get_major_version
           webkit_get_micro_version
           webkit_get_minor_version
@@ -206,6 +210,7 @@ jobs:
           sh native/tests/test_first_test_graphics_probe.sh
           grep -Fq -- '--graphics-probe' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           test -s "$pkg/Fire4Nix-EGL-R36H.py"
+          sh native/tests/test_local_html_mime_fallback.sh
           grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
@@ -216,8 +221,8 @@ jobs:
           WPE_RUNTIME_VERSION=2.54.1
           WPE_RUNTIME_ARTIFACT_RUN=40033262653
           NATIVE_LAUNCHER_VERSION=1.05
-          NATIVE_LAUNCHER_ARTIFACT_RUN=41138107872
-          NATIVE_SOURCE_COMMIT=99c09459bc67bee5e7ab50255dd5dbbbc6df07c3
+          NATIVE_LAUNCHER_ARTIFACT_RUN=41181500677
+          NATIVE_SOURCE_COMMIT=d5ef265ad7ae2e8e035d2cec1b04c41ebc2e693f
           NATIVE_GLIBC_MAX=2.34
           WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
           ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY

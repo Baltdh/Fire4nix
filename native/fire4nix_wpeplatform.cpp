@@ -13,6 +13,7 @@
 
 namespace {
 using LoadUri = void (*)(gpointer, const char*);
+using LoadHtml = void (*)(gpointer, const char*, const char*);
 using GetType = GType (*)();
 using GetVersionPart = unsigned (*)();
 using SetSettings = void (*)(gpointer, gpointer);
@@ -37,6 +38,7 @@ struct App {
     GObject* view = nullptr;
     void* webkit = nullptr;
     LoadUri loadUri = nullptr;
+    LoadHtml loadHtml = nullptr;
     GetUri getUri = nullptr;
     bool smoke = false;
     bool verifyOffline = false;
@@ -738,6 +740,7 @@ int main(int argc, char** argv) {
     auto webViewType = symbol<GetType>(app.webkit, "webkit_web_view_get_type");
     auto getWPEView = symbol<GetWPEView>(app.webkit, "webkit_web_view_get_wpe_view");
     app.loadUri = symbol<LoadUri>(app.webkit, "webkit_web_view_load_uri");
+    app.loadHtml = symbol<LoadHtml>(app.webkit, "webkit_web_view_load_html");
     app.getUri = symbol<GetUri>(app.webkit, "webkit_web_view_get_uri");
     auto settingsType = symbol<GetType>(app.webkit, "webkit_settings_get_type");
     auto assignSettings = symbol<SetSettings>(app.webkit, "webkit_web_view_set_settings");
@@ -898,7 +901,38 @@ int main(int argc, char** argv) {
                app.verifyOffline ? "verify-offline" : (app.smoke ? "smoke" : "interactive"),
                lowMemory() ? 1 : 0, url,
                g_getenv("WPE_PLATFORM") ? g_getenv("WPE_PLATFORM") : "default");
-    app.loadUri(app.view, url);
+    bool loadedLocalHtml = false;
+    const bool localHtmlUrl = g_str_has_prefix(url, "file://") &&
+        (g_str_has_suffix(url, ".html") || g_str_has_suffix(url, ".htm"));
+    if (localHtmlUrl && app.loadHtml) {
+        // Minimal ROCKNIX images may omit shared-mime-info text/html mapping.
+        // load_html() avoids treating a local .html file as plain text while
+        // preserving the original file URI as base for relative resources.
+        gchar* hostname = nullptr;
+        GError* fileError = nullptr;
+        gchar* localPath = g_filename_from_uri(url, &hostname, &fileError);
+        if (localPath && (!hostname || !*hostname)) {
+            gchar* html = nullptr;
+            gsize htmlLength = 0;
+            if (g_file_get_contents(localPath, &html, &htmlLength, &fileError)) {
+                stage("loading local HTML explicitly with webkit_web_view_load_html (MIME-independent)");
+                app.loadHtml(app.view, html, url);
+                loadedLocalHtml = true;
+                g_free(html);
+            }
+        }
+        if (fileError) {
+            g_printerr("[FIRE4NIX-NATIVE] local HTML read failed: %s\n", fileError->message);
+            g_error_free(fileError);
+        }
+        g_free(localPath);
+        g_free(hostname);
+    }
+    if (!loadedLocalHtml) {
+        if (localHtmlUrl && !app.loadHtml)
+            stage("webkit_web_view_load_html unavailable; falling back to URI MIME detection");
+        app.loadUri(app.view, url);
+    }
     stage("entering GLib main loop");
     g_main_loop_run(app.loop);
     stage("GLib main loop exited");

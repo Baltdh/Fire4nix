@@ -31,7 +31,7 @@ mkdir -p "$REPORT_DIR" 2>/dev/null || {
   echo "ERRO: nao foi possivel criar $REPORT_DIR" >&2
   exit 73
 }
-REPORT=$(mktemp "$REPORT_DIR/Primeiro-Teste-R36H-XXXXXX.txt") || exit 73
+REPORT=$(mktemp "$REPORT_DIR/Primeiro-Teste-R36H-XXXXXX") || exit 73
 SUMMARY="$REPORT_DIR/Primeiro-Teste-R36H-RESUMO.txt"
 : > "$REPORT" || exit 73
 
