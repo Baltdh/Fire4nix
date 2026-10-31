@@ -203,7 +203,7 @@ log 'offline_html_js_css_click=PASS'
 HOME_PAGE="$ROOT/www/inicio.html"
 [ -s "$HOME_PAGE" ] || fail 127 "Pagina inicial HTML ausente: $HOME_PAGE"
 run_stage HOME-UI --verify-home "file://$HOME_PAGE" || fail 4 "A interface inicial, teclado virtual ou controles HTML falharam."
-log 'home_ui_dom_keyboard_form_shortcuts_focus=PASS'
+log 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS'
 log 'ENGINE_FUNCTIONAL_TEST=PASS'
 log 'GRAPHICAL_FRAME_VERIFIED=no'
 log 'GRAPHICAL_FRAME_INSTRUCTIONS=Use --open to keep the 640x480 page visible and confirm the three color blocks and JS OK.'
