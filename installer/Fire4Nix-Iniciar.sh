@@ -99,8 +99,8 @@ case "$RUNTIME_ROOT" in
     /*) ;;
     *) RUNTIME_ROOT="$ROOT/$RUNTIME_ROOT" ;;
 esac
-RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
-    fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
+# Canonicalize after --selftest so the standalone binary self-test does not
+# require a WPE runtime to be installed.
 
 # A non-empty file is not proof of an ARM64 library. Check ELF magic, ELF64,
 # little-endian encoding and e_machine=EM_AARCH64 before any dlopen occurs.
@@ -136,6 +136,9 @@ if [ "$MODE" = --selftest ]; then
     "$BIN" --selftest >> "$LOG" 2>&1
     exit $?
 fi
+RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
+    fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
+printf 'runtime_root_resolved=%s\\n' "$RUNTIME_ROOT" >> "$LOG"
 LIB="$RUNTIME_ROOT/lib/libWPEWebKit-2.0.so.1"
 CHILD="$RUNTIME_ROOT/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing WPE WebKit runtime under $RUNTIME_ROOT"
