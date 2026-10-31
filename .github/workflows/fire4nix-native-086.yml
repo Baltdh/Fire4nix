@@ -50,7 +50,7 @@ jobs:
           build/native086/fire4nix-native-086-aarch64 --help | grep -q -- '--verify-home'
           max_glibc="$(readelf --version-info build/native086/fire4nix-native-086-aarch64 | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
           echo "NATIVE_GLIBC_MAX=$max_glibc"
-          test "$(printf '%s\\n' "$max_glibc" 2.34 | sort -V | tail -n 1)" = 2.34
+          test "$(printf '%s\n' "$max_glibc" 2.34 | sort -V | tail -n 1)" = 2.34
       - name: Test missing runtime and fake WPE GObject lifecycle
         shell: bash
         run: |
