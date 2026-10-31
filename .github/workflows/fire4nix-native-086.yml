@@ -13,19 +13,26 @@ jobs:
     container:
       image: debian:bullseye
     steps:
-      - uses: actions/checkout@v4
-      - name: Install small build dependencies
+      - name: Bootstrap container tools for checkout
+        shell: sh
         run: |
           if ! apt-get update -qq; then
             # Bullseye is the GLIBC 2.31 baseline; after its LTS window,
             # fall back to Debian's archive rather than building against a
             # newer host GLIBC and shipping an incompatible launcher.
             sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g; s|security.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list
-            printf 'Acquire::Check-Valid-Until "false";\\n' > /etc/apt/apt.conf.d/99archive
+            printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
             apt-get update -qq
           fi
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates g++ pkg-config libglib2.0-dev zip file binutils
+            bash git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Install small build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            g++ pkg-config libglib2.0-dev zip file binutils
       - name: Compile standalone WPEPlatform launcher
         shell: bash
         run: |
