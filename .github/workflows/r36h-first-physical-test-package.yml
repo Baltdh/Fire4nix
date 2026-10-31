@@ -284,7 +284,7 @@ jobs:
           sh native/tests/test_local_html_mime_fallback.sh
           grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
           grep -Fq -- '--verify-home' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
-          grep -Fq 'home_ui_dom_keyboard_form_shortcuts_focus=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          grep -Fq 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           test -s "$pkg/Fire4Nix/www/inicio.html"
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
