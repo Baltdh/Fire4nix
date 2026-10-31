@@ -157,15 +157,15 @@ exit_diagnostic=NA
         # manages gamepad mapping while the browser is running.
         # Do not impose a 25-second timeout on the physical display test.
         FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" sh "$installed_root/Fire4Nix-Iniciar.sh" --open \
-          "file://$installed_root/www/primeiro-teste.html" 2>&1
+          "$installed_root/www/primeiro-teste.html" 2>&1
         exit_visual=$?
       else
         echo "visual_test=STARTED_OFFLINE_HTML"
         # Bounded page-load signal for automated diagnostics, never proof
         # of rendered pixels on the physical 640x480 LCD.
         if command -v timeout >/dev/null 2>&1; then
-          timeout 25 env FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
-            "file://$installed_root/www/primeiro-teste.html" 2>&1
+          timeout 25 env FIRE4NIX_RUNTIME_ROOT="$installed_runtime_root" sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
+            "$installed_root/www/primeiro-teste.html" 2>&1
           exit_visual=$?
         else
           sh "$installed_root/Fire4Nix-Iniciar.sh" --smoke \
