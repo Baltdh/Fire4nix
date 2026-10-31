@@ -317,61 +317,10 @@ jobs:
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
           cp "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
           native_sha="$(sha256sum "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | awk '{print $1}')"
-          native_banner="$(strings "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -E '^Fire4Nix native WPEPlatform [0-9]+\\.[0-9]+
-          chmod 0644 "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt"
-          cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<EOF
-          FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
-          WPE_RUNTIME_VERSION=2.54.1
-          WPE_RUNTIME_ARTIFACT_RUN=40033262653
-          NATIVE_LAUNCHER_VERSION=$NATIVE_LAUNCHER_VERSION
-          NATIVE_LAUNCHER_WORKFLOW_RUN=${{ steps.native-run.outputs.run_id }}
-          NATIVE_LAUNCHER_ARTIFACT_ID=${{ steps.native-run.outputs.artifact_id }}
-          NATIVE_LAUNCHER_ARTIFACT_DIGEST=${{ steps.native-run.outputs.artifact_digest }}
-          NATIVE_SOURCE_COMMIT=${{ steps.native-run.outputs.source_sha }}
-          NATIVE_GLIBC_MAX=$NATIVE_GLIBC_MAX
-          WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
-          ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY
-          R36H_DEVICE_ABI_VERIFIED=no
-          R36H_EGL_DIAGNOSTIC_INCLUDED=yes
-          R36H_EGL_PROBE_EXECUTED_ON_DEVICE=no
-          R36H_WAYLAND_EGL_VERIFIED=no
-          R36H_FIRST_FRAME_VERIFIED=no
-          R36H_INTERACTIVE_BROWSING_VERIFIED=no
-          SYSTEM_FILES_MODIFIED=no
-          FIRMWARE_MODIFIED=no
-          EOF
-          chmod 0644 "$pkg/STATUS-PRIMEIRO-TESTE.txt"
-          rm -f "$pkg/PACOTE-SHA256SUMS.txt"
-          (cd "$pkg" && find . -type f ! -path './PACOTE-SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > PACOTE-SHA256SUMS.txt)
-          (cd "$pkg" && sha256sum -c PACOTE-SHA256SUMS.txt > "$RUNNER_TEMP/package-manifest-check.txt")
-          tail -n 3 "$RUNNER_TEMP/package-manifest-check.txt"
-
-      - name: Build and verify ZIP
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p delivery
-          package_name=Fire4Nix-R36H-Beta-20261031
-          mv "$RUNNER_TEMP/package" "$RUNNER_TEMP/$package_name"
-          (cd "$RUNNER_TEMP" && zip -9 -qr "$GITHUB_WORKSPACE/delivery/Fire4Nix-R36H-Beta-20261031.zip" "$package_name")
-          unzip -t delivery/Fire4Nix-R36H-Beta-20261031.zip | tail -1
-          sha256sum delivery/Fire4Nix-R36H-Beta-20261031.zip > delivery/SHA256SUMS.txt
-          cp "$RUNNER_TEMP/$package_name/STATUS-PRIMEIRO-TESTE.txt" delivery/
-          du -h delivery/Fire4Nix-R36H-Beta-20261031.zip
-          unzip -l delivery/Fire4Nix-R36H-Beta-20261031.zip | head -15
-          cat delivery/STATUS-PRIMEIRO-TESTE.txt >> "$GITHUB_STEP_SUMMARY"
-          echo 'PACKAGE_ZIP=PASS' >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Publish R36H first-test package
-        uses: actions/upload-artifact@v4
-        with:
-          name: Fire4Nix-R36H-Beta-20261031
-          path: delivery/
-          if-no-files-found: error
-          retention-days: 30
- | head -n 1)"
+          native_banner="$(strings "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -F 'Fire4Nix native WPEPlatform ' | head -n 1)"
           test -n "$native_banner"
           native_version="${native_banner##* }"
+          case "$native_version" in [0-9]*.[0-9]*) ;; *) echo "Invalid native launcher version: $native_version" >&2; exit 1 ;; esac
           native_glibc="$(readelf --version-info "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
           test -n "$native_glibc"
           cat > "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt" <<EOF
@@ -387,15 +336,16 @@ jobs:
           echo "NATIVE_LAUNCHER_VERSION=$native_version" >> "$GITHUB_ENV"
           echo "NATIVE_GLIBC_MAX=$native_glibc" >> "$GITHUB_ENV"
           chmod 0644 "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt"
-          cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<'EOF'
+          cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<EOF
           FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
           WPE_RUNTIME_VERSION=2.54.1
           WPE_RUNTIME_ARTIFACT_RUN=40033262653
-          NATIVE_LAUNCHER_VERSION=1.05
-          NATIVE_LAUNCHER_ARTIFACT_RUN=41181670144
-          NATIVE_LAUNCHER_ARTIFACT_ID=13035271896
-          NATIVE_SOURCE_COMMIT=2d1fdbc0303f57c0f1388f2b002c6241f3eefcc4
-          NATIVE_GLIBC_MAX=2.34
+          NATIVE_LAUNCHER_VERSION=$native_version
+          NATIVE_LAUNCHER_WORKFLOW_RUN=${{ steps.native-run.outputs.run_id }}
+          NATIVE_LAUNCHER_ARTIFACT_ID=${{ steps.native-run.outputs.artifact_id }}
+          NATIVE_LAUNCHER_ARTIFACT_DIGEST=${{ steps.native-run.outputs.artifact_digest }}
+          NATIVE_SOURCE_COMMIT=${{ steps.native-run.outputs.source_sha }}
+          NATIVE_GLIBC_MAX=$native_glibc
           WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
           ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY
           R36H_DEVICE_ABI_VERIFIED=no
