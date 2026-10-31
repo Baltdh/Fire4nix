@@ -31,10 +31,10 @@ make_runtime() {
   done
 }
 
-PKG="$T/package/Fire4Nix"
+PKG="$T/sandbox with space/Fire4Nix"
 mkdir -p "$PKG/bin" "$PKG/config" "$T/logs"
 cp "$REPO/installer/Fire4Nix-Iniciar.sh" "$PKG/Fire4Nix-Iniciar.sh"
-cp "$REPO/installer/Diagnosticar-Fire4Nix.sh" "$T/package/Diagnosticar-Fire4Nix.sh"
+cp "$REPO/installer/Diagnosticar-Fire4Nix.sh" "$T/sandbox with space/Diagnosticar-Fire4Nix.sh"
 make_runtime "$PKG/runtime"
 
 cat > "$PKG/bin/fire4nix-native-aarch64" <<'NATIVE'
@@ -77,7 +77,7 @@ grep -Fq "runtime_root=$T/external-runtime" "$T/external.log"
 mkdir -p "$PKG/www" "$T/fakebin" "$T/first-report"
 printf '<!doctype html><title>Fire4Nix offline fixture</title>\\n' > "$PKG/www/primeiro-teste.html"
 cp "$REPO/installer/www/inicio.html" "$PKG/www/inicio.html"
-cp "$REPO/installer/Fire4Nix-Primeiro-Teste-R36.sh" "$T/package/Fire4Nix-Primeiro-Teste-R36.sh"
+cp "$REPO/installer/Fire4Nix-Primeiro-Teste-R36.sh" "$T/sandbox with space/Fire4Nix-Primeiro-Teste-R36.sh"
 cat > "$T/fakebin/uname" <<'UNAME'
 #!/bin/sh
 case "${1:-}" in
@@ -111,7 +111,7 @@ FIRE4NIX_TEST_TRACE="$TRACE" \
 FIRE4NIX_GAMEPAD=0 \
 FIRE4NIX_LOG_DIR="$T/logs" \
 FIRE4NIX_TEST_REPORT_DIR="$T/first-report" \
-  sh "$T/package/Fire4Nix-Primeiro-Teste-R36.sh" --preflight > "$T/first-test.log" 2>&1
+  sh "$T/sandbox with space/Fire4Nix-Primeiro-Teste-R36.sh" --preflight > "$T/first-test.log" 2>&1
 grep -Fxq "runtime_root=$T/external-runtime" "$T/first-report/Primeiro-Teste-R36H-ULTIMO.txt"
 grep -Fq 'offline_html_js_css_click=PASS' "$T/first-test.log"
 grep -Fq 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS' "$T/first-test.log"
