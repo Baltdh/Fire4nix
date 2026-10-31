@@ -16,6 +16,7 @@ on:
       - 'native/fire4nix_wpeplatform.cpp'
       - 'native/tests/test_headless_integration_contract.py'
       - 'installer/www/primeiro-teste.html'
+      - 'installer/www/inicio.html'
       - '.github/workflows/wpe-headless-arm64-integration.yml'
   workflow_dispatch:
 
