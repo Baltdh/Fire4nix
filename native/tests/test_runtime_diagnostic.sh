@@ -4,6 +4,17 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
 T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct
+import sys
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+with open(sys.argv[1], "wb") as stream:
+    stream.write(ident + header)
+PY
+}
 mkdir -p "$T/package/Fire4Nix/bin" "$T/runtime/libexec/wpe-webkit-2.0" "$T/runtime/lib"
 cp "$ROOT/installer/Diagnosticar-Fire4Nix.sh" "$T/package/Diagnosticar-Fire4Nix.sh"
 cat > "$T/package/Fire4Nix/bin/fire4nix-native-aarch64" <<'BROWSER'
@@ -14,7 +25,7 @@ printf '[FIRE4NIX-ABI] wpe_toplevel_fullscreen=absent\n'
 exit 78
 BROWSER
 chmod +x "$T/package/Fire4Nix/bin/fire4nix-native-aarch64"
-printf 'MOCK-lib' > "$T/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$T/runtime/lib/libWPEWebKit-2.0.so.1"
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
   printf 'MOCK-process' > "$T/runtime/libexec/wpe-webkit-2.0/$p"
 done

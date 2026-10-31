@@ -4,13 +4,22 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
 T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 APP="$T/my Fire4Nix"
 mkdir -p "$APP/bin" "$APP/runtime/lib" "$APP/runtime/libexec/wpe-webkit-2.0" "$T/logs" "$T/reports" "$T/foreign"
 cp "$HERE/installer/Fire4Nix-Iniciar.sh" "$APP/Fire4Nix-Iniciar.sh"
-printf 'mock webkit\n' > "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
 printf 'mock EGL\n' > "$APP/runtime/lib/libEGL.so.1"
 for p in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-  printf 'mock process\n' > "$APP/runtime/libexec/wpe-webkit-2.0/$p"
+  make_arm64_elf "$APP/runtime/libexec/wpe-webkit-2.0/$p"
 done
 cat > "$APP/bin/fire4nix-native-aarch64" <<'MOCK'
 #!/bin/sh

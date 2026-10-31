@@ -4,13 +4,22 @@ on:
   push:
     branches:
       - codex/r36h-first-physical-test-20261030
+      - codex/r36h-file-html-mime-fix-20261031
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
+      - 'native/**'
+      - '.github/workflows/fire4nix-native-086.yml'
+      - 'native/tests/test_local_html_mime_fallback.sh'
       - 'installer/Fire4Nix-Primeiro-Teste-R36.sh'
       - 'installer/Fire4Nix-EGL-R36H.py'
       - 'installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt'
       - 'native/tests/test_first_test_graphics_probe.sh'
       - 'installer/Fire4Nix-Teste.sh'
+      - 'installer/Fire4Nix-Direto.sh'
+      - 'installer/config/fire4nix.gptk'
+      - 'installer/www/inicio.html'
+      - 'installer/www/primeiro-teste.html'
+      - 'scripts/package-first-r36h-ports-candidate.py'
       - 'installer/Diagnosticar-Fire4Nix.sh'
       - 'installer/Fire4Nix-Inspecionar-ELF.sh'
       - '.github/workflows/r36h-first-physical-test-package.yml'
@@ -22,10 +31,73 @@ permissions:
 
 jobs:
   assemble-r36h-first-test:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Resolve matching ARM64 native launcher artifact
+        id: native-run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '')
+            const changed = [
+              ...(context.payload.commits || []).flatMap(commit => commit.modified || []),
+              ...((context.payload.head_commit && context.payload.head_commit.modified) || [])
+            ]
+            const nativeChanged = changed.some(file =>
+              file.startsWith('native/') || file === '.github/workflows/fire4nix-native-086.yml'
+            )
+            const listRuns = async () => {
+              const response = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'fire4nix-native-086.yml',
+                branch,
+                per_page: 30
+              })
+              return response.data.workflow_runs.filter(item =>
+                item.head_repository?.full_name === context.repo.owner + '/' + context.repo.repo
+              )
+            }
+            let run = null
+            if (nativeChanged) {
+              // The native and package workflows start from the same push.
+              // Wait for the exact SHA to avoid packaging a stale launcher.
+              for (let attempt = 0; attempt < 60; attempt++) {
+                const runs = await listRuns()
+                run = runs.find(item => item.head_sha === context.sha)
+                if (run && run.status === 'completed') break
+                await new Promise(resolve => setTimeout(resolve, 10000))
+              }
+              if (!run || run.conclusion !== 'success') {
+                throw new Error('Matching ARM64 native build did not complete successfully for ' + context.sha)
+              }
+            } else {
+              // Installer/UI-only changes reuse the newest successful native
+              // binary. Give the Actions API a short consistency window, then
+              // wait for any newer in-progress build before choosing an older
+              // successful artifact.
+              await new Promise(resolve => setTimeout(resolve, 15000))
+              let runs = []
+              for (let attempt = 0; attempt < 18; attempt++) {
+                runs = await listRuns()
+                const newest = [...runs].sort((a, b) =>
+                  Date.parse(b.created_at) - Date.parse(a.created_at)
+                )[0]
+                if (!newest || newest.status === 'completed') break
+                await new Promise(resolve => setTimeout(resolve, 10000))
+              }
+              run = runs
+                .filter(item => item.conclusion === 'success')
+                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
+              if (!run) throw new Error('No successful ARM64 native launcher artifact for this branch')
+            }
+            core.setOutput('run_id', String(run.id))
 
       - name: Download pinned ROCKNIX WPE 2.54.1 runtime artifact
         uses: actions/download-artifact@v4
@@ -36,11 +108,11 @@ jobs:
           name: Fire4Nix-R36H-Mali-EGL-Experimental
           path: ${{ runner.temp }}/wpe-artifact
 
-      - name: Download pinned Fire4Nix ARM64 launcher
+      - name: Download matching Fire4Nix ARM64 launcher
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 41138107872
+          run-id: ${{ steps.native-run.outputs.run_id }}
           github-token: ${{ github.token }}
           name: Fire4Nix-0.86-R36H-ARM64-Native-Test
           path: ${{ runner.temp }}/native-artifact
@@ -132,6 +204,7 @@ jobs:
           lib="$pkg/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
           readelf -h "$bin" | grep -Eq 'Class:[[:space:]]+ELF64'
           readelf -h "$bin" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          "$bin" --help | grep -q -- '--verify-home'
           readelf -h "$lib" | grep -Eq 'Machine:[[:space:]]+AArch64'
           readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
           readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
@@ -143,6 +216,7 @@ jobs:
           readelf --dyn-syms -W "$lib" | awk '$7!="UND" {print $8}' | sed 's/@.*//' | sort -u > "$RUNNER_TEMP/wpe-exports.txt"
           cat > "$RUNNER_TEMP/wpe-required-symbols.txt" <<'EOF'
           jsc_value_to_string
+          webkit_web_view_load_html
           webkit_get_major_version
           webkit_get_micro_version
           webkit_get_minor_version
@@ -176,7 +250,8 @@ jobs:
             }
           done < "$RUNNER_TEMP/wpe-required-symbols.txt"
           echo 'NATIVE_WPE_2_54_1_REQUIRED_SYMBOLS=26_OF_26'
-          strings "$bin" | grep -Fq 'Fire4Nix native WPEPlatform 1.05'
+          strings "$bin" | grep -Fq 'Fire4Nix native WPEPlatform 1.06'
+          strings "$bin" | grep -Fq 'webkit_web_view_load_html'
           grep -Fxq 'GPU_PROCESS_PROFILE=disabled_verified_wayland' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
           grep -Fxq 'WPE_INSTALLED_ASSETS_PROFILE=strict' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
           grep -Fxq 'WPE_INSTALLED_ASSETS_STATUS=copied_and_static_elf_checked' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
@@ -206,18 +281,33 @@ jobs:
           sh native/tests/test_first_test_graphics_probe.sh
           grep -Fq -- '--graphics-probe' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           test -s "$pkg/Fire4Nix-EGL-R36H.py"
+          sh native/tests/test_local_html_mime_fallback.sh
           grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
+          grep -Fq -- '--verify-home' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
+          grep -Fq 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          test -s "$pkg/Fire4Nix/www/inicio.html"
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
           cp "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
+          native_sha="$(sha256sum "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | awk '{print $1}')"
+          cat > "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt" <<EOF
+          NATIVE_LAUNCHER_WORKFLOW_RUN=41181670144
+          NATIVE_LAUNCHER_ARTIFACT_ID=13035271896
+          NATIVE_SOURCE_COMMIT=2d1fdbc0303f57c0f1388f2b002c6241f3eefcc4
+          NATIVE_BINARY_SHA256=$native_sha
+          NATIVE_GLIBC_MAX=2.34
+          NATIVE_LOCAL_HTML_API=webkit_web_view_load_html
+          EOF
+          chmod 0644 "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt"
           cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<'EOF'
           FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
           WPE_RUNTIME_VERSION=2.54.1
           WPE_RUNTIME_ARTIFACT_RUN=40033262653
           NATIVE_LAUNCHER_VERSION=1.05
-          NATIVE_LAUNCHER_ARTIFACT_RUN=41138107872
-          NATIVE_SOURCE_COMMIT=99c09459bc67bee5e7ab50255dd5dbbbc6df07c3
+          NATIVE_LAUNCHER_ARTIFACT_RUN=41181670144
+          NATIVE_LAUNCHER_ARTIFACT_ID=13035271896
+          NATIVE_SOURCE_COMMIT=2d1fdbc0303f57c0f1388f2b002c6241f3eefcc4
           NATIVE_GLIBC_MAX=2.34
           WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
           ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY
@@ -241,21 +331,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p delivery
-          package_name=Fire4Nix-R36H-Primeiro-Teste-20261030
+          package_name=Fire4Nix-R36H-Beta-20261031
           mv "$RUNNER_TEMP/package" "$RUNNER_TEMP/$package_name"
-          (cd "$RUNNER_TEMP" && zip -9 -qr "$GITHUB_WORKSPACE/delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip" "$package_name")
-          unzip -t delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip | tail -1
-          sha256sum delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip > delivery/SHA256SUMS.txt
+          (cd "$RUNNER_TEMP" && zip -9 -qr "$GITHUB_WORKSPACE/delivery/Fire4Nix-R36H-Beta-20261031.zip" "$package_name")
+          unzip -t delivery/Fire4Nix-R36H-Beta-20261031.zip | tail -1
+          sha256sum delivery/Fire4Nix-R36H-Beta-20261031.zip > delivery/SHA256SUMS.txt
           cp "$RUNNER_TEMP/$package_name/STATUS-PRIMEIRO-TESTE.txt" delivery/
-          du -h delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip
-          unzip -l delivery/Fire4Nix-R36H-Primeiro-Teste-20261030.zip | head -15
+          du -h delivery/Fire4Nix-R36H-Beta-20261031.zip
+          unzip -l delivery/Fire4Nix-R36H-Beta-20261031.zip | head -15
           cat delivery/STATUS-PRIMEIRO-TESTE.txt >> "$GITHUB_STEP_SUMMARY"
           echo 'PACKAGE_ZIP=PASS' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish R36H first-test package
         uses: actions/upload-artifact@v4
         with:
-          name: Fire4Nix-R36H-Primeiro-Teste-20261030
+          name: Fire4Nix-R36H-Beta-20261031
           path: delivery/
           if-no-files-found: error
           retention-days: 30

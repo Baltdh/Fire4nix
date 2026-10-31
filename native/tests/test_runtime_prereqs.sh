@@ -4,9 +4,18 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
 T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 mkdir -p "$T/bin" "$T/pkg/Fire4Nix/bin" "$T/runtime/lib" "$T/runtime/libexec/wpe-webkit-2.0"
 cp "$ROOT/installer/Diagnosticar-Fire4Nix.sh" "$T/pkg/Diagnosticar-Fire4Nix.sh"
-printf "mock WPE" > "$T/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$T/runtime/lib/libWPEWebKit-2.0.so.1"
 printf "mock EGL" > "$T/runtime/lib/libEGL.so.1"
 printf "mock font" > "$T/fallback.ttf"
 cat > "$T/bin/fc-list" <<'FONTS'

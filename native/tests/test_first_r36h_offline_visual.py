@@ -74,7 +74,8 @@ class FirstOfflineVisualTests(unittest.TestCase):
 
     def test_visual_script_uses_first_test_page_for_both_paths(self):
         shell = VISUAL.read_text("utf-8")
-        self.assertEqual(shell.count('file://$installed_root/www/primeiro-teste.html'), 3)
+        self.assertEqual(shell.count('"$installed_root/www/primeiro-teste.html" 2>&1'), 3)
+        self.assertNotIn('file://$installed_root/www/primeiro-teste.html', shell)
         self.assertNotIn('file://$installed_root/www/inicio.html', shell)
         self.assertIn("visual_test_manual_checks=HTML_CSS_THREE_COLORS_AND_JS_OK", shell)
         self.assertIn("PAGE_LOAD_SIGNAL_ONLY_MANUALLY_CONFIRM_CSS_AND_JS", shell)

@@ -31,7 +31,7 @@ mkdir -p "$REPORT_DIR" 2>/dev/null || {
   echo "ERRO: nao foi possivel criar $REPORT_DIR" >&2
   exit 73
 }
-REPORT=$(mktemp "$REPORT_DIR/Primeiro-Teste-R36H-XXXXXX.txt") || exit 73
+REPORT=$(mktemp "$REPORT_DIR/Primeiro-Teste-R36H-XXXXXX") || exit 73
 SUMMARY="$REPORT_DIR/Primeiro-Teste-R36H-RESUMO.txt"
 : > "$REPORT" || exit 73
 
@@ -129,9 +129,59 @@ fi
 [ "$(uname -m 2>/dev/null)" = aarch64 ] || fail 126 "Este pacote requer ROCKNIX ARM64 (aarch64)."
 [ -s "$BIN" ] || fail 127 "Executavel Fire4Nix ausente: $BIN"
 [ -f "$LAUNCHER" ] || fail 127 "Launcher principal ausente: $LAUNCHER"
-[ -s "$ROOT/runtime/lib/libWPEWebKit-2.0.so.1" ] || fail 127 "Runtime WPE local ausente."
-[ -s "$ROOT/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" ] || fail 127 "WPEWebProcess ausente."
-[ -s "$ROOT/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" ] || fail 127 "WPENetworkProcess ausente."
+# Resolve the private WPE runtime independently from the package directory.
+# The explicit override supports the two-SD layout; otherwise prefer the
+# package-local runtime and then known ROCKNIX tools/Ports locations.
+is_elf64_aarch64() {
+  file_path=$1
+  [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
+  command -v od >/dev/null 2>&1 || return 1
+  elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
+  set -- $elf_bytes
+  [ "$#" -ge 20 ] || return 1
+  [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
+  [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
+}
+RUNTIME_ROOT=""
+INVALID_RUNTIME=""
+if [ -n "${FIRE4NIX_RUNTIME_ROOT:-}" ]; then
+  candidate=$FIRE4NIX_RUNTIME_ROOT
+  case "$candidate" in /*) ;; *) candidate="$ROOT/$candidate" ;; esac
+  if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+    RUNTIME_ROOT=$candidate
+  else
+    INVALID_RUNTIME=$candidate
+  fi
+else
+  for candidate in "$ROOT/runtime" "$HERE/Fire4Nix/runtime" \
+    /storage/games-internal/roms/tools/Fire4Nix/runtime \
+    /storage/games-external/roms/tools/Fire4Nix/runtime \
+    /storage/roms/tools/Fire4Nix/runtime \
+    /storage/games-internal/roms/ports/fire4nix-completo/runtime \
+    /storage/games-external/roms/ports/fire4nix-completo/runtime \
+    /storage/roms/ports/fire4nix-completo/runtime; do
+    if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+      RUNTIME_ROOT=$candidate
+      break
+    elif [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ] && [ -z "$INVALID_RUNTIME" ]; then
+      INVALID_RUNTIME=$candidate
+    fi
+  done
+fi
+[ -n "$RUNTIME_ROOT" ] || {
+  [ -n "$INVALID_RUNTIME" ] && log "invalid_wpe_runtime=$INVALID_RUNTIME"
+  fail 79 "Runtime WPE ausente ou nao e ELF64 AArch64 valido."
+}
+RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
+  fail 127 "Diretorio de runtime WPE nao encontrado."
+export FIRE4NIX_RUNTIME_ROOT="$RUNTIME_ROOT"
+log "runtime_root=$RUNTIME_ROOT"
+[ -s "$RUNTIME_ROOT/libexec/wpe-webkit-2.0/WPEWebProcess" ] &&
+  is_elf64_aarch64 "$RUNTIME_ROOT/libexec/wpe-webkit-2.0/WPEWebProcess" ||
+  fail 79 "WPEWebProcess ausente ou ELF64 AArch64 invalido."
+[ -s "$RUNTIME_ROOT/libexec/wpe-webkit-2.0/WPENetworkProcess" ] &&
+  is_elf64_aarch64 "$RUNTIME_ROOT/libexec/wpe-webkit-2.0/WPENetworkProcess" ||
+  fail 79 "WPENetworkProcess ausente ou ELF64 AArch64 invalido."
 [ -s "$PAGE" ] || fail 127 "Pagina offline de teste ausente."
 
 if ! "$BIN" --selftest > "$REPORT_DIR/selftest.log" 2>&1; then
@@ -147,8 +197,13 @@ log 'wpe_library=PASS'
 run_stage WPEPLATFORM-ABI --check-platform || fail 78 "A biblioteca nao expoe toda a API WPEPlatform necessaria."
 log 'wpeplatform_symbols=PASS'
 
-run_stage OFFLINE-ENGINE --verify-offline "file://$PAGE" || fail 4 "O WebKit nao passou no teste DOM/JavaScript/CSS/clique."
+run_stage OFFLINE-ENGINE --verify-offline "$PAGE" || fail 4 "O WebKit nao passou no teste DOM/JavaScript/CSS/clique."
 log 'offline_html_js_css_click=PASS'
+
+HOME_PAGE="$ROOT/www/inicio.html"
+[ -s "$HOME_PAGE" ] || fail 127 "Pagina inicial HTML ausente: $HOME_PAGE"
+run_stage HOME-UI --verify-home "$HOME_PAGE" || fail 4 "A interface inicial, teclado virtual ou controles HTML falharam."
+log 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS'
 log 'ENGINE_FUNCTIONAL_TEST=PASS'
 log 'GRAPHICAL_FRAME_VERIFIED=no'
 log 'GRAPHICAL_FRAME_INSTRUCTIONS=Use --open to keep the 640x480 page visible and confirm the three color blocks and JS OK.'
@@ -156,7 +211,7 @@ log 'GRAPHICAL_FRAME_INSTRUCTIONS=Use --open to keep the 640x480 page visible an
 if [ "$MODE" = --open ]; then
   log 'visual_session=STARTED'
   log 'visual_manual_checks=THREE_COLOR_BLOCKS,JS_OK,TEST_BUTTON_CLICK'
-  sh "$LAUNCHER" --open "file://$PAGE" >> "$REPORT" 2>&1
+  sh "$LAUNCHER" --open "$PAGE" >> "$REPORT" 2>&1
   visual_rc=$?
   log "visual_session_exit=$visual_rc"
   if [ "$visual_rc" -eq 0 ]; then

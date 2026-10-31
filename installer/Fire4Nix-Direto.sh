@@ -13,6 +13,18 @@ else
 fi
 : > "$LOG" || exit 73
 log() { printf '%s\n' "$*" >> "$LOG"; }
+# Ports can keep the native launcher on one SD and the large WPE runtime on
+# another. Only accept a real ELF64 little-endian AArch64 library.
+is_elf64_aarch64() {
+    file_path=$1
+    [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
+    command -v od >/dev/null 2>&1 || return 1
+    elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
+    set -- $elf_bytes
+    [ "$#" -ge 20 ] || return 1
+    [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
+    [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
+}
 if [ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-wayland-0}" ] &&
    [ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/wayland-1" ]; then
     for session_dir in /var/run/0-runtime-dir /run/user/0 "/run/user/$(id -u)"; do
@@ -44,45 +56,87 @@ for root in "${FIRE4NIX_ROOT:-}" "$HERE/fire4nix-completo" "$HERE/Fire4Nix" "$HE
     /storage/roms/tools/Fire4Nix; do
     [ -n "$root" ] && [ -d "$root" ] || continue
     if [ -f "$root/Fire4Nix-Iniciar.sh" ] &&
-       [ -s "$root/bin/fire4nix-native-aarch64" ] &&
-       [ -s "$root/runtime/lib/libWPEWebKit-2.0.so.1" ]; then
+       [ -s "$root/bin/fire4nix-native-aarch64" ]; then
+        runtime_root=""
+        invalid_runtime=""
+        if [ -n "${FIRE4NIX_RUNTIME_ROOT:-}" ]; then
+            candidate=$FIRE4NIX_RUNTIME_ROOT
+            case "$candidate" in
+                /*) ;;
+                *) candidate="$root/$candidate" ;;
+            esac
+            if [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ]; then
+                if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+                    runtime_root=$candidate
+                else
+                    invalid_runtime=$candidate
+                fi
+            fi
+        else
+            for candidate in "$root/runtime" \
+                "${FIRE4NIX_ROMS:-/no-roms}/tools/Fire4Nix/runtime" \
+                "${FIRE4NIX_ROMS:-/no-roms}/ports/fire4nix-completo/runtime" \
+                /storage/games-internal/roms/tools/Fire4Nix/runtime \
+                /storage/games-external/roms/tools/Fire4Nix/runtime \
+                /storage/roms/tools/Fire4Nix/runtime \
+                /storage/games-internal/roms/ports/fire4nix-completo/runtime \
+                /storage/games-external/roms/ports/fire4nix-completo/runtime \
+                /storage/roms/ports/fire4nix-completo/runtime; do
+                if [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ]; then
+                    if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+                        runtime_root=$candidate
+                        break
+                    elif [ -z "$invalid_runtime" ]; then
+                        invalid_runtime=$candidate
+                    fi
+                fi
+            done
+        fi
+        if [ -z "$runtime_root" ]; then
+            [ -n "$invalid_runtime" ] && log "skipped_invalid_runtime_elf=$invalid_runtime"
+            log "skipped_no_valid_wpe_runtime=$root"
+            continue
+        fi
         # Match the primary launcher: only a verified ROCKNIX Wayland
         # GPU-off report permits omitting WPEGPUProcess. No report retains
         # the conservative three-process requirement for legacy runtimes.
         gpu_required=1
-        gpu_report="$root/runtime/BUILD-REPORT.txt"
+        gpu_report="$runtime_root/BUILD-REPORT.txt"
         if [ -e "$gpu_report" ] || [ -L "$gpu_report" ]; then
             if [ ! -f "$gpu_report" ] || [ -L "$gpu_report" ]; then
-                log "skipped_invalid_gpu_report=$root"
+                log "skipped_invalid_gpu_report=$runtime_root"
                 continue
             fi
             gpu_profile=$(sed -n 's/^GPU_PROCESS_PROFILE=//p' "$gpu_report") || {
-                log "skipped_unreadable_gpu_report=$root"
+                log "skipped_unreadable_gpu_report=$runtime_root"
                 continue
             }
             case "$gpu_profile" in
                 disabled_verified_wayland) gpu_required=0 ;;
                 required_unverified|enabled_verified|'') gpu_required=1 ;;
-                *) log "skipped_invalid_gpu_profile=$root"; continue ;;
+                *) log "skipped_invalid_gpu_profile=$runtime_root"; continue ;;
             esac
         fi
         missing_child=""
         for child in WPEWebProcess WPENetworkProcess; do
-            if [ ! -s "$root/runtime/libexec/wpe-webkit-2.0/$child" ]; then
+            child_path="$runtime_root/libexec/wpe-webkit-2.0/$child"
+            if ! is_elf64_aarch64 "$child_path"; then
                 missing_child="$missing_child $child"
             fi
         done
         if [ "$gpu_required" -eq 1 ] &&
-           [ ! -s "$root/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess" ]; then
+           ! is_elf64_aarch64 "$runtime_root/libexec/wpe-webkit-2.0/WPEGPUProcess"; then
             missing_child="$missing_child WPEGPUProcess"
         fi
         if [ -n "$missing_child" ]; then
-            log "skipped_incomplete_runtime=$root missing=$missing_child"
+            log "skipped_incomplete_or_invalid_runtime=$runtime_root missing=$missing_child"
             continue
         fi
         selected=$root
         log "selected_install=$selected"
+        log "selected_runtime=$runtime_root"
         log 'launch_mode=native-wpeplatform'
+        FIRE4NIX_RUNTIME_ROOT="$runtime_root" \
         FIRE4NIX_LOG_DIR="${FIRE4NIX_LOG_DIR:-$(dirname "$LOG")}" \
           sh "$root/Fire4Nix-Iniciar.sh" --open "$@" >> "$LOG" 2>&1
         status=$?

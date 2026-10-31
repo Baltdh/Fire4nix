@@ -90,15 +90,40 @@ fail() {
     printf 'error=%s\n' "$*" >> "$LOG"
     exit "$code"
 }
+
+# Resolve the engine independently from the launcher location only when the
+# caller explicitly requests a split-SD runtime. Never inherit a stale tools
+# path silently from a previous Ports process.
+RUNTIME_ROOT=${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}
+case "$RUNTIME_ROOT" in
+    /*) ;;
+    *) RUNTIME_ROOT="$ROOT/$RUNTIME_ROOT" ;;
+esac
+# Canonicalize after --selftest so the standalone binary self-test does not
+# require a WPE runtime to be installed.
+
+# A non-empty file is not proof of an ARM64 library. Check ELF magic, ELF64,
+# little-endian encoding and e_machine=EM_AARCH64 before any dlopen occurs.
+# od is used instead of readelf so the guard also works on minimal BusyBox.
+is_elf64_aarch64() {
+    file_path=$1
+    [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
+    command -v od >/dev/null 2>&1 || return 1
+    elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
+    set -- $elf_bytes
+    [ "$#" -ge 20 ] || return 1
+    [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
+    [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
+}
 # At most 12 log files; never delete the stable last-result copy in /storage.
 ls -1t "$LOG_DIR"/Fire4Nix-*.log "$LOG_DIR"/Fire4Nix-*-log-* 2>/dev/null | sed -n '13,$p' |
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=1.05\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=1.06\nroot=%s\nruntime_root=%s\n' "$ROOT" "$RUNTIME_ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
-  --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline)
+  --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage)
     MODE=$1
     shift ;;
   --*) fail 2 "Unsupported Fire4Nix option: $1" ;;
@@ -111,13 +136,18 @@ if [ "$MODE" = --selftest ]; then
     "$BIN" --selftest >> "$LOG" 2>&1
     exit $?
 fi
-LIB="$ROOT/runtime/lib/libWPEWebKit-2.0.so.1"
-CHILD="$ROOT/runtime/libexec/wpe-webkit-2.0"
-[ -s "$LIB" ] || fail 127 "Missing local WPE WebKit runtime"
+RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
+    fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
+printf 'runtime_root_resolved=%s\n' "$RUNTIME_ROOT" >> "$LOG"
+LIB="$RUNTIME_ROOT/lib/libWPEWebKit-2.0.so.1"
+CHILD="$RUNTIME_ROOT/libexec/wpe-webkit-2.0"
+[ -s "$LIB" ] || fail 127 "Missing WPE WebKit runtime under $RUNTIME_ROOT"
+is_elf64_aarch64 "$LIB" ||
+    fail 79 "WPE WebKit library is not a valid ELF64 AArch64 object: $LIB"
 # Stage-WPE from ROCKNIX (PR #116) records a verified configure profile.
 # Legacy runtimes with no BUILD-REPORT continue to require WPEGPUProcess.
 GPU_PROCESS_REQUIRED=1
-GPU_REPORT="$ROOT/runtime/BUILD-REPORT.txt"
+GPU_REPORT="$RUNTIME_ROOT/BUILD-REPORT.txt"
 if [ -e "$GPU_REPORT" ]; then
     [ -f "$GPU_REPORT" ] && [ ! -L "$GPU_REPORT" ] ||
         fail 127 "Invalid WPE runtime build report"
@@ -130,9 +160,13 @@ if [ -e "$GPU_REPORT" ]; then
 fi
 for child in WPEWebProcess WPENetworkProcess; do
     [ -s "$CHILD/$child" ] || fail 127 "Missing WebKit subprocess: $child"
+    is_elf64_aarch64 "$CHILD/$child" ||
+        fail 79 "WebKit subprocess is not a valid ELF64 AArch64 binary: $CHILD/$child"
 done
 if [ "$GPU_PROCESS_REQUIRED" -eq 1 ]; then
     [ -s "$CHILD/WPEGPUProcess" ] || fail 127 "Missing WebKit subprocess: WPEGPUProcess"
+    is_elf64_aarch64 "$CHILD/WPEGPUProcess" ||
+        fail 79 "WPEGPUProcess is not a valid ELF64 AArch64 binary"
 fi
 printf 'gpu_process_required=%s\n' "$GPU_PROCESS_REQUIRED" >> "$LOG"
 # A previous PortMaster/SD launch can leave incompatible system libraries on
@@ -140,22 +174,38 @@ printf 'gpu_process_required=%s\n' "$GPU_PROCESS_REQUIRED" >> "$LOG"
 # previous behavior behind an explicit opt-in for controlled comparisons.
 if [ "${FIRE4NIX_INHERIT_LIBRARY_PATH:-0}" = 1 ]; then
     printf 'library_path_mode=compat_inherited\n' >> "$LOG"
-    export LD_LIBRARY_PATH="$ROOT/runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$RUNTIME_ROOT/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 else
     if [ -n "${LD_LIBRARY_PATH:-}" ]; then
         printf 'library_path_mode=isolated_discarded_inherited_paths\n' >> "$LOG"
     else
         printf 'library_path_mode=isolated_no_inherited_paths\n' >> "$LOG"
     fi
-    export LD_LIBRARY_PATH="$ROOT/runtime/lib"
+    export LD_LIBRARY_PATH="$RUNTIME_ROOT/lib"
 fi
 # Do not unset LD_PRELOAD: ROCKNIX may use a platform-provided Mali hook.
 for lib in libc.so.6 ld-linux-aarch64.so.1 libwayland-client.so.0 \
            libgbm.so.1 libdrm.so.2 libEGL.so.1 libGLESv2.so.2 libmali.so; do
-    if [ -e "$ROOT/runtime/lib/$lib" ]; then
+    if [ -e "$RUNTIME_ROOT/lib/$lib" ]; then
         printf 'warning=private_system_or_gpu_library:%s\n' "$lib" >> "$LOG"
     fi
 done
+# WPE 2.54 may use Bubblewrap and xdg-dbus-proxy for WebProcess isolation.
+# Never disable the sandbox silently. The opt-in below is only for controlled
+# experiments on ROCKNIX images that lack those helpers.
+BWRAP_BIN=$(command -v bwrap 2>/dev/null || true)
+DBUS_PROXY_BIN=$(command -v xdg-dbus-proxy 2>/dev/null || true)
+if [ -n "$BWRAP_BIN" ] && [ -n "$DBUS_PROXY_BIN" ]; then
+    printf 'sandbox_helpers=bwrap_and_xdg_dbus_proxy_present\n' >> "$LOG"
+elif [ "${WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS:-0}" = 1 ]; then
+    printf 'sandbox_mode=disabled_explicitly_by_environment\n' >> "$LOG"
+elif [ "${FIRE4NIX_ALLOW_UNSANDBOXED:-0}" = 1 ]; then
+    export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+    printf 'warning=sandbox_disabled_by_explicit_user_opt_in\n' >> "$LOG"
+else
+    printf 'warning=sandbox_unverified_bwrap_or_proxy_missing\n' >> "$LOG"
+    printf 'hint=FIRE4NIX_ALLOW_UNSANDBOXED=1_only_for_controlled_testing\n' >> "$LOG"
+fi
 export WEBKIT_EXEC_PATH="$CHILD"
 # Patched WPE keeps normal EGL paths first, then permits the device-probed
 # EGL_DEFAULT_DISPLAY fallback. Unpatched upstream ignores this variable.
@@ -164,9 +214,9 @@ printf 'wpe_default_egl_fallback=%s\n' "$FIRE4NIX_WPE_DEFAULT_EGL" >> "$LOG"
 # WPE 2.54.1 looks for its dlopen-loaded injected bundle and GResource via
 # these exact variables. A private SD-card runtime must not inherit values
 # from another WebKit installation or fall back to build-time /usr paths.
-INJECTED_DIR="$ROOT/runtime/lib/wpe-webkit-2.0/injected-bundle"
+INJECTED_DIR="$RUNTIME_ROOT/lib/wpe-webkit-2.0/injected-bundle"
 INJECTED_SO="$INJECTED_DIR/libWPEInjectedBundle.so"
-INSPECTOR_RESOURCE="$ROOT/runtime/share/wpe-webkit-2.0/inspector.gresource"
+INSPECTOR_RESOURCE="$RUNTIME_ROOT/share/wpe-webkit-2.0/inspector.gresource"
 ASSET_PROFILE=legacy_optional
 ASSET_STATUS=unreported
 if [ -f "$GPU_REPORT" ]; then
@@ -266,9 +316,11 @@ fi
 printf 'mali_wayland_afbc=%s\n' "${MALI_WAYLAND_AFBC:-not_overridden}" >> "$LOG"
 printf 'mali_default_display=%s\n' "${MALI_DEFAULT_DISPLAY:-unconfigured}" >> "$LOG"
 printf 'wsialloc_use_gbm=%s\n' "${WSIALLOC_USE_GBM:-unconfigured}" >> "$LOG"
-export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
+# Pass filesystem paths, not hand-built file:// URIs. The native launcher
+# converts absolute paths with g_filename_to_uri, including spaces in Ports names.
+export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-$ROOT/www/inicio.html}"
 if [ "$MODE" = --verify-offline ]; then
-    URL=${1:-file://$ROOT/www/primeiro-teste.html}
+    URL=${1:-$ROOT/www/primeiro-teste.html}
 else
     URL=${1:-$FIRE4NIX_HOME_URL}
 fi
@@ -287,8 +339,10 @@ else
 fi
 case "$MODE" in
   --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;
-  --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
+  --smoke|--headless) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
   --verify-offline) "$BIN" --verify-offline "$URL" >> "$LOG" 2>&1; code=$? ;;
+  --verify-home|--verify-navigation|--verify-form|--verify-storage)
+    "$BIN" "$MODE" "$URL" >> "$LOG" 2>&1; code=$? ;;
   --open) "$BIN" "$URL" >> "$LOG" 2>&1; code=$? ;;
 esac
 exit "$code"

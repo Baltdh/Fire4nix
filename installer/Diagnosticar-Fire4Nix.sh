@@ -23,21 +23,49 @@ if [ ! -s "$ROOT/bin/fire4nix-native-aarch64" ]; then
 fi
 # An explicit runtime is useful for harmless mock tests and unusual SD layouts.
 RUNTIME=""
-for candidate in "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" \
- "$ROOT/runtime" "$HERE/Fire4Nix/runtime" \
- "${FIRE4NIX_ROMS:-/no-roms}/tools/Fire4Nix/runtime" \
- "${FIRE4NIX_ROMS:-/no-roms}/ports/fire4nix-completo/runtime" \
- /storage/games-internal/roms/tools/Fire4Nix/runtime \
- /storage/games-external/roms/tools/Fire4Nix/runtime \
- /storage/games-internal/roms/ports/fire4nix-completo/runtime \
- /storage/games-external/roms/ports/fire4nix-completo/runtime \
- /storage/roms/tools/Fire4Nix/runtime \
- /storage/roms/ports/fire4nix-completo/runtime; do
-  if [ -n "$candidate" ] && [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ]; then
-    RUNTIME="$candidate"
-    break
+INVALID_RUNTIME_CANDIDATE=""
+INVALID_RUNTIME_REASON=""
+is_elf64_aarch64() {
+  file_path=$1
+  [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
+  command -v od >/dev/null 2>&1 || return 1
+  elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
+  set -- $elf_bytes
+  [ "$#" -ge 20 ] || return 1
+  [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
+  [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
+}
+if [ -n "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" ]; then
+  candidate=$FIRE4NIX_DIAGNOSTIC_RUNTIME
+  if [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ]; then
+    if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+      RUNTIME=$candidate
+    else
+      INVALID_RUNTIME_CANDIDATE=$candidate
+      INVALID_RUNTIME_REASON=not_elf64_little_endian_aarch64
+    fi
   fi
-done
+else
+  for candidate in "$ROOT/runtime" "$HERE/Fire4Nix/runtime" \
+   "${FIRE4NIX_ROMS:-/no-roms}/tools/Fire4Nix/runtime" \
+   "${FIRE4NIX_ROMS:-/no-roms}/ports/fire4nix-completo/runtime" \
+   /storage/games-internal/roms/tools/Fire4Nix/runtime \
+   /storage/games-external/roms/tools/Fire4Nix/runtime \
+   /storage/games-internal/roms/ports/fire4nix-completo/runtime \
+   /storage/games-external/roms/ports/fire4nix-completo/runtime \
+   /storage/roms/tools/Fire4Nix/runtime \
+   /storage/roms/ports/fire4nix-completo/runtime; do
+    if [ -n "$candidate" ] && [ -s "$candidate/lib/libWPEWebKit-2.0.so.1" ]; then
+      if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
+        RUNTIME=$candidate
+        break
+      elif [ -z "$INVALID_RUNTIME_CANDIDATE" ]; then
+        INVALID_RUNTIME_CANDIDATE=$candidate
+        INVALID_RUNTIME_REASON=not_elf64_little_endian_aarch64
+      fi
+    fi
+  done
+fi
 OUT=${FIRE4NIX_DIAGNOSTIC_OUT:-}
 if [ -z "$OUT" ]; then
   if [ -d /storage ] && [ -w /storage ]; then
@@ -101,6 +129,20 @@ trap 'rm -f "$TMP"' 0
   else
     echo 'bubblewrap=missing_from_PATH_sandbox_unverified'
   fi
+  if command -v xdg-dbus-proxy >/dev/null 2>&1; then
+    echo 'xdg_dbus_proxy=present_in_PATH'
+  else
+    echo 'xdg_dbus_proxy=missing_from_PATH_sandbox_unverified'
+  fi
+  if command -v unshare >/dev/null 2>&1; then
+    if unshare -Ur true >/dev/null 2>&1; then
+      echo 'user_namespaces=available'
+    else
+      echo 'user_namespaces=restricted_or_disabled'
+    fi
+  else
+    echo 'user_namespaces=unshare_tool_missing'
+  fi
   if [ -n "$RUNTIME" ]; then
     for name in libc.so.6 libm.so.6 libpthread.so.0 ld-linux-aarch64.so.1 libEGL.so.1 libGLESv2.so.2 libgbm.so.1 libdrm.so.2 libwayland-client.so.0; do
       if [ -e "$RUNTIME/lib/$name" ]; then
@@ -115,12 +157,19 @@ trap 'rm -f "$TMP"' 0
     device_glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || true)
     printf 'device_glibc=%s\n' "${device_glibc:-unknown}"
   fi
+  if [ -n "$INVALID_RUNTIME_CANDIDATE" ] && [ -n "$RUNTIME" ]; then
+    printf 'invalid_wpe_runtime_candidate=%s\\n' "$INVALID_RUNTIME_CANDIDATE"
+  fi
   if [ -n "$RUNTIME" ]; then
     echo "WPE_library=present"
     printf 'WPE_runtime_source=%s\n' "$RUNTIME"
     if command -v stat >/dev/null 2>&1; then
       stat -c 'WPE_library_bytes=%s' "$RUNTIME/lib/libWPEWebKit-2.0.so.1" 2>/dev/null || true
     fi
+  elif [ -n "$INVALID_RUNTIME_CANDIDATE" ]; then
+    echo 'WPE_library=invalid_elf'
+    printf 'WPE_runtime_source=%s\n' "$INVALID_RUNTIME_CANDIDATE"
+    printf 'WPE_runtime_error=%s\n' "$INVALID_RUNTIME_REASON"
   else
     echo 'WPE_library=missing'
     echo 'WPE_runtime_source=not_found_on_checked_SD_paths'
@@ -273,6 +322,9 @@ trap 'rm -f "$TMP"' 0
       *) echo 'WPEPlatform_preflight_note=inspect_loader_or_abi_logs' ;;
     esac
     rm -f "$TMP.abi"
+  elif [ -s "$BIN" ] && [ -n "$INVALID_RUNTIME_CANDIDATE" ]; then
+    echo 'WPEPlatform_preflight=skipped_invalid_runtime_elf'
+    echo 'WPEPlatform_fault=invalid_elf_header_before_dlopen'
   elif [ -s "$BIN" ] && [ -f "$ROOT/Fire4Nix-Iniciar.sh" ]; then
     sh "$ROOT/Fire4Nix-Iniciar.sh" --check-platform >/dev/null 2>&1
     printf 'WPEPlatform_preflight_exit=%s\n' "$?"
@@ -291,7 +343,7 @@ trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
   echo '=== FIRE4NIX 1.03 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$OUT" |
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_runtime_error=|invalid_wpe_runtime_candidate=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|xdg_dbus_proxy=|user_namespaces=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|WPE_runtime_error=|WPEPlatform_preflight=skipped_invalid_runtime_elf|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi

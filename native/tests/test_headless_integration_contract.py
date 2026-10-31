@@ -6,6 +6,13 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "native/fire4nix_wpeplatform.cpp"
 PAGE = ROOT / "installer/www/primeiro-teste.html"
+HOME_PAGE = ROOT / "installer/www/inicio.html"
+WAYLAND_TEST = ROOT / "native/tests/test_wayland_compositor_integration.sh"
+LAUNCHER = ROOT / "installer/Fire4Nix-Iniciar.sh"
+FIRST_TEST = ROOT / "installer/Fire4Nix-Primeiro-Teste-R36.sh"
+PORTS_TEST = ROOT / "installer/Fire4Nix-Teste.sh"
+DIAGNOSTIC = ROOT / "installer/Diagnosticar-Fire4Nix.sh"
+GAMEPAD = ROOT / "installer/config/fire4nix.gptk"
 WORKFLOW = ROOT / ".github/workflows/wpe-headless-arm64-integration.yml"
 
 
@@ -40,6 +47,97 @@ class HeadlessIntegrationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
         self.assertIn("#include <gio/gio.h>", source)
+
+    def test_real_home_ui_is_verified_inside_wpe(self):
+        source = SOURCE.read_text()
+        page = HOME_PAGE.read_text()
+        wayland_test = WAYLAND_TEST.read_text()
+        launcher = LAUNCHER.read_text()
+        first_test = FIRST_TEST.read_text()
+        ports_test = PORTS_TEST.read_text()
+        workflow = WORKFLOW.read_text()
+        for token in (
+            "--verify-home",
+            "bool verifyHome = false",
+            "homeEvaluationFinished",
+            "document.querySelector('#address')",
+            "document.querySelector('#keyboardToggle')",
+            "g_filename_to_uri(url",
+            "g_filename_from_uri(url",
+            "g_uri_escape_string",
+            "normalizedLocalUrl",
+            "keyboard_toggle=PASS",
+            "keyboard_compact=PASS",
+            "keyboard_input=PASS",
+            "form_submit_guard=PASS",
+            "shortcuts=4",
+            "body_background=PASS",
+            "viewport_meta=PASS",
+            "focus_navigation=PASS",
+            "ArrowDown",
+            "ArrowRight",
+        ):
+            self.assertIn(token, source)
+        for token in (
+            '<title>Fire4Nix | Início</title>',
+            'id="address"',
+            'id="form"',
+            'id="keyboardToggle"',
+            'id="keyboard"',
+            'body.keyboard-open{padding:8px 12px}',
+            'document.body.classList.toggle("keyboard-open",open)',
+            '<nav aria-label="Atalhos">',
+            'class="tile"',
+            'keyboardToggle.addEventListener("click"',
+            'form.addEventListener("submit"',
+            'document.addEventListener("keydown"',
+        ):
+            self.assertIn(token, page)
+        self.assertEqual(page.count('class="tile"'), 4)
+        self.assertIn('--verify-home', wayland_test)
+        self.assertIn('Fire4Nix Wayland local', wayland_test)
+        self.assertIn('Fire4Nix Wayland home', wayland_test)
+        self.assertIn('Fire4Nix offline path', workflow)
+        self.assertIn('Fire4Nix home path', workflow)
+        self.assertIn('FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-$ROOT/www/inicio.html}"', launcher)
+        self.assertIn('--verify-home|--verify-navigation|--verify-form|--verify-storage', launcher)
+        self.assertIn('"$BIN" "$MODE" "$URL"', launcher)
+        self.assertIn('run_stage OFFLINE-ENGINE --verify-offline "$PAGE"', first_test)
+        self.assertIn('run_stage HOME-UI --verify-home "$HOME_PAGE"', first_test)
+        self.assertNotIn('file://$PAGE', first_test)
+        self.assertIn('sh "$LAUNCHER" --open "$PAGE"', first_test)
+        self.assertIn('"$installed_root/www/primeiro-teste.html" 2>&1', ports_test)
+        self.assertNotIn('file://$installed_root/www/primeiro-teste.html', ports_test)
+        self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND_640X480', wayland_test)
+        self.assertIn('WAYLAND_HOME_VIEWPORT=', wayland_test)
+        self.assertIn('FAIL_640X480_OVERFLOW', wayland_test)
+        self.assertIn('scroll_height=(\\d+)', wayland_test)
+
+    def test_sandbox_is_never_disabled_without_explicit_opt_in(self):
+        launcher = LAUNCHER.read_text()
+        diagnostic = DIAGNOSTIC.read_text()
+        self.assertIn("FIRE4NIX_ALLOW_UNSANDBOXED", launcher)
+        self.assertIn("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", launcher)
+        self.assertIn("sandbox_unverified_bwrap_or_proxy_missing", launcher)
+        self.assertIn("sandbox_disabled_by_explicit_user_opt_in", launcher)
+        self.assertIn("xdg_dbus_proxy=", diagnostic)
+        self.assertIn("user_namespaces=", diagnostic)
+        self.assertIn("unshare -Ur true", diagnostic)
+
+    def test_rocknix_gamepad_dpad_maps_to_home_focus_navigation(self):
+        config = GAMEPAD.read_text()
+        for token in (
+            "up = up",
+            "down = down",
+            "left = left",
+            "right = right",
+            "a = enter",
+            "b = esc",
+            "x = tab",
+            "l1_hk = left",
+            "r1_hk = right",
+        ):
+            self.assertIn(token, config)
 
     def test_native_browser_history_verification_uses_real_navigation_api(self):
         source = SOURCE.read_text()
@@ -162,6 +260,9 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "2.54.2",
             "WPE_PLATFORM=headless",
             "--verify-offline",
+            "--verify-home",
+            "WPE_HOME_UI=PASS_REAL_DOM_COMPACT_KEYBOARD_FORM_SHORTCUTS",
+            "installer/www/inicio.html",
             "WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK",
             "WPE_FILE_URI=PASS_REAL_HTML_JS_CSS_CLICK",
             "data:text/html;base64,",

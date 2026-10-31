@@ -4,13 +4,21 @@ set -eu
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
 T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 mkdir -p "$T/sandbox with space/Fire4Nix/bin" \
     "$T/sandbox with space/Fire4Nix/runtime/lib" "$T/sandbox with space/Fire4Nix/runtime/libexec/wpe-webkit-2.0" "$T/logs"
 cp "$BASE/installer/Fire4Nix-Direto.sh" "$T/sandbox with space/Fire4Nix-Direto.sh"
 printf 'fake-binary' > "$T/sandbox with space/Fire4Nix/bin/fire4nix-native-aarch64"
-printf 'fake-runtime' > "$T/sandbox with space/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$T/sandbox with space/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
 for child in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-  printf 'fake-child' > "$T/sandbox with space/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$child"
+  make_arm64_elf "$T/sandbox with space/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$child"
 done
 cat > "$T/sandbox with space/Fire4Nix/Fire4Nix-Iniciar.sh" <<'FAKE'
 #!/bin/sh
@@ -46,7 +54,7 @@ cp "$ROOT/runtime/lib/libWPEWebKit-2.0.so.1" "$T/sandbox with space/fire4nix-com
   cd /
   FIRE4NIX_LOG_DIR="$T/logs" sh "$LAUNCH" >/dev/null
 )
-grep -q "^skipped_incomplete_runtime=.*fire4nix-completo missing=" "$T/sandbox with space/Fire4Nix-PORTS-ultimo.txt"
+grep -q "^skipped_incomplete_or_invalid_runtime=.*fire4nix-completo/runtime missing=" "$T/sandbox with space/Fire4Nix-PORTS-ultimo.txt"
 grep -q "^selected_install=$ROOT$" "$T/sandbox with space/Fire4Nix-PORTS-ultimo.txt"
 # A corrupt/empty package must NOT be advertised as a successful launch.
 set +e

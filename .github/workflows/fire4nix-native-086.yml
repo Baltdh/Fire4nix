@@ -10,12 +10,30 @@ permissions:
 jobs:
   aarch64:
     runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:bullseye
     steps:
+      - name: Bootstrap container tools for checkout
+        shell: sh
+        run: |
+          # Bullseye's security repository has moved to the Debian archive.
+          # Keep the build on GLIBC 2.31 instead of using a newer runner libc.
+          sed -i \
+            -e 's|deb.debian.org/debian-security|archive.debian.org/debian-security|g' \
+            -e 's|security.debian.org/debian-security|archive.debian.org/debian-security|g' \
+            -e 's|deb.debian.org/debian|archive.debian.org/debian|g' \
+            /etc/apt/sources.list
+          printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            bash git ca-certificates
       - uses: actions/checkout@v4
       - name: Install small build dependencies
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev zip
+          set -euo pipefail
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            g++ pkg-config libglib2.0-dev zip unzip file binutils
       - name: Compile standalone WPEPlatform launcher
         shell: bash
         run: |
@@ -29,6 +47,10 @@ jobs:
           readelf -h build/native086/fire4nix-native-086-aarch64 | grep -q AArch64
           build/native086/fire4nix-native-086-aarch64 --selftest | tee build/native086/selftest.txt
           grep -q 'AArch64' build/native086/selftest.txt
+          build/native086/fire4nix-native-086-aarch64 --help | grep -q -- '--verify-home'
+          max_glibc="$(readelf --version-info build/native086/fire4nix-native-086-aarch64 | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
+          echo "NATIVE_GLIBC_MAX=$max_glibc"
+          test "$(printf '%s\n' "$max_glibc" 2.34 | sort -V | tail -n 1)" = 2.34
       - name: Test missing runtime and fake WPE GObject lifecycle
         shell: bash
         run: |
@@ -49,6 +71,7 @@ jobs:
           grep -q 'load-event=3' build/native086/smoke.log
           grep -q 'GLib main loop exited' build/native086/smoke.log
           sh -n native/Fire4Nix-086-Teste.sh
+          sh native/tests/test_local_html_mime_fallback.sh
           echo 'PASS: ELF AArch64 + missing library 127 + GObject view creation + page-load lifecycle.'
       - name: Package optional candidate (not an automatic replacement)
         shell: bash
