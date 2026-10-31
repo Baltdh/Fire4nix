@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 namespace {
 using LoadUri = void (*)(gpointer, const char*);
@@ -809,6 +810,77 @@ int main(int argc, char** argv) {
             strcmp(argv[i],"--verify-home") && strcmp(argv[i],"--verify-navigation") && strcmp(argv[i],"--verify-form") &&
             strcmp(argv[i],"--verify-storage") && argv[i][0] != '-') { url=argv[i]; break; }
     }
+
+    // Accept either an absolute local path or a file URI. This is important
+    // for Ports directories such as "Fire4Nix-R36H-1.07-Duas-SDs-Runtime":
+    // raw spaces are not valid URI characters, so always canonicalize local
+    // paths before passing them to WebKit.
+    std::string normalizedLocalUrl;
+    if (g_path_is_absolute(url)) {
+        GError* uriError = nullptr;
+        gchar* converted = g_filename_to_uri(url, nullptr, &uriError);
+        if (!converted) {
+            g_printerr("[FIRE4NIX-NATIVE] local_path_to_uri_failed: %s\\n",
+                       uriError ? uriError->message : "unknown error");
+            if (uriError) g_error_free(uriError);
+            return 2;
+        }
+        normalizedLocalUrl = converted;
+        g_free(converted);
+        url = normalizedLocalUrl.c_str();
+        g_printerr("[FIRE4NIX-NATIVE] local_path_to_uri=PASS\\n");
+    } else if (g_str_has_prefix(url, "file://")) {
+        GError* uriError = nullptr;
+        gchar* host = nullptr;
+        gchar* localPath = g_filename_from_uri(url, &host, &uriError);
+        if (localPath && (!host || !*host)) {
+            GError* encodeError = nullptr;
+            gchar* converted = g_filename_to_uri(localPath, nullptr, &encodeError);
+            if (!converted) {
+                g_printerr("[FIRE4NIX-NATIVE] file_uri_normalization_failed: %s\\n",
+                           encodeError ? encodeError->message : "unknown error");
+                if (encodeError) g_error_free(encodeError);
+                g_free(localPath);
+                g_free(host);
+                if (uriError) g_error_free(uriError);
+                return 2;
+            }
+            normalizedLocalUrl = converted;
+            g_free(converted);
+            url = normalizedLocalUrl.c_str();
+        } else if (!localPath) {
+            if (uriError) g_error_free(uriError);
+            uriError = nullptr;
+            const char* rawPath = url + strlen("file://");
+            if (rawPath[0] != '/') {
+                g_printerr("[FIRE4NIX-NATIVE] invalid_local_file_uri\\n");
+                g_free(host);
+                return 2;
+            }
+            gchar* escapedPath = g_uri_escape_string(rawPath, "/", FALSE);
+            gchar* candidate = g_strconcat("file://", escapedPath, nullptr);
+            g_free(escapedPath);
+            gchar* checkedPath = g_filename_from_uri(candidate, nullptr, &uriError);
+            if (!checkedPath) {
+                g_printerr("[FIRE4NIX-NATIVE] file_uri_escape_failed: %s\\n",
+                           uriError ? uriError->message : "unknown error");
+                if (uriError) g_error_free(uriError);
+                g_free(candidate);
+                g_free(host);
+                return 2;
+            }
+            g_free(checkedPath);
+            normalizedLocalUrl = candidate;
+            g_free(candidate);
+            url = normalizedLocalUrl.c_str();
+        }
+        if (uriError) g_error_free(uriError);
+        g_free(localPath);
+        g_free(host);
+        if (!normalizedLocalUrl.empty())
+            g_printerr("[FIRE4NIX-NATIVE] file_uri_normalized=PASS\\n");
+    }
+
     stage("dlopen libWPEWebKit-2.0.so.1");
     App app;
     app.smoke = smoke || verifyOffline || verifyHome || verifyNavigation || verifyForm || verifyStorage;
