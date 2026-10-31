@@ -8,7 +8,7 @@ trap 'rm -rf "$T"' 0
 make_arm64_elf() {
   python3 - "$1" <<'PY'
 import struct, sys
-ident = b"\\x7fELF\\x02\\x01\\x01" + b"\\x00" * 9
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
 header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
 open(sys.argv[1], "wb").write(ident + header)
 PY
