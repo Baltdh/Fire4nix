@@ -16,14 +16,15 @@ jobs:
       - name: Bootstrap container tools for checkout
         shell: sh
         run: |
-          if ! apt-get update -qq; then
-            # Bullseye is the GLIBC 2.31 baseline; after its LTS window,
-            # fall back to Debian's archive rather than building against a
-            # newer host GLIBC and shipping an incompatible launcher.
-            sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g; s|security.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list
-            printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
-            apt-get update -qq
-          fi
+          # Bullseye's security repository has moved to the Debian archive.
+          # Keep the build on GLIBC 2.31 instead of using a newer runner libc.
+          sed -i \
+            -e 's|deb.debian.org/debian-security|archive.debian.org/debian-security|g' \
+            -e 's|security.debian.org/debian-security|archive.debian.org/debian-security|g' \
+            -e 's|deb.debian.org/debian|archive.debian.org/debian|g' \
+            /etc/apt/sources.list
+          printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
+          apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             bash git ca-certificates
       - uses: actions/checkout@v4
