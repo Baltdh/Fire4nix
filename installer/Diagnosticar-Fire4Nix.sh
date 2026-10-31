@@ -143,6 +143,9 @@ trap 'rm -f "$TMP"' 0
     device_glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || true)
     printf 'device_glibc=%s\n' "${device_glibc:-unknown}"
   fi
+  if [ -n "$INVALID_RUNTIME_CANDIDATE" ] && [ -n "$RUNTIME" ]; then
+    printf 'invalid_wpe_runtime_candidate=%s\\n' "$INVALID_RUNTIME_CANDIDATE"
+  fi
   if [ -n "$RUNTIME" ]; then
     echo "WPE_library=present"
     printf 'WPE_runtime_source=%s\n' "$RUNTIME"
@@ -326,7 +329,7 @@ trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
   echo '=== FIRE4NIX 1.03 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_runtime_error=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|WPE_runtime_error=|WPEPlatform_preflight=skipped_invalid_runtime_elf|GRAPHICS_STATUS=)' "$OUT" |
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_runtime_error=|invalid_wpe_runtime_candidate=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|WPE_runtime_error=|WPEPlatform_preflight=skipped_invalid_runtime_elf|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi
