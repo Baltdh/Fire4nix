@@ -197,12 +197,12 @@ log 'wpe_library=PASS'
 run_stage WPEPLATFORM-ABI --check-platform || fail 78 "A biblioteca nao expoe toda a API WPEPlatform necessaria."
 log 'wpeplatform_symbols=PASS'
 
-run_stage OFFLINE-ENGINE --verify-offline "file://$PAGE" || fail 4 "O WebKit nao passou no teste DOM/JavaScript/CSS/clique."
+run_stage OFFLINE-ENGINE --verify-offline "$PAGE" || fail 4 "O WebKit nao passou no teste DOM/JavaScript/CSS/clique."
 log 'offline_html_js_css_click=PASS'
 
 HOME_PAGE="$ROOT/www/inicio.html"
 [ -s "$HOME_PAGE" ] || fail 127 "Pagina inicial HTML ausente: $HOME_PAGE"
-run_stage HOME-UI --verify-home "file://$HOME_PAGE" || fail 4 "A interface inicial, teclado virtual ou controles HTML falharam."
+run_stage HOME-UI --verify-home "$HOME_PAGE" || fail 4 "A interface inicial, teclado virtual ou controles HTML falharam."
 log 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS'
 log 'ENGINE_FUNCTIONAL_TEST=PASS'
 log 'GRAPHICAL_FRAME_VERIFIED=no'
