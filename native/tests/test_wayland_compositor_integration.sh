@@ -67,7 +67,10 @@ webkit_exec_path="$(dirname "$web_process")"
   echo 'WAYLAND_WPE_TEST=FAIL_WPENETWORKPROCESS_MISSING' >&2; exit 7;
 }
 
-page="file://$fixture"
+local_dir="$work/Fire4Nix Wayland local"
+mkdir -p "$local_dir"
+cp "$fixture" "$local_dir/primeiro-teste.html"
+page="$local_dir/primeiro-teste.html"
 set +e
 env WPE_PLATFORM=wayland \
   WEBKIT_EXEC_PATH="$webkit_exec_path" \
@@ -106,7 +109,10 @@ if grep -Fq 'WPE display disconnected' "$work/logs/wpe-wayland.log"; then
 fi
 
 if [[ -n "$home_fixture" ]]; then
-  home_page="file://$home_fixture"
+  home_dir="$work/Fire4Nix Wayland home"
+  mkdir -p "$home_dir"
+  cp "$home_fixture" "$home_dir/inicio.html"
+  home_page="$home_dir/inicio.html"
   set +e
   env WPE_PLATFORM=wayland \
     WEBKIT_EXEC_PATH="$webkit_exec_path" \
