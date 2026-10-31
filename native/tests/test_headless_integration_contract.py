@@ -100,6 +100,8 @@ class HeadlessIntegrationContract(unittest.TestCase):
         self.assertIn('Fire4Nix offline path', workflow)
         self.assertIn('Fire4Nix home path', workflow)
         self.assertIn('FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-$ROOT/www/inicio.html}"', launcher)
+        self.assertIn('--verify-home|--verify-navigation|--verify-form|--verify-storage', launcher)
+        self.assertIn('"$BIN" "$MODE" "$URL"', launcher)
         self.assertIn('run_stage OFFLINE-ENGINE --verify-offline "$PAGE"', first_test)
         self.assertIn('run_stage HOME-UI --verify-home "$HOME_PAGE"', first_test)
         self.assertNotIn('file://$PAGE', first_test)
