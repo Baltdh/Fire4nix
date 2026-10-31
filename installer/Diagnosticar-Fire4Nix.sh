@@ -33,7 +33,7 @@ is_elf64_aarch64() {
   set -- $elf_bytes
   [ "$#" -ge 20 ] || return 1
   [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
-  [ "$5" = 02 ] && [ "$6" = 01 ] && [ "$19" = b7 ] && [ "$20" = 00 ]
+  [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
 }
 if [ -n "${FIRE4NIX_DIAGNOSTIC_RUNTIME:-}" ]; then
   candidate=$FIRE4NIX_DIAGNOSTIC_RUNTIME
