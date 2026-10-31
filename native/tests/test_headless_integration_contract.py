@@ -8,6 +8,7 @@ SOURCE = ROOT / "native/fire4nix_wpeplatform.cpp"
 PAGE = ROOT / "installer/www/primeiro-teste.html"
 HOME_PAGE = ROOT / "installer/www/inicio.html"
 WAYLAND_TEST = ROOT / "native/tests/test_wayland_compositor_integration.sh"
+GAMEPAD = ROOT / "installer/config/fire4nix.gptk"
 WORKFLOW = ROOT / ".github/workflows/wpe-headless-arm64-integration.yml"
 
 
@@ -80,6 +81,21 @@ class HeadlessIntegrationContract(unittest.TestCase):
         self.assertEqual(page.count('class="tile"'), 4)
         self.assertIn('--verify-home', wayland_test)
         self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND', wayland_test)
+
+    def test_rocknix_gamepad_dpad_maps_to_home_focus_navigation(self):
+        config = GAMEPAD.read_text()
+        for token in (
+            "up = up",
+            "down = down",
+            "left = left",
+            "right = right",
+            "a = enter",
+            "b = esc",
+            "x = tab",
+            "l1_hk = left",
+            "r1_hk = right",
+        ):
+            self.assertIn(token, config)
 
     def test_native_browser_history_verification_uses_real_navigation_api(self):
         source = SOURCE.read_text()
