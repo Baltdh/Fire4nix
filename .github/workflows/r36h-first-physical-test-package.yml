@@ -90,7 +90,7 @@ jobs:
           name: Fire4Nix-R36H-Mali-EGL-Experimental
           path: ${{ runner.temp }}/wpe-artifact
 
-      - name: Download pinned Fire4Nix ARM64 launcher
+      - name: Download matching Fire4Nix ARM64 launcher
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -186,6 +186,7 @@ jobs:
           lib="$pkg/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
           readelf -h "$bin" | grep -Eq 'Class:[[:space:]]+ELF64'
           readelf -h "$bin" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          "$bin" --help | grep -q -- '--verify-home'
           readelf -h "$lib" | grep -Eq 'Machine:[[:space:]]+AArch64'
           readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
           readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
