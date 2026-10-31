@@ -72,6 +72,8 @@ class HeadlessIntegrationContract(unittest.TestCase):
             'id="form"',
             'id="keyboardToggle"',
             'id="keyboard"',
+            'body.keyboard-open{padding:8px 12px}',
+            'document.body.classList.toggle("keyboard-open",open)',
             '<nav aria-label="Atalhos">',
             'class="tile"',
             'keyboardToggle.addEventListener("click"',
