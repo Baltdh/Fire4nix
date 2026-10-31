@@ -113,7 +113,7 @@ is_elf64_aarch64() {
     set -- $elf_bytes
     [ "$#" -ge 20 ] || return 1
     [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
-    [ "$5" = 02 ] && [ "$6" = 01 ] && [ "$19" = b7 ] && [ "$20" = 00 ]
+    [ "$5" = 02 ] && [ "$6" = 01 ] && [ "${19}" = b7 ] && [ "${20}" = 00 ]
 }
 # At most 12 log files; never delete the stable last-result copy in /storage.
 ls -1t "$LOG_DIR"/Fire4Nix-*.log "$LOG_DIR"/Fire4Nix-*-log-* 2>/dev/null | sed -n '13,$p' |
