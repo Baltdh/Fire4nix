@@ -113,6 +113,8 @@ FIRE4NIX_TEST_REPORT_DIR="$T/first-report" \
   sh "$T/package/Fire4Nix-Primeiro-Teste-R36.sh" --preflight > "$T/first-test.log" 2>&1
 grep -Fxq "runtime_root=$T/external-runtime" "$T/first-report/Primeiro-Teste-R36H-ULTIMO.txt"
 grep -Fq 'offline_html_js_css_click=PASS' "$T/first-test.log"
+grep -Fq 'home_ui_dom_keyboard_compact_form_shortcuts_focus=PASS' "$T/first-test.log"
+grep -Fq 'native_args=--verify-home file://' "$TRACE"
 grep -Fq 'native_called=yes' "$TRACE"
 mv "$T/package-runtime-backup" "$PKG/runtime"
 
