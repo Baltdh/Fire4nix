@@ -78,8 +78,15 @@ jobs:
                 throw new Error('Matching ARM64 native build did not complete successfully for ' + context.sha)
               }
             } else {
-              const runs = await listRuns()
-              run = runs.find(item => item.conclusion === 'success')
+              // Installer/UI-only changes can reuse the latest successful
+              // native binary. Wait briefly if the branch's first native build
+              // is still running instead of failing on an empty run history.
+              for (let attempt = 0; attempt < 36; attempt++) {
+                const runs = await listRuns()
+                run = runs.find(item => item.conclusion === 'success')
+                if (run) break
+                await new Promise(resolve => setTimeout(resolve, 10000))
+              }
               if (!run) throw new Error('No successful ARM64 native launcher artifact for this branch')
             }
             core.setOutput('run_id', String(run.id))
