@@ -23,6 +23,10 @@ on:
       - 'installer/Fire4Nix-Inspecionar-ELF.sh'
       - '.github/workflows/r36h-first-physical-test-package.yml'
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - 'Fire4Nix v0.86 ARM64 WPEPlatform candidate'
+    types: [completed]
 
 permissions:
   contents: read
@@ -30,6 +34,14 @@ permissions:
 
 jobs:
   assemble-r36h-first-test:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push'
+          && !contains(join(github.event.head_commit.modified, ','), 'native/fire4nix_wpeplatform.cpp'))
+      || (github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.head_repository.full_name == github.repository
+          && github.event.workflow_run.head_branch == 'codex/r36h-file-html-mime-fix-20261031')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
@@ -48,7 +60,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 41181670144
+          run-id: ${{ steps.native-run.outputs.run_id }}
           github-token: ${{ github.token }}
           name: Fire4Nix-0.86-R36H-ARM64-Native-Test
           path: ${{ runner.temp }}/native-artifact
