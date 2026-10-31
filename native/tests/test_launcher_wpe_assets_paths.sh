@@ -4,6 +4,15 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\\x7fELF\\x02\\x01\\x01" + b"\\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 root="$tmp/SD Card/Fire4Nix"
 mkdir -p "$root/bin" "$root/runtime/lib" \
   "$root/runtime/libexec/wpe-webkit-2.0" "$root/logs" "$root/www"
@@ -16,9 +25,9 @@ printf 'exec=%s\ninjected=%s\ninspector=%s\n' \
   "${WEBKIT_INSPECTOR_RESOURCES_PATH:-unset}" > "$FIRE4NIX_ENV_CAPTURE"
 EOF
 chmod +x "$root/bin/fire4nix-native-aarch64"
-printf 'fake WPE ELF metadata fixture\n' > "$root/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$root/runtime/lib/libWPEWebKit-2.0.so.1"
 for process in WPEWebProcess WPENetworkProcess; do
-  printf 'mock subprocess, not executed\n' > "$root/runtime/libexec/wpe-webkit-2.0/$process"
+  make_arm64_elf "$root/runtime/libexec/wpe-webkit-2.0/$process"
 done
 report="$root/runtime/BUILD-REPORT.txt"
 bundle="$root/runtime/lib/wpe-webkit-2.0/injected-bundle"
