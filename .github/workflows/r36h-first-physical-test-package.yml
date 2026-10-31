@@ -48,7 +48,9 @@ jobs:
               ...(context.payload.commits || []).flatMap(commit => commit.modified || []),
               ...((context.payload.head_commit && context.payload.head_commit.modified) || [])
             ]
-            const nativeChanged = changed.includes('native/fire4nix_wpeplatform.cpp')
+            const nativeChanged = changed.some(file =>
+              file.startsWith('native/') || file === '.github/workflows/fire4nix-native-086.yml'
+            )
             const listRuns = async () => {
               const response = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
