@@ -7,7 +7,8 @@ on:
       - codex/r36h-file-html-mime-fix-20261031
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
-      - 'native/fire4nix_wpeplatform.cpp'
+      - 'native/**'
+      - '.github/workflows/fire4nix-native-086.yml'
       - 'native/tests/test_local_html_mime_fallback.sh'
       - 'installer/Fire4Nix-Primeiro-Teste-R36.sh'
       - 'installer/Fire4Nix-EGL-R36H.py'
