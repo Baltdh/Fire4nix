@@ -55,6 +55,7 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "document.querySelector('#address')",
             "document.querySelector('#keyboardToggle')",
             "keyboard_toggle=PASS",
+            "keyboard_compact=PASS",
             "keyboard_input=PASS",
             "form_submit_guard=PASS",
             "shortcuts=4",
