@@ -9,6 +9,7 @@ on:
       - 'native/tests/test_headless_integration_contract.py'
       - 'native/tests/test_wayland_compositor_integration.sh'
       - 'installer/www/primeiro-teste.html'
+      - 'installer/www/inicio.html'
       - '.github/workflows/wpe-headless-arm64-integration.yml'
   pull_request:
     paths:
@@ -118,6 +119,36 @@ jobs:
               logs/wpe-headless-file-url.log || true
             exit 31
           fi
+
+          # Verify the real browser chrome, not only the small synthetic fixture.
+          # This exercises the address field, keyboard toggle, generated keys,
+          # form submit guard, shortcut links and 640x480 viewport metadata.
+          home_page="file://$GITHUB_WORKSPACE/installer/www/inicio.html"
+          set +e
+          env -u WPE_DISPLAY \
+            WPE_PLATFORM=headless \
+            WEBKIT_EXEC_PATH="$webkit_exec_path" \
+            WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+            FIRE4NIX_LOW_MEMORY=1 \
+            HOME="$RUNNER_TEMP/fire4nix-home" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/fire4nix-cache" \
+            timeout --signal=TERM --kill-after=10s 100s \
+            build/headless/fire4nix-native-headless --verify-home "$home_page" \
+            > logs/wpe-headless-home-ui.log 2>&1
+          home_rc=$?
+          set -e
+          cat logs/wpe-headless-home-ui.log
+          if [ "$home_rc" -ne 0 ]; then
+            echo "WPE_HOME_UI=FAIL_EXIT_$home_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit "$home_rc"
+          fi
+          for marker in home_dom virtual_keyboard form_submit_guard shortcuts viewport_css; do
+            grep -Fq "[FIRE4NIX-HOME] $marker=PASS" logs/wpe-headless-home-ui.log || {
+              echo "WPE_HOME_UI=FAIL_MISSING_$marker" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 34
+            }
+          done
+          echo 'WPE_HOME_UI=PASS_REAL_DOM_KEYBOARD_FORM_SHORTCUTS' | tee -a "$GITHUB_STEP_SUMMARY"
 
           # The same trusted HTML over data: separates DOM/JS execution from
           # file-URL policy and sandbox filesystem access. This is a control
