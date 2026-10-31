@@ -41,6 +41,15 @@ Referências externas:
 
 O Fire4Nix não deve alterar DTB, overlay de painel, firmware ou drivers do ROCKNIX. A identificação do painel e a inicialização do sistema permanecem uma camada separada do navegador.
 
+## Gate de segurança do WPE (ainda aberto)
+
+O WPE/WebKit upstream habilita por padrão o suporte ao sandbox Bubblewrap em Linux, e a configuração também pode depender de `xdg-dbus-proxy`. No diagnóstico enviado, `bubblewrap=missing_from_PATH_sandbox_unverified`. O pacote experimental de runtime disponível registra `R36H_INSTALLABLE=no`, `TARGET_EXECUTED=no` e `WEBKIT_RENDERED_ON_R36H=no`; portanto, não é prova de execução no aparelho.
+
+O workflow headless atual define `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` para testes automatizados. Isso é um bypass de teste, não uma validação do sandbox no ROCKNIX. Não devemos ativá-lo silenciosamente no lançamento normal. Antes de chamar o pacote de beta funcional, precisamos:
+1. Confirmar no CMakeCache do runtime se `ENABLE_BUBBLEWRAP_SANDBOX` está ON ou OFF.
+2. Se ON, validar `bwrap`, `xdg-dbus-proxy` e user namespaces no ROCKNIX.
+3. Se OFF, documentar claramente a redução de isolamento e exigir autorização explícita para executar sem sandbox.
+
 ## Evidência específica do R36H
 
 O relatório de 23/10/2026 registra:
