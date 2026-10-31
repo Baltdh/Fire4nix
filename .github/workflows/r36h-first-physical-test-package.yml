@@ -68,7 +68,7 @@ jobs:
             if (nativeChanged) {
               // The native and package workflows start from the same push.
               // Wait for the exact SHA to avoid packaging a stale launcher.
-              for (let attempt = 0; attempt < 36; attempt++) {
+              for (let attempt = 0; attempt < 60; attempt++) {
                 const runs = await listRuns()
                 run = runs.find(item => item.head_sha === context.sha)
                 if (run && run.status === 'completed') break
