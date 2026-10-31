@@ -3,7 +3,13 @@
 set -eu
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
 T=$(mktemp -d)
-trap 'rm -rf "$T"' 0
+WAYLAND_PID=""
+cleanup() {
+  [ -n "$WAYLAND_PID" ] && kill "$WAYLAND_PID" 2>/dev/null || true
+  [ -n "$WAYLAND_PID" ] && wait "$WAYLAND_PID" 2>/dev/null || true
+  rm -rf "$T"
+}
+trap cleanup 0
 
 make_arm64_elf() {
   python3 - "$1" <<'PY'
@@ -79,9 +85,25 @@ case "${1:-}" in
 esac
 UNAME
 chmod +x "$T/fakebin/uname"
+mkdir -p "$T/fake-wayland"
+python3 - "$T/fake-wayland/wayland-1" <<'PY' &
+import socket, sys, time
+sock = socket.socket(socket.AF_UNIX)
+sock.bind(sys.argv[1])
+sock.listen(1)
+while True:
+    time.sleep(1)
+PY
+WAYLAND_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -S "$T/fake-wayland/wayland-1" ] && break
+  sleep 0.1
+done
+[ -S "$T/fake-wayland/wayland-1" ]
 mv "$PKG/runtime" "$T/package-runtime-backup"
 : > "$TRACE"
 PATH="$T/fakebin:$PATH" \
+XDG_RUNTIME_DIR="$T/fake-wayland" WAYLAND_DISPLAY=wayland-1 \
 FIRE4NIX_RUNTIME_ROOT="$T/external-runtime" \
 FIRE4NIX_TEST_TRACE="$TRACE" \
 FIRE4NIX_LOG_DIR="$T/logs" \
