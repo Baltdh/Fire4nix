@@ -129,6 +129,20 @@ trap 'rm -f "$TMP"' 0
   else
     echo 'bubblewrap=missing_from_PATH_sandbox_unverified'
   fi
+  if command -v xdg-dbus-proxy >/dev/null 2>&1; then
+    echo 'xdg_dbus_proxy=present_in_PATH'
+  else
+    echo 'xdg_dbus_proxy=missing_from_PATH_sandbox_unverified'
+  fi
+  if command -v unshare >/dev/null 2>&1; then
+    if unshare -Ur true >/dev/null 2>&1; then
+      echo 'user_namespaces=available'
+    else
+      echo 'user_namespaces=restricted_or_disabled'
+    fi
+  else
+    echo 'user_namespaces=unshare_tool_missing'
+  fi
   if [ -n "$RUNTIME" ]; then
     for name in libc.so.6 libm.so.6 libpthread.so.0 ld-linux-aarch64.so.1 libEGL.so.1 libGLESv2.so.2 libgbm.so.1 libdrm.so.2 libwayland-client.so.0; do
       if [ -e "$RUNTIME/lib/$name" ]; then
@@ -329,7 +343,7 @@ trap - 0
 echo "Fire4Nix full diagnosis: $OUT"
 if [ "$SCREEN" -eq 1 ]; then
   echo '=== FIRE4NIX 1.03 / RESUMO PARA FOTO ==='
-  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_runtime_error=|invalid_wpe_runtime_candidate=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|WPE_runtime_error=|WPEPlatform_preflight=skipped_invalid_runtime_elf|GRAPHICS_STATUS=)' "$OUT" |
+  grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_runtime_error=|invalid_wpe_runtime_candidate=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPE_version=|WPEPlatform_fault_stage=|WPEPlatform_fault=|wpe_elf_arch=|wpe_glibc_max_required=|wpe_direct_glibc_compat=|fontconfig_fonts=|shared_mime_database=|bubblewrap=|xdg_dbus_proxy=|user_namespaces=|private_library_conflict_candidate=|wpeplatform_static_symbol=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|WPE_runtime_error=|WPEPlatform_preflight=skipped_invalid_runtime_elf|GRAPHICS_STATUS=)' "$OUT" |
     cut -c 1-100
   echo '=== FIM DO RESUMO ==='
 fi
