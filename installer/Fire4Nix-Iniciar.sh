@@ -123,7 +123,7 @@ done
 printf 'version=1.06\nroot=%s\nruntime_root=%s\n' "$ROOT" "$RUNTIME_ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
-  --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline)
+  --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage)
     MODE=$1
     shift ;;
   --*) fail 2 "Unsupported Fire4Nix option: $1" ;;
