@@ -29,7 +29,7 @@ for name in WPEWebProcess WPENetworkProcess; do
 done
 cat > "$APP/Fire4Nix-Iniciar.sh" <<'MOCK'
 #!/bin/sh
-printf 'PORTS_MOCK_LAUNCHED=%s\n' "$*" >> "$FIRE4NIX_TEST_TRACE"
+printf 'PORTS_MOCK_LAUNCHED=%s\nPORTS_MOCK_RUNTIME=%s\n' "$*" "${FIRE4NIX_RUNTIME_ROOT:-unset}" >> "$FIRE4NIX_TEST_TRACE"
 exit 0
 MOCK
 export FIRE4NIX_TEST_TRACE="$T/ports-called.txt"
