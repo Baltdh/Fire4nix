@@ -42,6 +42,7 @@ struct App {
     GetUri getUri = nullptr;
     bool smoke = false;
     bool verifyOffline = false;
+    bool verifyHome = false;
     bool verifyNavigation = false;
     unsigned navigationPhase = 0;
     unsigned navigationReloads = 0;
@@ -149,6 +150,54 @@ static void offlineEvaluationFinished(GObject* object, GAsyncResult* result, gpo
             }
             g_free(report);
         }
+    }
+    if (value && app->jscValueUnref) app->jscValueUnref(value);
+    if (app->loop) g_main_loop_quit(app->loop);
+}
+
+static void homeEvaluationFinished(GObject* object, GAsyncResult* result, gpointer data) {
+    App* app = static_cast<App*>(data);
+    GError* error = nullptr;
+    gpointer value = app->evaluateJavaScriptFinish ?
+        app->evaluateJavaScriptFinish(object, result, &error) : nullptr;
+    gchar* report = (!error && value && app->jscValueToString) ?
+        app->jscValueToString(value) : nullptr;
+    if (error || !report) {
+        g_printerr("[FIRE4NIX-HOME] evaluation_error=%s\\n",
+                   error ? error->message : "empty result");
+        if (error) g_error_free(error);
+        app->exitCode = 4;
+        app->failed = true;
+    } else {
+        g_printerr("[FIRE4NIX-HOME] detail=%s\\n", report);
+        const bool titleOK = strstr(report, "home_title=PASS") != nullptr;
+        const bool addressOK = strstr(report, "address_field=PASS") != nullptr;
+        const bool formOK = strstr(report, "form_submit_guard=PASS") != nullptr;
+        const bool keyboardOK = strstr(report, "keyboard_toggle=PASS") != nullptr;
+        const bool keyInputOK = strstr(report, "keyboard_input=PASS") != nullptr;
+        const bool shortcutsOK = strstr(report, "shortcuts=4") != nullptr;
+        const bool cssOK = strstr(report, "body_background=PASS") != nullptr;
+        const bool viewportOK = strstr(report, "viewport_meta=PASS") != nullptr;
+        if (titleOK && addressOK && formOK && keyboardOK && keyInputOK &&
+            shortcutsOK && cssOK && viewportOK) {
+            stage("home UI DOM, keyboard, form guard, shortcuts and viewport verification passed");
+            g_printerr("[FIRE4NIX-HOME] home_dom=PASS\\n");
+            g_printerr("[FIRE4NIX-HOME] virtual_keyboard=PASS\\n");
+            g_printerr("[FIRE4NIX-HOME] form_submit_guard=PASS\\n");
+            g_printerr("[FIRE4NIX-HOME] shortcuts=PASS\\n");
+            g_printerr("[FIRE4NIX-HOME] viewport_css=PASS\\n");
+            app->exitCode = 0;
+        } else {
+            stage("home UI verification failed; see detail fields");
+            g_printerr("[FIRE4NIX-HOME] title=%s address=%s form=%s keyboard=%s key_input=%s shortcuts=%s css=%s viewport=%s\\n",
+                titleOK ? "PASS" : "FAIL", addressOK ? "PASS" : "FAIL",
+                formOK ? "PASS" : "FAIL", keyboardOK ? "PASS" : "FAIL",
+                keyInputOK ? "PASS" : "FAIL", shortcutsOK ? "PASS" : "FAIL",
+                cssOK ? "PASS" : "FAIL", viewportOK ? "PASS" : "FAIL");
+            app->exitCode = 4;
+            app->failed = true;
+        }
+        g_free(report);
     }
     if (value && app->jscValueUnref) app->jscValueUnref(value);
     if (app->loop) g_main_loop_quit(app->loop);
@@ -502,6 +551,51 @@ static void loadChanged(GObject*, int event, gpointer data) {
             startNavigationEvaluation(app);
             return;
         }
+        if (app->verifyHome) {
+            if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
+                !app->jscValueToString || !app->jscValueUnref) {
+                stage("home UI verification API unavailable in this WPE runtime");
+                app->exitCode = 78;
+                app->failed = true;
+                g_idle_add(smokeQuit, app);
+                return;
+            }
+            // Exercise the actual 640x480 browser chrome without submitting a
+            // URL or making a network request. This checks the virtual keyboard
+            // and focusable controls in the same WPE view used interactively.
+            static const char script[] =
+                "(() => { const a=document.querySelector('#address');"
+                " const f=document.querySelector('#form');"
+                " const k=document.querySelector('#keyboard');"
+                " const t=document.querySelector('#keyboardToggle');"
+                " const nav=document.querySelector('nav[aria-label=\\\"Atalhos\\\"]');"
+                " const checks=[];"
+                " checks.push('home_title='+(document.title==='Fire4Nix | Início'?'PASS':'FAIL'));"
+                " checks.push('address_field='+(!!a && a.getAttribute('aria-label')==='Endereço ou pesquisa'?'PASS':'FAIL'));"
+                " checks.push('viewport_meta='+(!!document.querySelector('meta[name=\\\"viewport\\\"]')?'PASS':'FAIL'));"
+                " checks.push('body_background='+(getComputedStyle(document.body).backgroundColor==='rgb(16, 23, 37)'?'PASS':'FAIL'));"
+                " if(t) t.click();"
+                " const opened=!!k && k.classList.contains('open');"
+                " const keyCount=k?k.querySelectorAll('button').length:0;"
+                " const first=k?k.querySelector('button'):null;"
+                " if(first) first.click();"
+                " const typed=!!a && a.value==='q';"
+                " if(a) a.value='';"
+                " const ev=new Event('submit',{cancelable:true,bubbles:true});"
+                " if(f) f.dispatchEvent(ev);"
+                " checks.push('form_submit_guard='+(!!f && ev.defaultPrevented?'PASS':'FAIL'));"
+                " checks.push('keyboard_toggle='+(opened && t.getAttribute('aria-expanded')==='true' && getComputedStyle(k).display==='grid'?'PASS':'FAIL'));"
+                " checks.push('keyboard_input='+(typed?'PASS':'FAIL'));"
+                " checks.push('keyboard_keys='+keyCount);"
+                " checks.push('shortcuts='+(nav?nav.querySelectorAll('a.tile').length:0));"
+                " checks.push('viewport='+window.innerWidth+'x'+window.innerHeight);"
+                " checks.push('scroll_height='+(document.documentElement?document.documentElement.scrollHeight:0));"
+                " return checks.join(';'); })()";
+            stage("evaluating actual Fire4Nix home page controls");
+            app->evaluateJavaScript(app->view, script, -1, nullptr, nullptr,
+                                    nullptr, homeEvaluationFinished, app);
+            return;
+        }
         if (app->verifyOffline) {
             if (!app->evaluateJavaScript || !app->evaluateJavaScriptFinish ||
                 !app->jscValueToString || !app->jscValueUnref) {
@@ -664,7 +758,7 @@ template <typename T> T symbol(void* library, const char* name) {
 
 int main(int argc, char** argv) {
     if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
-        puts("Fire4Nix native WPEPlatform 1.05: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-navigation|--verify-form|--verify-storage] [URL]");
+        puts("Fire4Nix native WPEPlatform 1.06: [--selftest|--check-library|--check-platform|--smoke|--verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage] [URL]");
         return 0;
     }
     if (argc > 1 && !strcmp(argv[1], "--selftest")) {
@@ -679,6 +773,7 @@ int main(int argc, char** argv) {
     const bool onlyPlatform = argc > 1 && !strcmp(argv[1], "--check-platform");
     const bool smoke = argc > 1 && !strcmp(argv[1], "--smoke");
     const bool verifyOffline = argc > 1 && !strcmp(argv[1], "--verify-offline");
+    const bool verifyHome = argc > 1 && !strcmp(argv[1], "--verify-home");
     const bool verifyNavigation = argc > 1 && !strcmp(argv[1], "--verify-navigation");
     const bool verifyForm = argc > 1 && !strcmp(argv[1], "--verify-form");
     const bool verifyStorage = argc > 1 && !strcmp(argv[1], "--verify-storage");
@@ -686,13 +781,14 @@ int main(int argc, char** argv) {
     for (int i=1; i<argc; ++i) {
         if (strcmp(argv[i],"--check-library") && strcmp(argv[i],"--check-platform") &&
             strcmp(argv[i],"--smoke") && strcmp(argv[i],"--verify-offline") &&
-            strcmp(argv[i],"--verify-navigation") && strcmp(argv[i],"--verify-form") &&
+            strcmp(argv[i],"--verify-home") && strcmp(argv[i],"--verify-navigation") && strcmp(argv[i],"--verify-form") &&
             strcmp(argv[i],"--verify-storage") && argv[i][0] != '-') { url=argv[i]; break; }
     }
     stage("dlopen libWPEWebKit-2.0.so.1");
     App app;
-    app.smoke = smoke || verifyOffline || verifyNavigation || verifyForm || verifyStorage;
+    app.smoke = smoke || verifyOffline || verifyHome || verifyNavigation || verifyForm || verifyStorage;
     app.verifyOffline = verifyOffline;
+    app.verifyHome = verifyHome;
     app.verifyNavigation = verifyNavigation;
     app.verifyForm = verifyForm;
     app.verifyStorage = verifyStorage;
@@ -898,7 +994,7 @@ int main(int argc, char** argv) {
     g_unix_signal_add(SIGTERM, signalQuit, &app);
     if (app.smoke) app.smokeTimeoutSource = g_timeout_add_seconds(30, timeoutQuit, &app);
     g_printerr("[FIRE4NIX-NATIVE] mode=%s low_memory=%d url=%s platform=%s\n",
-               app.verifyOffline ? "verify-offline" : (app.smoke ? "smoke" : "interactive"),
+               app.verifyHome ? "verify-home" : (app.verifyOffline ? "verify-offline" : (app.smoke ? "smoke" : "interactive")),
                lowMemory() ? 1 : 0, url,
                g_getenv("WPE_PLATFORM") ? g_getenv("WPE_PLATFORM") : "default");
     bool loadedLocalHtml = false;
