@@ -17,6 +17,9 @@ import sys
 EGL_DEFAULT_DISPLAY = C.c_void_p()
 EGL_NONE = 0x3038
 EGL_EXTENSIONS = 0x3055
+EGL_VENDOR = 0x3053
+EGL_VERSION_STRING = 0x3054
+EGL_CLIENT_APIS = 0x308D
 EGL_SURFACE_TYPE = 0x3033
 EGL_PBUFFER_BIT = 0x0001
 EGL_RENDERABLE_TYPE = 0x3040
@@ -47,8 +50,16 @@ def report(name, value):
 def main():
     report("probe", "fire4nix-r36h-egl-gles2-readonly-v1")
     report("mali_default_display", os.getenv("MALI_DEFAULT_DISPLAY", "unset"))
-    report("wayland_display", os.getenv("WAYLAND_DISPLAY", "unset"))
-    report("xdg_runtime_dir", "present" if os.getenv("XDG_RUNTIME_DIR") else "unset")
+    wayland_display = os.getenv("WAYLAND_DISPLAY", "wayland-0")
+    runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+    report("wayland_display", wayland_display)
+    report("xdg_runtime_dir", "present" if runtime_dir else "unset")
+    socket_path = ""
+    if os.path.isabs(wayland_display):
+        socket_path = wayland_display
+    elif runtime_dir:
+        socket_path = os.path.join(runtime_dir, wayland_display)
+    report("wayland_socket", "present" if socket_path and os.path.exists(socket_path) else "not_found")
     if os.getenv("MALI_DEFAULT_DISPLAY") != "wayland":
         report("warning", "set_MALI_DEFAULT_DISPLAY=wayland_for_device_comparison")
     try:
@@ -91,6 +102,13 @@ def main():
         return 4
     report("egl_initialize", "success")
     report("egl_version", "%d.%d" % (major.value, minor.value))
+    for label, token in (
+        ("egl_vendor", EGL_VENDOR),
+        ("egl_display_version", EGL_VERSION_STRING),
+        ("egl_client_apis", EGL_CLIENT_APIS),
+    ):
+        value = query(display, token)
+        report(label, value.decode("utf-8", "replace") if value else "unavailable")
     surface, context = None, None
     try:
         if not api(EGL_OPENGL_ES_API):

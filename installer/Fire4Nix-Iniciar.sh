@@ -98,7 +98,7 @@ done
 printf 'version=1.05\nroot=%s\n' "$ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
-  --open|--smoke|--headless|--check-library|--check-platform|--selftest)
+  --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline)
     MODE=$1
     shift ;;
   --*) fail 2 "Unsupported Fire4Nix option: $1" ;;
@@ -239,6 +239,26 @@ if [ "$WPE_PLATFORM" = wayland ] &&
     fail 69 "Wayland socket unavailable: start Fire4Nix from ROCKNIX Ports under Sway"
 fi
 export FIRE4NIX_LOW_MEMORY=${FIRE4NIX_LOW_MEMORY:-1}
+# Keep website data, cookies and cache in a Fire4Nix-owned persistent profile
+# on /storage. This survives replacement of the Ports folder and does not
+# write into /usr or the firmware. Explicit XDG/FIRE4NIX overrides are kept.
+PROFILE_ROOT=${FIRE4NIX_PROFILE_DIR:-}
+if [ -z "$PROFILE_ROOT" ]; then
+    if [ -d /storage ] && [ -w /storage ]; then
+        PROFILE_ROOT=/storage/.config/Fire4Nix
+    else
+        PROFILE_ROOT="$ROOT/profile"
+    fi
+fi
+if mkdir -p "$PROFILE_ROOT/data" "$PROFILE_ROOT/config" "$PROFILE_ROOT/cache" 2>/dev/null &&
+   [ -w "$PROFILE_ROOT/data" ] && [ -w "$PROFILE_ROOT/cache" ]; then
+    export XDG_DATA_HOME=${XDG_DATA_HOME:-$PROFILE_ROOT/data}
+    export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$PROFILE_ROOT/config}
+    export XDG_CACHE_HOME=${XDG_CACHE_HOME:-$PROFILE_ROOT/cache}
+    printf 'profile_mode=persistent\\nprofile_root=%s\\n' "$PROFILE_ROOT" >> "$LOG"
+else
+    printf 'profile_mode=system_default_fallback\\nprofile_root_unavailable=%s\\n' "$PROFILE_ROOT" >> "$LOG"
+fi
 # RK3326 ROCKNIX provides GPU selection through its own profile.d.
 # Recent ROCKNIX code migrates away from a global MALI_WAYLAND_AFBC=0.
 # Do not impose this legacy tuning on the WebKit process; respect any
@@ -247,7 +267,11 @@ printf 'mali_wayland_afbc=%s\n' "${MALI_WAYLAND_AFBC:-not_overridden}" >> "$LOG"
 printf 'mali_default_display=%s\n' "${MALI_DEFAULT_DISPLAY:-unconfigured}" >> "$LOG"
 printf 'wsialloc_use_gbm=%s\n' "${WSIALLOC_USE_GBM:-unconfigured}" >> "$LOG"
 export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
-URL=${1:-$FIRE4NIX_HOME_URL}
+if [ "$MODE" = --verify-offline ]; then
+    URL=${1:-file://$ROOT/www/primeiro-teste.html}
+else
+    URL=${1:-$FIRE4NIX_HOME_URL}
+fi
 start_gamepad
 # Enable ELF loader tracing ONLY for an explicit offline preflight. Never
 # enable it during interactive browsing: verbose paths can reveal local data.
@@ -264,6 +288,7 @@ fi
 case "$MODE" in
   --check-library|--check-platform) "$BIN" "$MODE" >> "$LOG" 2>&1; code=$? ;;
   --smoke) "$BIN" --smoke "$URL" >> "$LOG" 2>&1; code=$? ;;
+  --verify-offline) "$BIN" --verify-offline "$URL" >> "$LOG" 2>&1; code=$? ;;
   --open) "$BIN" "$URL" >> "$LOG" 2>&1; code=$? ;;
 esac
 exit "$code"
