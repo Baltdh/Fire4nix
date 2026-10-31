@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cerrno>
+#include <cstdint>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
