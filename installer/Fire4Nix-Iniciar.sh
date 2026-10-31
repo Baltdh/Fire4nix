@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix R36H 1.05: preserve diagnosis from the very first failing preflight.
+# Fire4Nix R36H 1.07: preserve diagnosis from the very first failing preflight.
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
@@ -139,6 +139,7 @@ fi
 RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
     fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
 printf 'runtime_root_resolved=%s\n' "$RUNTIME_ROOT" >> "$LOG"
+export FIRE4NIX_RUNTIME_ROOT="$RUNTIME_ROOT"
 LIB="$RUNTIME_ROOT/lib/libWPEWebKit-2.0.so.1"
 CHILD="$RUNTIME_ROOT/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing WPE WebKit runtime under $RUNTIME_ROOT"
@@ -196,15 +197,15 @@ done
 BWRAP_BIN=$(command -v bwrap 2>/dev/null || true)
 DBUS_PROXY_BIN=$(command -v xdg-dbus-proxy 2>/dev/null || true)
 if [ -n "$BWRAP_BIN" ] && [ -n "$DBUS_PROXY_BIN" ]; then
-    printf 'sandbox_helpers=bwrap_and_xdg_dbus_proxy_present\\n' >> "$LOG"
+    printf 'sandbox_helpers=bwrap_and_xdg_dbus_proxy_present\n' >> "$LOG"
 elif [ "${WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS:-0}" = 1 ]; then
-    printf 'sandbox_mode=disabled_explicitly_by_environment\\n' >> "$LOG"
+    printf 'sandbox_mode=disabled_explicitly_by_environment\n' >> "$LOG"
 elif [ "${FIRE4NIX_ALLOW_UNSANDBOXED:-0}" = 1 ]; then
     export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
-    printf 'warning=sandbox_disabled_by_explicit_user_opt_in\\n' >> "$LOG"
+    printf 'warning=sandbox_disabled_by_explicit_user_opt_in\n' >> "$LOG"
 else
-    printf 'warning=sandbox_unverified_bwrap_or_proxy_missing\\n' >> "$LOG"
-    printf 'hint=FIRE4NIX_ALLOW_UNSANDBOXED=1_only_for_controlled_testing\\n' >> "$LOG"
+    printf 'warning=sandbox_unverified_bwrap_or_proxy_missing\n' >> "$LOG"
+    printf 'hint=FIRE4NIX_ALLOW_UNSANDBOXED=1_only_for_controlled_testing\n' >> "$LOG"
 fi
 export WEBKIT_EXEC_PATH="$CHILD"
 # Patched WPE keeps normal EGL paths first, then permits the device-probed

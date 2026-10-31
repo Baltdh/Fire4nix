@@ -5,6 +5,7 @@ on:
     branches:
       - codex/r36h-first-physical-test-20261030
       - codex/r36h-file-html-mime-fix-20261031
+      - codex/r36h-runtime-loader-provenance-20261031
     paths:
       - 'installer/Fire4Nix-Iniciar.sh'
       - 'native/**'
@@ -45,9 +46,14 @@ jobs:
         with:
           script: |
             const branch = context.ref.replace('refs/heads/', '')
+            const changedPaths = commit => [
+              ...(commit?.added || []),
+              ...(commit?.modified || []),
+              ...(commit?.removed || [])
+            ]
             const changed = [
-              ...(context.payload.commits || []).flatMap(commit => commit.modified || []),
-              ...((context.payload.head_commit && context.payload.head_commit.modified) || [])
+              ...(context.payload.commits || []).flatMap(changedPaths),
+              ...changedPaths(context.payload.head_commit || {})
             ]
             const nativeChanged = changed.some(file =>
               file.startsWith('native/') || file === '.github/workflows/fire4nix-native-086.yml'
@@ -78,26 +84,40 @@ jobs:
                 throw new Error('Matching ARM64 native build did not complete successfully for ' + context.sha)
               }
             } else {
-              // Installer/UI-only changes reuse the newest successful native
-              // binary. Give the Actions API a short consistency window, then
-              // wait for any newer in-progress build before choosing an older
-              // successful artifact.
+              // Installer/UI-only changes may reuse the latest native build,
+              // but never fall back to an older success if the newest build
+              // failed. That would silently package stale native code.
               await new Promise(resolve => setTimeout(resolve, 15000))
-              let runs = []
+              let newest = null
               for (let attempt = 0; attempt < 18; attempt++) {
-                runs = await listRuns()
-                const newest = [...runs].sort((a, b) =>
+                const runs = await listRuns()
+                newest = [...runs].sort((a, b) =>
                   Date.parse(b.created_at) - Date.parse(a.created_at)
-                )[0]
-                if (!newest || newest.status === 'completed') break
+                )[0] || null
+                if (newest && newest.status === 'completed') break
                 await new Promise(resolve => setTimeout(resolve, 10000))
               }
-              run = runs
-                .filter(item => item.conclusion === 'success')
-                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
-              if (!run) throw new Error('No successful ARM64 native launcher artifact for this branch')
+              if (!newest || newest.status !== 'completed' || newest.conclusion !== 'success') {
+                throw new Error('Latest ARM64 native launcher build is missing or unsuccessful; refusing stale artifact fallback')
+              }
+              run = newest
+            }
+            const artifactsResponse = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: run.id,
+              per_page: 100
+            })
+            const nativeArtifact = artifactsResponse.data.artifacts.find(item =>
+              item.name === 'Fire4Nix-0.86-R36H-ARM64-Native-Test' && !item.expired
+            )
+            if (!nativeArtifact) {
+              throw new Error('Native launcher artifact missing or expired for workflow run ' + run.id)
             }
             core.setOutput('run_id', String(run.id))
+            core.setOutput('artifact_id', String(nativeArtifact.id))
+            core.setOutput('source_sha', run.head_sha)
+            core.setOutput('artifact_digest', nativeArtifact.digest || 'unavailable')
 
       - name: Download pinned ROCKNIX WPE 2.54.1 runtime artifact
         uses: actions/download-artifact@v4
@@ -205,9 +225,18 @@ jobs:
           readelf -h "$bin" | grep -Eq 'Class:[[:space:]]+ELF64'
           readelf -h "$bin" | grep -Eq 'Machine:[[:space:]]+AArch64'
           "$bin" --help | grep -q -- '--verify-home'
+          readelf -h "$lib" | grep -Eq 'Class:[[:space:]]+ELF64'
+          readelf -h "$lib" | grep -Eq "Data:.*2's complement, little endian"
+          readelf -h "$lib" | grep -Eq 'Type:[[:space:]]+DYN'
           readelf -h "$lib" | grep -Eq 'Machine:[[:space:]]+AArch64'
-          readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
-          readelf -h "$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          readelf -l "$lib" | grep -Eq 'LOAD[[:space:]]'
+          readelf -l "$lib" | grep -Eq 'DYNAMIC[[:space:]]'
+          readelf -d "$lib" | grep -Fq 'Library soname: [libWPEWebKit-2.0.so.1]'
+          for process in WPEWebProcess WPENetworkProcess; do
+            process_bin="$pkg/Fire4Nix/runtime/libexec/wpe-webkit-2.0/$process"
+            readelf -h "$process_bin" | grep -Eq 'Class:[[:space:]]+ELF64'
+            readelf -h "$process_bin" | grep -Eq 'Machine:[[:space:]]+AArch64'
+          done
           readelf -d "$bin" | grep -Fq 'libgobject-2.0.so.0'
           readelf -d "$bin" | grep -Fq 'libglib-2.0.so.0'
           max_glibc="$(readelf --version-info "$bin" | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
@@ -279,6 +308,7 @@ jobs:
           print("EGL_PROBE_PYTHON_SYNTAX=PASS")
           PYCODE
           sh native/tests/test_first_test_graphics_probe.sh
+          sh native/tests/test_runtime_elf_guard.sh
           grep -Fq -- '--graphics-probe' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           test -s "$pkg/Fire4Nix-EGL-R36H.py"
           sh native/tests/test_local_html_mime_fallback.sh
@@ -291,24 +321,35 @@ jobs:
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
           cp "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt" "$pkg/PROVENANCE-WPE-RUNTIME.txt"
           native_sha="$(sha256sum "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | awk '{print $1}')"
+          native_banner="$(strings "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -F 'Fire4Nix native WPEPlatform ' | head -n 1)"
+          test -n "$native_banner"
+          native_version="${native_banner##* }"
+          case "$native_version" in [0-9]*.[0-9]*) ;; *) echo "Invalid native launcher version: $native_version" >&2; exit 1 ;; esac
+          native_glibc="$(readelf --version-info "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
+          test -n "$native_glibc"
           cat > "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt" <<EOF
-          NATIVE_LAUNCHER_WORKFLOW_RUN=41181670144
-          NATIVE_LAUNCHER_ARTIFACT_ID=13035271896
-          NATIVE_SOURCE_COMMIT=2d1fdbc0303f57c0f1388f2b002c6241f3eefcc4
+          NATIVE_LAUNCHER_WORKFLOW_RUN=${{ steps.native-run.outputs.run_id }}
+          NATIVE_LAUNCHER_ARTIFACT_ID=${{ steps.native-run.outputs.artifact_id }}
+          NATIVE_LAUNCHER_ARTIFACT_DIGEST=${{ steps.native-run.outputs.artifact_digest }}
+          NATIVE_SOURCE_COMMIT=${{ steps.native-run.outputs.source_sha }}
+          NATIVE_LAUNCHER_VERSION=$native_version
           NATIVE_BINARY_SHA256=$native_sha
-          NATIVE_GLIBC_MAX=2.34
+          NATIVE_GLIBC_MAX=$native_glibc
           NATIVE_LOCAL_HTML_API=webkit_web_view_load_html
           EOF
+          echo "NATIVE_LAUNCHER_VERSION=$native_version" >> "$GITHUB_ENV"
+          echo "NATIVE_GLIBC_MAX=$native_glibc" >> "$GITHUB_ENV"
           chmod 0644 "$pkg/PROVENANCE-NATIVE-LAUNCHER.txt"
-          cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<'EOF'
+          cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<EOF
           FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
           WPE_RUNTIME_VERSION=2.54.1
           WPE_RUNTIME_ARTIFACT_RUN=40033262653
-          NATIVE_LAUNCHER_VERSION=1.05
-          NATIVE_LAUNCHER_ARTIFACT_RUN=41181670144
-          NATIVE_LAUNCHER_ARTIFACT_ID=13035271896
-          NATIVE_SOURCE_COMMIT=2d1fdbc0303f57c0f1388f2b002c6241f3eefcc4
-          NATIVE_GLIBC_MAX=2.34
+          NATIVE_LAUNCHER_VERSION=$native_version
+          NATIVE_LAUNCHER_WORKFLOW_RUN=${{ steps.native-run.outputs.run_id }}
+          NATIVE_LAUNCHER_ARTIFACT_ID=${{ steps.native-run.outputs.artifact_id }}
+          NATIVE_LAUNCHER_ARTIFACT_DIGEST=${{ steps.native-run.outputs.artifact_digest }}
+          NATIVE_SOURCE_COMMIT=${{ steps.native-run.outputs.source_sha }}
+          NATIVE_GLIBC_MAX=$native_glibc
           WPE_REQUIRED_RUNTIME_SYMBOLS=26_OF_26_STATICALLY_PRESENT
           ROCKNIX_SDK_CLOSURE=STATIC_CANDIDATES_ONLY
           R36H_DEVICE_ABI_VERIFIED=no
