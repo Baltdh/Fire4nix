@@ -9,15 +9,23 @@ trap 'status=$?; if [ "$status" -ne 0 ]; then
   if [ -f "$T/install.log" ]; then cat "$T/install.log" >&2; fi
 fi
 rm -rf "$T"' 0
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\\x7fELF\\x02\\x01\\x01" + b"\\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 P="$T/ports with spaces"
 APP="$P/Fire4Nix"
 CHILD="$APP/runtime/libexec/wpe-webkit-2.0"
 mkdir -p "$APP/bin" "$APP/runtime/lib" "$CHILD"
 cp "$BASE/installer/Fire4Nix-Direto.sh" "$P/Fire4Nix-Direto.sh"
-printf 'mock-WPE\n' > "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$APP/runtime/lib/libWPEWebKit-2.0.so.1"
 printf 'mock-AArch64\n' > "$APP/bin/fire4nix-native-aarch64"
 for name in WPEWebProcess WPENetworkProcess; do
-    printf 'mock-%s\n' "$name" > "$CHILD/$name"
+    make_arm64_elf "$CHILD/$name"
 done
 cat > "$APP/Fire4Nix-Iniciar.sh" <<'MOCK'
 #!/bin/sh
@@ -102,9 +110,9 @@ printf 'diagnostic\n' > "$PACKAGE/Diagnosticar-Fire4Nix.sh"
 cp "$PACKAGE/Diagnosticar-Fire4Nix.sh" "$PKG/Diagnosticar-Fire4Nix.sh"
 PKG_RUNTIME="$PACKAGE/runtime"
 PKG_CHILD="$PKG_RUNTIME/libexec/wpe-webkit-2.0"
-printf 'dummy engine\n' > "$PKG_RUNTIME/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$PKG_RUNTIME/lib/libWPEWebKit-2.0.so.1"
 for name in WPEWebProcess WPENetworkProcess; do
-    printf 'process-%s\n' "$name" > "$PKG_CHILD/$name"
+    make_arm64_elf "$PKG_CHILD/$name"
 done
 printf 'GPU_PROCESS_PROFILE=disabled_verified_wayland\n' > "$PKG_RUNTIME/BUILD-REPORT.txt"
 install_once() {
@@ -146,7 +154,7 @@ rm "$PKG_RUNTIME/BUILD-REPORT.txt"
 # Transition to GPU-on must install GPUProcess, not skip the update because
 # Web/Network binaries and the engine library happen to have the same hashes.
 printf 'GPU_PROCESS_PROFILE=enabled_verified\n' > "$PKG_RUNTIME/BUILD-REPORT.txt"
-printf 'gpu-process\n' > "$PKG_CHILD/WPEGPUProcess"
+make_arm64_elf "$PKG_CHILD/WPEGPUProcess"
 install_once
 grep -Fxq 'GPU_PROCESS_PROFILE=enabled_verified' "$DEST/runtime/BUILD-REPORT.txt"
 test -s "$DEST/runtime/libexec/wpe-webkit-2.0/WPEGPUProcess"
