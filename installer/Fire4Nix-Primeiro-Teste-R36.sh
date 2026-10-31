@@ -211,7 +211,7 @@ log 'GRAPHICAL_FRAME_INSTRUCTIONS=Use --open to keep the 640x480 page visible an
 if [ "$MODE" = --open ]; then
   log 'visual_session=STARTED'
   log 'visual_manual_checks=THREE_COLOR_BLOCKS,JS_OK,TEST_BUTTON_CLICK'
-  sh "$LAUNCHER" --open "file://$PAGE" >> "$REPORT" 2>&1
+  sh "$LAUNCHER" --open "$PAGE" >> "$REPORT" 2>&1
   visual_rc=$?
   log "visual_session_exit=$visual_rc"
   if [ "$visual_rc" -eq 0 ]; then
