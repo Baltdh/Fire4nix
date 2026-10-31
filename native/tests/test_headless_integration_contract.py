@@ -83,7 +83,10 @@ class HeadlessIntegrationContract(unittest.TestCase):
             self.assertIn(token, page)
         self.assertEqual(page.count('class="tile"'), 4)
         self.assertIn('--verify-home', wayland_test)
-        self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND', wayland_test)
+        self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND_640X480', wayland_test)
+        self.assertIn('WAYLAND_HOME_VIEWPORT=', wayland_test)
+        self.assertIn('FAIL_640X480_OVERFLOW', wayland_test)
+        self.assertIn('scroll_height=(\\d+)', wayland_test)
 
     def test_rocknix_gamepad_dpad_maps_to_home_focus_navigation(self):
         config = GAMEPAD.read_text()
