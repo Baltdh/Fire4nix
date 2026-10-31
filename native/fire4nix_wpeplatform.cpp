@@ -91,8 +91,11 @@ static void stage(const char* name) {
 }
 static gboolean timeoutQuit(gpointer data) {
     App* app = static_cast<App*>(data);
-    stage("smoke timeout; no confirmed page load");
-    if (app->loaded || app->failed) return G_SOURCE_REMOVE;
+    const bool verificationPending = app->verifyOffline || app->verifyHome ||
+        app->verifyNavigation || app->verifyForm || app->verifyStorage;
+    if (app->failed || (app->loaded && !verificationPending))
+        return G_SOURCE_REMOVE;
+    stage("smoke/verification timeout; no completed result");
     app->exitCode = 124;
     if (app->loop) g_main_loop_quit(app->loop);
     return G_SOURCE_REMOVE;
