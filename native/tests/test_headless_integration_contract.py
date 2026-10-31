@@ -8,6 +8,9 @@ SOURCE = ROOT / "native/fire4nix_wpeplatform.cpp"
 PAGE = ROOT / "installer/www/primeiro-teste.html"
 HOME_PAGE = ROOT / "installer/www/inicio.html"
 WAYLAND_TEST = ROOT / "native/tests/test_wayland_compositor_integration.sh"
+LAUNCHER = ROOT / "installer/Fire4Nix-Iniciar.sh"
+FIRST_TEST = ROOT / "installer/Fire4Nix-Primeiro-Teste-R36.sh"
+PORTS_TEST = ROOT / "installer/Fire4Nix-Teste.sh"
 GAMEPAD = ROOT / "installer/config/fire4nix.gptk"
 WORKFLOW = ROOT / ".github/workflows/wpe-headless-arm64-integration.yml"
 
@@ -48,12 +51,20 @@ class HeadlessIntegrationContract(unittest.TestCase):
         source = SOURCE.read_text()
         page = HOME_PAGE.read_text()
         wayland_test = WAYLAND_TEST.read_text()
+        launcher = LAUNCHER.read_text()
+        first_test = FIRST_TEST.read_text()
+        ports_test = PORTS_TEST.read_text()
+        workflow = WORKFLOW.read_text()
         for token in (
             "--verify-home",
             "bool verifyHome = false",
             "homeEvaluationFinished",
             "document.querySelector('#address')",
             "document.querySelector('#keyboardToggle')",
+            "g_filename_to_uri(url",
+            "g_filename_from_uri(url",
+            "g_uri_escape_string",
+            "normalizedLocalUrl",
             "keyboard_toggle=PASS",
             "keyboard_compact=PASS",
             "keyboard_input=PASS",
@@ -83,6 +94,17 @@ class HeadlessIntegrationContract(unittest.TestCase):
             self.assertIn(token, page)
         self.assertEqual(page.count('class="tile"'), 4)
         self.assertIn('--verify-home', wayland_test)
+        self.assertIn('Fire4Nix Wayland local', wayland_test)
+        self.assertIn('Fire4Nix Wayland home', wayland_test)
+        self.assertIn('Fire4Nix offline path', workflow)
+        self.assertIn('Fire4Nix home path', workflow)
+        self.assertIn('FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-$ROOT/www/inicio.html}"', launcher)
+        self.assertIn('run_stage OFFLINE-ENGINE --verify-offline "$PAGE"', first_test)
+        self.assertIn('run_stage HOME-UI --verify-home "$HOME_PAGE"', first_test)
+        self.assertNotIn('file://$PAGE', first_test)
+        self.assertIn('sh "$LAUNCHER" --open "$PAGE"', first_test)
+        self.assertIn('"$installed_root/www/primeiro-teste.html" 2>&1', ports_test)
+        self.assertNotIn('file://$installed_root/www/primeiro-teste.html', ports_test)
         self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND_640X480', wayland_test)
         self.assertIn('WAYLAND_HOME_VIEWPORT=', wayland_test)
         self.assertIn('FAIL_640X480_OVERFLOW', wayland_test)
