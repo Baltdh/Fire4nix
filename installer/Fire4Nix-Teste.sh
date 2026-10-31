@@ -31,10 +31,10 @@ DIAG_SCRIPT="$HERE/Diagnosticar-Fire4Nix.sh"
 [ -f "$DIAG_SCRIPT" ] || DIAG_SCRIPT="$ROOT/Diagnosticar-Fire4Nix.sh"
 
 installed_root=""
-for dir in "$ROOT" \
-  "$HERE/../Fire4Nix" \
+for dir in "$HERE/../Fire4Nix" \
   "${FIRE4NIX_ROMS:-/no-roms}/ports/Fire4Nix" \
   "${FIRE4NIX_ROMS:-/no-roms}/ports/fire4nix-completo" \
+  "$ROOT" \
   /storage/games-internal/roms/ports/Fire4Nix \
   /storage/games-external/roms/ports/Fire4Nix \
   /storage/roms/ports/Fire4Nix \
