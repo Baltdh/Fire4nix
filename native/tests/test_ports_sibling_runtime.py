@@ -21,7 +21,7 @@ class SiblingRuntime(unittest.TestCase):
             # The runtime resolver now rejects non-ELF placeholders before
             # selecting a library; use a minimal ELF64 little-endian AArch64
             # header because this test exercises selection, not dlopen.
-            ident = b'\\x7fELF\\x02\\x01\\x01' + b'\\x00' * 9
+            ident = b'\x7fELF\x02\x01\x01' + b'\x00' * 9
             header = struct.pack('<HHIQQQIHHHHHH', 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
             (app/'runtime/lib/libWPEWebKit-2.0.so.1').write_bytes(ident + header)
             (app/'bin/fire4nix-native-aarch64').chmod(0o755)
