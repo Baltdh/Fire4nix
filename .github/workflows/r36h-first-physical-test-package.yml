@@ -46,9 +46,14 @@ jobs:
         with:
           script: |
             const branch = context.ref.replace('refs/heads/', '')
+            const changedPaths = commit => [
+              ...(commit?.added || []),
+              ...(commit?.modified || []),
+              ...(commit?.removed || [])
+            ]
             const changed = [
-              ...(context.payload.commits || []).flatMap(commit => commit.modified || []),
-              ...((context.payload.head_commit && context.payload.head_commit.modified) || [])
+              ...(context.payload.commits || []).flatMap(changedPaths),
+              ...changedPaths(context.payload.head_commit || {})
             ]
             const nativeChanged = changed.some(file =>
               file.startsWith('native/') || file === '.github/workflows/fire4nix-native-086.yml'
@@ -79,24 +84,23 @@ jobs:
                 throw new Error('Matching ARM64 native build did not complete successfully for ' + context.sha)
               }
             } else {
-              // Installer/UI-only changes reuse the newest successful native
-              // binary. Give the Actions API a short consistency window, then
-              // wait for any newer in-progress build before choosing an older
-              // successful artifact.
+              // Installer/UI-only changes may reuse the latest native build,
+              // but never fall back to an older success if the newest build
+              // failed. That would silently package stale native code.
               await new Promise(resolve => setTimeout(resolve, 15000))
-              let runs = []
+              let newest = null
               for (let attempt = 0; attempt < 18; attempt++) {
-                runs = await listRuns()
-                const newest = [...runs].sort((a, b) =>
+                const runs = await listRuns()
+                newest = [...runs].sort((a, b) =>
                   Date.parse(b.created_at) - Date.parse(a.created_at)
-                )[0]
-                if (!newest || newest.status === 'completed') break
+                )[0] || null
+                if (newest && newest.status === 'completed') break
                 await new Promise(resolve => setTimeout(resolve, 10000))
               }
-              run = runs
-                .filter(item => item.conclusion === 'success')
-                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
-              if (!run) throw new Error('No successful ARM64 native launcher artifact for this branch')
+              if (!newest || newest.status !== 'completed' || newest.conclusion !== 'success') {
+                throw new Error('Latest ARM64 native launcher build is missing or unsuccessful; refusing stale artifact fallback')
+              }
+              run = newest
             }
             const artifactsResponse = await github.rest.actions.listWorkflowRunArtifacts({
               owner: context.repo.owner,
