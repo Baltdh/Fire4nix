@@ -131,7 +131,8 @@ if [[ -n "$home_fixture" ]]; then
     '[FIRE4NIX-HOME] virtual_keyboard=PASS' \
     '[FIRE4NIX-HOME] form_submit_guard=PASS' \
     '[FIRE4NIX-HOME] shortcuts=PASS' \
-    '[FIRE4NIX-HOME] viewport_css=PASS'; do
+    '[FIRE4NIX-HOME] viewport_css=PASS' \
+    '[FIRE4NIX-HOME] focus_navigation=PASS'; do
     grep -Fq "$marker" "$work/logs/wpe-wayland-home-ui.log" || {
       echo "WAYLAND_WPE_HOME_UI=FAIL_MISSING_MARKER:$marker" | tee -a "$GITHUB_STEP_SUMMARY"
       exit 10
