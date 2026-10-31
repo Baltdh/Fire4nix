@@ -8,4 +8,10 @@ grep -Fq 'g_filename_from_uri(url, &hostname, &fileError)' "$source_file"
 grep -Fq 'g_file_get_contents(localPath, &html, &htmlLength, &fileError)' "$source_file"
 grep -Fq 'app.loadHtml(app.view, html, url)' "$source_file"
 grep -Fq 'preserving the original file URI as base' "$source_file"
-echo 'PASS: local .html/.htm uses explicit HTML MIME-independent loading with file URI base.'
+test_script=$(CDPATH= cd -- "$(dirname -- "$0")/../../installer" && pwd -P)/Fire4Nix-Primeiro-Teste-R36.sh
+grep -Fq 'REPORT=$(mktemp "$REPORT_DIR/Primeiro-Teste-R36H-XXXXXX")' "$test_script"
+if grep -Fq 'Primeiro-Teste-R36H-XXXXXX.txt' "$test_script"; then
+  echo 'FAIL: non-portable mktemp suffix remains in R36H preflight script' >&2
+  exit 1
+fi
+echo 'PASS: local HTML MIME fallback and BusyBox-compatible mktemp template.'
