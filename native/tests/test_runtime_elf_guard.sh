@@ -106,6 +106,7 @@ PATH="$T/fakebin:$PATH" \
 XDG_RUNTIME_DIR="$T/fake-wayland" WAYLAND_DISPLAY=wayland-1 \
 FIRE4NIX_RUNTIME_ROOT="$T/external-runtime" \
 FIRE4NIX_TEST_TRACE="$TRACE" \
+FIRE4NIX_GAMEPAD=0 \
 FIRE4NIX_LOG_DIR="$T/logs" \
 FIRE4NIX_TEST_REPORT_DIR="$T/first-report" \
   sh "$T/package/Fire4Nix-Primeiro-Teste-R36.sh" --preflight > "$T/first-test.log" 2>&1
