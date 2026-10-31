@@ -38,7 +38,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             ca-certificates build-essential pkg-config python3 file openssl \
             libglib2.0-dev libglib2.0-bin shared-mime-info glib-networking \
-            libwpewebkit-2.0-dev weston libegl1 libgles2 libgl1-mesa-dri
+            libwpewebkit-2.0-dev weston libegl1 libgles2 libgl1-mesa-dri python3-pil
           version="$(dpkg-query -W -f='${Version}' libwpewebkit-2.0-1)"
           echo "WPE_PACKAGE_VERSION=$version"
           case "$version" in
