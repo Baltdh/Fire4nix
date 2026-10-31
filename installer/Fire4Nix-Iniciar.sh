@@ -100,7 +100,7 @@ case "$RUNTIME_ROOT" in
     *) RUNTIME_ROOT="$ROOT/$RUNTIME_ROOT" ;;
 esac
 RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
-    fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$RUNTIME_ROOT}"
+    fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
 
 # A non-empty file is not proof of an ARM64 library. Check ELF magic, ELF64,
 # little-endian encoding and e_machine=EM_AARCH64 before any dlopen occurs.
