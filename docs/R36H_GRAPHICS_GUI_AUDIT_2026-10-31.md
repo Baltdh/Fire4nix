@@ -11,6 +11,7 @@ Alvo: R36H / RK3326 / AArch64 / ROCKNIX, painel lógico 640×480. Este documento
 - `native/fire4nix_wpeplatform.cpp` é o launcher nativo WPEPlatform. Ele carrega a biblioteca WPE, consulta a API WPEPlatform, cria o WebKitWebView/WPEView, obtém o toplevel e executa o loop GLib.
 - O launcher recebe `WPE_PLATFORM=wayland`; a integração com Wayland não depende do shell SDL antigo.
 - `installer/www/inicio.html` é a página inicial visual do produto: endereço/pesquisa, atalhos, teclado virtual e CSS responsivo.
+- O novo modo `--verify-home` testa essa página no próprio WPE: campo de endereço, submit sem navegação, teclado virtual, atalhos, CSS, viewport e foco por setas.
 - O teste `--verify-offline` verifica DOM, JavaScript, CSS computado e evento de clique.
 - A correção de HTML local usa `webkit_web_view_load_html()` para evitar depender da associação MIME `text/html` do sistema; a URI `file://` original é mantida como base para recursos relativos.
 
@@ -76,7 +77,7 @@ Substituir o `ShellBrowserBridge` de journal por uma ponte nativa real. As açõ
 
 ### Fase 3 — controles físicos
 
-Usar uma única rota de entrada para direcional, A/B, Start, Select e teclado. Evitar executar dois mapeadores de gamepad simultaneamente. Validar foco visível, seleção, digitação, voltar, início, atualizar e sair na resolução 640×480.
+Usar uma única rota de entrada para direcional, A/B, Start, Select e teclado. O perfil `installer/config/fire4nix.gptk` mapeia o D-pad para setas e A/B para Enter/Esc. Evitar executar dois mapeadores de gamepad simultaneamente. O teste `--verify-home` exercita ArrowDown/ArrowRight para confirmar o avanço de foco entre controles. Depois validar seleção, digitação, voltar, início, atualizar e sair no aparelho.
 
 ### Fase 4 — interface C++ opcional
 
@@ -88,7 +89,7 @@ Só reativar composição SDL/framebuffer depois de demonstrar um frame WPE Wayl
 |---|---|---|
 | G0 | Biblioteca e subprocessos ELF64 AArch64 válidos | Guarda adicionada; CI pendente |
 | G1 | ABI WPEPlatform e dependências transitivas compatíveis com o ROCKNIX real | Pendente no aparelho |
-| G2 | HTML local, DOM, JS, CSS e clique | CI ARM64 aprovado |
+| G2 | HTML local, DOM, JS, CSS, teclado virtual, formulário e foco D-pad | CI ARM64 pendente |
 | G3 | WPEView Wayland e frame capturado em Weston | CI; não é Mali físico |
 | G4 | EGL/GLES e superfície Wayland no R36H | Pendente |
 | G5 | Primeiro frame visível no painel 640×480 | Pendente |
