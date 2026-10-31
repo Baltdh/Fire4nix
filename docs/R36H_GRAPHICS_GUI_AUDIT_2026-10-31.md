@@ -30,6 +30,16 @@ Conclusão: essa camada C++ ainda não é a interface operacional do browser. N�
 
 O aplicativo não deve carregar cópias privadas de `libEGL`, `libGLESv2`, `libmali`, `libdrm`, `libgbm`, `libwayland-client`, `libc` ou do loader do sistema sem um motivo comprovado. A pilha gráfica e as bibliotecas de plataforma devem ser fornecidas pelo ROCKNIX; o runtime privado deve conter apenas a closure WPE necessária e auditada.
 
+## Status de suporte ROCKNIX no R36H
+
+A release oficial ROCKNIX 20261001 lista o pacote RK3326 A para R33S/R36S/RG351, mas não lista o R36H. Um guia comunitário atualizado em 21/10/2026 também classifica ROCKNIX como não oficialmente suportado no R36H e descreve uso comunitário da imagem R36S com overlay de painel. Portanto, a compatibilidade do Fire4Nix aqui é com a pilha ROCKNIX/RK3326/AArch64/Wayland disponível no aparelho; não equivale a certificação da imagem ROCKNIX para a placa/painel R36H.
+
+Referências externas:
+- https://github.com/ROCKNIX/distribution/releases
+- https://r36h.com/guides/firmware-setup
+
+O Fire4Nix não deve alterar DTB, overlay de painel, firmware ou drivers do ROCKNIX. A identificação do painel e a inicialização do sistema permanecem uma camada separada do navegador.
+
 ## Evidência específica do R36H
 
 O relatório de 23/10/2026 registra:
@@ -51,7 +61,7 @@ O socket Wayland existir também não prova que o WPE esteja apresentando uma ja
 ## Correção de runtime incluída nesta revisão
 
 O launcher agora:
-1. Usa `$ROOT/runtime` por padrão; runtime em outro cartão só é aceito por `FIRE4NIX_RUNTIME_ROOT` explícito.
+1. Usa `$ROOT/runtime` por padrão. O launcher principal aceita runtime externo por `FIRE4NIX_RUNTIME_ROOT` explícito; o entrypoint Ports procura os diretórios conhecidos em `roms/tools` e `roms/ports`, valida o ELF e então passa o caminho selecionado explicitamente ao launcher.
 2. Descarta `LD_LIBRARY_PATH` herdado por padrão, mantendo o modo compatível apenas com `FIRE4NIX_INHERIT_LIBRARY_PATH=1`.
 3. Verifica ELF64 little-endian AArch64 na biblioteca WPE e nos subprocessos antes de iniciar o carregador.
 4. Recusa biblioteca inválida com código 79 antes de `dlopen`, em vez de permitir uma falha tardia e pouco informativa.
