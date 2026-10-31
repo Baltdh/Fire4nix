@@ -109,7 +109,7 @@ is_elf64_aarch64() {
     file_path=$1
     [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
     command -v od >/dev/null 2>&1 || return 1
-    elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\\n' ' ') || return 1
+    elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
     set -- $elf_bytes
     [ "$#" -ge 20 ] || return 1
     [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
@@ -120,7 +120,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log "$LOG_DIR"/Fire4Nix-*-log-* 2>/dev/null | sed -
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=1.05\nroot=%s\n' "$ROOT" >> "$LOG"
+printf 'version=1.06\nroot=%s\nruntime_root=%s\n' "$ROOT" "$RUNTIME_ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline)
