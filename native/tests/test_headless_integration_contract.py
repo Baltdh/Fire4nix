@@ -6,6 +6,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "native/fire4nix_wpeplatform.cpp"
 PAGE = ROOT / "installer/www/primeiro-teste.html"
+HOME_PAGE = ROOT / "installer/www/inicio.html"
+WAYLAND_TEST = ROOT / "native/tests/test_wayland_compositor_integration.sh"
 WORKFLOW = ROOT / ".github/workflows/wpe-headless-arm64-integration.yml"
 
 
@@ -40,6 +42,41 @@ class HeadlessIntegrationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
         self.assertIn("#include <gio/gio.h>", source)
+
+    def test_real_home_ui_is_verified_inside_wpe(self):
+        source = SOURCE.read_text()
+        page = HOME_PAGE.read_text()
+        wayland_test = WAYLAND_TEST.read_text()
+        for token in (
+            "--verify-home",
+            "bool verifyHome = false",
+            "homeEvaluationFinished",
+            "document.querySelector('#address')",
+            "document.querySelector('#keyboardToggle')",
+            "keyboard_toggle=PASS",
+            "keyboard_input=PASS",
+            "form_submit_guard=PASS",
+            "shortcuts=4",
+            "body_background=PASS",
+            "viewport_meta=PASS",
+        ):
+            self.assertIn(token, source)
+        for token in (
+            '<title>Fire4Nix | Início</title>',
+            'id="address"',
+            'id="form"',
+            'id="keyboardToggle"',
+            'id="keyboard"',
+            '<nav aria-label="Atalhos">',
+            'class="tile"',
+            'keyboardToggle.addEventListener("click"',
+            'form.addEventListener("submit"',
+            'document.addEventListener("keydown"',
+        ):
+            self.assertIn(token, page)
+        self.assertEqual(page.count('class="tile"'), 4)
+        self.assertIn('--verify-home', wayland_test)
+        self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND', wayland_test)
 
     def test_native_browser_history_verification_uses_real_navigation_api(self):
         source = SOURCE.read_text()
@@ -162,6 +199,9 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "2.54.2",
             "WPE_PLATFORM=headless",
             "--verify-offline",
+            "--verify-home",
+            "WPE_HOME_UI=PASS_REAL_DOM_KEYBOARD_FORM_SHORTCUTS",
+            "installer/www/inicio.html",
             "WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK",
             "WPE_FILE_URI=PASS_REAL_HTML_JS_CSS_CLICK",
             "data:text/html;base64,",
