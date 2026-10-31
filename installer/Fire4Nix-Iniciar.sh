@@ -138,7 +138,7 @@ if [ "$MODE" = --selftest ]; then
 fi
 RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
     fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
-printf 'runtime_root_resolved=%s\\n' "$RUNTIME_ROOT" >> "$LOG"
+printf 'runtime_root_resolved=%s\n' "$RUNTIME_ROOT" >> "$LOG"
 LIB="$RUNTIME_ROOT/lib/libWPEWebKit-2.0.so.1"
 CHILD="$RUNTIME_ROOT/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing WPE WebKit runtime under $RUNTIME_ROOT"
