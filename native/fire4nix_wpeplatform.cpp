@@ -177,13 +177,14 @@ static void homeEvaluationFinished(GObject* object, GAsyncResult* result, gpoint
         const bool addressOK = strstr(report, "address_field=PASS") != nullptr;
         const bool formOK = strstr(report, "form_submit_guard=PASS") != nullptr;
         const bool keyboardOK = strstr(report, "keyboard_toggle=PASS") != nullptr;
+        const bool keyboardCompactOK = strstr(report, "keyboard_compact=PASS") != nullptr;
         const bool keyInputOK = strstr(report, "keyboard_input=PASS") != nullptr;
         const bool shortcutsOK = strstr(report, "shortcuts=4") != nullptr;
         const bool cssOK = strstr(report, "body_background=PASS") != nullptr;
         const bool viewportOK = strstr(report, "viewport_meta=PASS") != nullptr;
         const bool focusNavigationOK = strstr(report, "focus_navigation=PASS") != nullptr;
-        if (titleOK && addressOK && formOK && keyboardOK && keyInputOK &&
-            shortcutsOK && cssOK && viewportOK && focusNavigationOK) {
+        if (titleOK && addressOK && formOK && keyboardOK && keyboardCompactOK &&
+            keyInputOK && shortcutsOK && cssOK && viewportOK && focusNavigationOK) {
             stage("home UI DOM, virtual keyboard, D-pad focus, form guard and viewport verification passed");
             g_printerr("[FIRE4NIX-HOME] home_dom=PASS\n");
             g_printerr("[FIRE4NIX-HOME] virtual_keyboard=PASS\n");
@@ -591,15 +592,23 @@ static void loadChanged(GObject*, int event, gpointer data) {
                 " if(f) f.dispatchEvent(ev);"
                 " checks.push('form_submit_guard='+(!!f && ev.defaultPrevented?'PASS':'FAIL'));"
                 " const keyboardVisible=!!k && getComputedStyle(k).display==='grid';"
+                " const compact=!!document.body.classList.contains('keyboard-open') && !!nav && getComputedStyle(nav).display==='none' && getComputedStyle(document.querySelector('footer')).display==='none';"
                 " checks.push('keyboard_toggle='+(opened && !!t && t.getAttribute('aria-expanded')==='true' && keyboardVisible?'PASS':'FAIL'));"
+                " checks.push('keyboard_compact='+(compact?'PASS':'FAIL'));"
                 " checks.push('keyboard_input='+(typed?'PASS':'FAIL'));"
                 " checks.push('keyboard_keys='+keyCount);"
                 " if(t) t.focus();"
                 " document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));"
-                " const downFocus=!!document.activeElement && document.activeElement.id==='go';"
+                " const openDown=!!document.activeElement && document.activeElement.id==='go';"
                 " document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));"
-                " const rightFocus=!!document.activeElement && document.activeElement.classList.contains('tile');"
-                " checks.push('focus_navigation='+(downFocus && rightFocus?'PASS':'FAIL'));"
+                " const openRight=!!k && k.contains(document.activeElement) && document.activeElement.tagName==='BUTTON';"
+                " if(t) t.click();"
+                " if(t) t.focus();"
+                " document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));"
+                " const closedDown=!!document.activeElement && document.activeElement.id==='go';"
+                " document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));"
+                " const shortcutFocus=!!document.activeElement && document.activeElement.classList.contains('tile');"
+                " checks.push('focus_navigation='+(openDown && openRight && closedDown && shortcutFocus?'PASS':'FAIL'));"
                 " checks.push('shortcuts='+(nav?nav.querySelectorAll('a.tile').length:0));"
                 " checks.push('viewport='+window.innerWidth+'x'+window.innerHeight);"
                 " checks.push('scroll_height='+(document.documentElement?document.documentElement.scrollHeight:0));"
