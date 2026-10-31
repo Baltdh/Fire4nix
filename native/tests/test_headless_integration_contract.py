@@ -11,6 +11,7 @@ WAYLAND_TEST = ROOT / "native/tests/test_wayland_compositor_integration.sh"
 LAUNCHER = ROOT / "installer/Fire4Nix-Iniciar.sh"
 FIRST_TEST = ROOT / "installer/Fire4Nix-Primeiro-Teste-R36.sh"
 PORTS_TEST = ROOT / "installer/Fire4Nix-Teste.sh"
+DIAGNOSTIC = ROOT / "installer/Diagnosticar-Fire4Nix.sh"
 GAMEPAD = ROOT / "installer/config/fire4nix.gptk"
 WORKFLOW = ROOT / ".github/workflows/wpe-headless-arm64-integration.yml"
 
@@ -109,6 +110,17 @@ class HeadlessIntegrationContract(unittest.TestCase):
         self.assertIn('WAYLAND_HOME_VIEWPORT=', wayland_test)
         self.assertIn('FAIL_640X480_OVERFLOW', wayland_test)
         self.assertIn('scroll_height=(\\d+)', wayland_test)
+
+    def test_sandbox_is_never_disabled_without_explicit_opt_in(self):
+        launcher = LAUNCHER.read_text()
+        diagnostic = DIAGNOSTIC.read_text()
+        self.assertIn("FIRE4NIX_ALLOW_UNSANDBOXED", launcher)
+        self.assertIn("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", launcher)
+        self.assertIn("sandbox_unverified_bwrap_or_proxy_missing", launcher)
+        self.assertIn("sandbox_disabled_by_explicit_user_opt_in", launcher)
+        self.assertIn("xdg_dbus_proxy=", diagnostic)
+        self.assertIn("user_namespaces=", diagnostic)
+        self.assertIn("unshare -Ur true", diagnostic)
 
     def test_rocknix_gamepad_dpad_maps_to_home_focus_navigation(self):
         config = GAMEPAD.read_text()
