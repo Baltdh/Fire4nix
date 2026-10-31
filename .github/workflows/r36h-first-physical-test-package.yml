@@ -14,6 +14,11 @@ on:
       - 'installer/LEIA-ME-PRIMEIRO-TESTE-R36H.txt'
       - 'native/tests/test_first_test_graphics_probe.sh'
       - 'installer/Fire4Nix-Teste.sh'
+      - 'installer/Fire4Nix-Direto.sh'
+      - 'installer/config/fire4nix.gptk'
+      - 'installer/www/inicio.html'
+      - 'installer/www/primeiro-teste.html'
+      - 'scripts/package-first-r36h-ports-candidate.py'
       - 'installer/Diagnosticar-Fire4Nix.sh'
       - 'installer/Fire4Nix-Inspecionar-ELF.sh'
       - '.github/workflows/r36h-first-physical-test-package.yml'
@@ -213,6 +218,9 @@ jobs:
           test -s "$pkg/Fire4Nix-EGL-R36H.py"
           sh native/tests/test_local_html_mime_fallback.sh
           grep -Fq -- '--verify-offline' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
+          grep -Fq -- '--verify-home' "$pkg/Fire4Nix/Fire4Nix-Iniciar.sh"
+          grep -Fq 'home_ui_dom_keyboard_form_shortcuts_focus=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
+          test -s "$pkg/Fire4Nix/www/inicio.html"
           grep -Fq 'ENGINE_FUNCTIONAL_TEST=PASS' "$pkg/Fire4Nix-Primeiro-Teste-R36.sh"
           grep -Fq 'WPE 2.54.1' "$pkg/LEIA-ME-PRIMEIRO-TESTE-R36H.txt"
           (cd "$pkg/Fire4Nix/runtime" && sha256sum -c SHA256SUMS.txt)
