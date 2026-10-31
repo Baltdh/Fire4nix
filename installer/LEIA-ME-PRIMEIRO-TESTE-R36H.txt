@@ -1,10 +1,16 @@
-FIRE4NIX R36H — PRIMEIRO TESTE FÍSICO
+FIRE4NIX R36H — BETA DE PRIMEIRO TESTE (2026-10-31)
 =========================================
 
 PACOTE EXPERIMENTAL PARA ROCKNIX / R36H
 Este pacote combina o runtime WPE 2.54.1 compilado com SDK ROCKNIX e o
 launcher nativo Fire4Nix 1.05 ARM64. O WPE 2.54.2 foi usado separadamente
 na validação headless de integração contínua; ele NÃO foi copiado para cá.
+
+Correção incluída nesta revisão: HTML local .html/.htm é lido via GIO e enviado
+à API webkit_web_view_load_html(), sem depender da associação MIME text/html.
+A regressão passou no CI ARM64 com o runtime de integração WPE 2.54.2.
+A captura Wayland/Weston de CI confirmou pixels renderizados em 640x480;
+isso NÃO valida a GPU Mali nem a tela física do R36H.
 
 O que este pacote verifica:
 1. Diagnóstico EGL/GLES2 independente, com contexto pbuffer 1x1.
@@ -20,13 +26,13 @@ passa, NÃO comprova superfície Wayland, primeiro frame ou renderização do WP
 
 INSTALAÇÃO NÃO DESTRUTIVA
 1. Extraia o conteúdo completo deste ZIP em uma pasta nova dentro de:
-   roms/ports/Fire4Nix-R36H-Primeiro-Teste-20261030
+   roms/ports/Fire4Nix-R36H-Beta-20261031
 2. Não misture com a pasta de uma instalação anterior.
 3. Não copie bibliotecas para /usr e não substitua arquivos do ROCKNIX.
 
 PRIMEIRO: DIAGNÓSTICO GRÁFICO INDEPENDENTE
 Abra o terminal do ROCKNIX dentro da sessão gráfica e execute:
-   cd /storage/games-internal/roms/ports/Fire4Nix-R36H-Primeiro-Teste-20261030
+   cd /storage/games-internal/roms/ports/Fire4Nix-R36H-Beta-20261031
    sh Fire4Nix-Primeiro-Teste-R36.sh --graphics-probe
 
 O probe cria somente um contexto EGL/GLES2 offscreen de 1x1, com timeout de
@@ -74,8 +80,11 @@ LIMITES CONHECIDOS
   SDK ROCKNIX; isso não equivale a prova de ABI de cada biblioteca do rootfs.
 - O teste headless ARM64 não prova o framebuffer nem o driver Mali do R36H.
 - O pacote não instala/atualiza firmware, kernel, DTB, drivers ou /usr.
+A procedência do launcher nativo e o SHA-256 estão em
+PROVENANCE-NATIVE-LAUNCHER.txt; a procedência do runtime está em
+PROVENANCE-WPE-RUNTIME.txt.
 
 ROLLBACK
 Feche o navegador e remova somente a pasta nova
-Fire4Nix-R36H-Primeiro-Teste-20261030 de roms/ports.
+Fire4Nix-R36H-Beta-20261031 de roms/ports.
 O pacote não sobrescreve a instalação anterior.
