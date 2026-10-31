@@ -12,6 +12,7 @@ Alvo: R36H / RK3326 / AArch64 / ROCKNIX, painel lógico 640×480. Este documento
 - O launcher recebe `WPE_PLATFORM=wayland`; a integração com Wayland não depende do shell SDL antigo.
 - `installer/www/inicio.html` é a página inicial visual do produto: endereço/pesquisa, atalhos, teclado virtual e CSS responsivo.
 - O novo modo `--verify-home` testa essa página no próprio WPE: campo de endereço, submit sem navegação, teclado virtual, atalhos, CSS, viewport e foco por setas.
+- Ao abrir o teclado, a interface entra em modo compacto: oculta atalhos/rodapé, reduz margens e altura das teclas. O teste Wayland exige viewport real de 640×480 e ausência de overflow vertical enquanto o teclado está aberto.
 - O teste `--verify-offline` verifica DOM, JavaScript, CSS computado e evento de clique.
 - A correção de HTML local usa `webkit_web_view_load_html()` para evitar depender da associação MIME `text/html` do sistema; a URI `file://` original é mantida como base para recursos relativos.
 
@@ -89,7 +90,7 @@ Só reativar composição SDL/framebuffer depois de demonstrar um frame WPE Wayl
 |---|---|---|
 | G0 | Biblioteca e subprocessos ELF64 AArch64 válidos | Guarda adicionada; CI pendente |
 | G1 | ABI WPEPlatform e dependências transitivas compatíveis com o ROCKNIX real | Pendente no aparelho |
-| G2 | HTML local, DOM, JS, CSS, teclado virtual, formulário e foco D-pad | CI ARM64 pendente |
+| G2 | HTML local, DOM, JS, CSS, teclado virtual compacto, formulário e foco D-pad em 640×480 | CI ARM64 pendente |
 | G3 | WPEView Wayland e frame capturado em Weston | CI; não é Mali físico |
 | G4 | EGL/GLES e superfície Wayland no R36H | Pendente |
 | G5 | Primeiro frame visível no painel 640×480 | Pendente |
