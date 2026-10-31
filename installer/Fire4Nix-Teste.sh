@@ -63,7 +63,7 @@ installed_runtime_root=""
 invalid_runtime_candidate=""
 if [ -n "${FIRE4NIX_RUNTIME_ROOT:-}" ]; then
   candidate=$FIRE4NIX_RUNTIME_ROOT
-  case "$candidate" in /*) ;; *) candidate="$installed_root/$candidate" ;; esac
+  case "$candidate" in /*) ;; *) candidate="${installed_root:-$ROOT}/$candidate" ;; esac
   if is_elf64_aarch64 "$candidate/lib/libWPEWebKit-2.0.so.1"; then
     installed_runtime_root=$(CDPATH= cd -- "$candidate" && pwd -P) || exit 127
   else
