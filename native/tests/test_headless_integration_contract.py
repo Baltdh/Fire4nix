@@ -59,6 +59,9 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "shortcuts=4",
             "body_background=PASS",
             "viewport_meta=PASS",
+            "focus_navigation=PASS",
+            "ArrowDown",
+            "ArrowRight",
         ):
             self.assertIn(token, source)
         for token in (
