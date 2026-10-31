@@ -10,12 +10,15 @@ permissions:
 jobs:
   aarch64:
     runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:bullseye
     steps:
       - uses: actions/checkout@v4
       - name: Install small build dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends g++ pkg-config libglib2.0-dev zip
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates g++ pkg-config libglib2.0-dev zip file binutils
       - name: Compile standalone WPEPlatform launcher
         shell: bash
         run: |
@@ -29,6 +32,10 @@ jobs:
           readelf -h build/native086/fire4nix-native-086-aarch64 | grep -q AArch64
           build/native086/fire4nix-native-086-aarch64 --selftest | tee build/native086/selftest.txt
           grep -q 'AArch64' build/native086/selftest.txt
+          build/native086/fire4nix-native-086-aarch64 --help | grep -q -- '--verify-home'
+          max_glibc="$(readelf --version-info build/native086/fire4nix-native-086-aarch64 | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
+          echo "NATIVE_GLIBC_MAX=$max_glibc"
+          test "$(printf '%s\\n' "$max_glibc" 2.34 | sort -V | tail -n 1)" = 2.34
       - name: Test missing runtime and fake WPE GObject lifecycle
         shell: bash
         run: |
