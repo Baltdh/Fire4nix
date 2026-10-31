@@ -41,6 +41,7 @@ cat > "$PKG/bin/fire4nix-native-aarch64" <<'NATIVE'
 #!/bin/sh
 {
   printf 'native_called=yes\n'
+  printf 'native_args=%s\n' "$*"
   printf 'native_ld_library_path=%s\n' "${LD_LIBRARY_PATH:-}"
   printf 'native_webkit_exec_path=%s\n' "${WEBKIT_EXEC_PATH:-}"
 } >> "${FIRE4NIX_TEST_TRACE:?}"
