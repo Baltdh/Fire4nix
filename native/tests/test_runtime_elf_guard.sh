@@ -75,6 +75,7 @@ grep -Fq "runtime_root=$T/external-runtime" "$T/external.log"
 # pass it through to every launcher stage.
 mkdir -p "$PKG/www" "$T/fakebin" "$T/first-report"
 printf '<!doctype html><title>Fire4Nix offline fixture</title>\\n' > "$PKG/www/primeiro-teste.html"
+cp "$REPO/installer/www/inicio.html" "$PKG/www/inicio.html"
 cp "$REPO/installer/Fire4Nix-Primeiro-Teste-R36.sh" "$T/package/Fire4Nix-Primeiro-Teste-R36.sh"
 cat > "$T/fakebin/uname" <<'UNAME'
 #!/bin/sh
