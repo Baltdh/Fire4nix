@@ -96,7 +96,10 @@ jobs:
           test -s installer/www/primeiro-teste.html
           echo 'WPE_HEADLESS_FIXTURE_FILE=present'
           sha256sum installer/www/primeiro-teste.html
-          page="file://$GITHUB_WORKSPACE/installer/www/primeiro-teste.html"
+          file_dir="$RUNNER_TEMP/Fire4Nix offline path"
+          mkdir -p "$file_dir"
+          cp "$GITHUB_WORKSPACE/installer/www/primeiro-teste.html" "$file_dir/primeiro-teste.html"
+          page="$file_dir/primeiro-teste.html"
 
           set +e
           env -u WPE_DISPLAY \
@@ -124,7 +127,10 @@ jobs:
           # Verify the real browser chrome, not only the small synthetic fixture.
           # This exercises the address field, keyboard toggle, generated keys,
           # form submit guard, shortcut links and 640x480 viewport metadata.
-          home_page="file://$GITHUB_WORKSPACE/installer/www/inicio.html"
+          home_dir="$RUNNER_TEMP/Fire4Nix home path"
+          mkdir -p "$home_dir"
+          cp "$GITHUB_WORKSPACE/installer/www/inicio.html" "$home_dir/inicio.html"
+          home_page="$home_dir/inicio.html"
           set +e
           env -u WPE_DISPLAY \
             WPE_PLATFORM=headless \
