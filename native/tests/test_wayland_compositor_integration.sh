@@ -25,7 +25,7 @@ export WESTON_LOG="$work/logs/weston.log"
 export LIBGL_ALWAYS_SOFTWARE=1
 unset WPE_DISPLAY MALI_DEFAULT_DISPLAY
 
-weston --backend=headless-backend.so --renderer=pixman \
+weston --debug --backend=headless-backend.so --renderer=pixman \
   --socket="$WAYLAND_DISPLAY" --idle-time=0 --width=640 --height=480 \
   --no-config --log="$WESTON_LOG" >"$work/logs/weston-stdout.log" 2>&1 &
 weston_pid=$!
@@ -106,3 +106,94 @@ echo 'WAYLAND_WPE_VIEW_CREATED=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
 echo 'WAYLAND_WPE_PAGE_DOM_JS_CSS_CLICK=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
 echo 'WAYLAND_WPE_MALI_HARDWARE_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
 echo 'WAYLAND_WPE_R36H_FRAME_VERIFIED=no' | tee -a "$GITHUB_STEP_SUMMARY"
+# The DOM verifier above exits as soon as JavaScript checks pass. Start a
+# separate interactive session and capture the actual Weston output so CI
+# verifies pixels, not only DOM state or WPEView creation.
+command -v weston-screenshooter >/dev/null || {
+  echo 'WAYLAND_WPE_FRAME=FAIL_WESTON_SCREENSHOOTER_MISSING' | tee -a "$GITHUB_STEP_SUMMARY"
+  exit 10
+}
+command -v python3 >/dev/null
+visual_pid=
+cleanup_visual() {
+  if [[ -n "$visual_pid" ]]; then
+    kill "$visual_pid" 2>/dev/null || true
+    wait "$visual_pid" 2>/dev/null || true
+    visual_pid=
+  fi
+}
+trap 'cleanup_visual; cleanup' EXIT INT TERM
+
+env WPE_PLATFORM=wayland \
+  WEBKIT_EXEC_PATH="$webkit_exec_path" \
+  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+  FIRE4NIX_LOW_MEMORY=1 \
+  HOME="$work/home" \
+  XDG_DATA_HOME="$work/data" \
+  XDG_CACHE_HOME="$work/cache" \
+  "$binary" --open "$page" >"$work/logs/wpe-wayland-visual.log" 2>&1 &
+visual_pid=$!
+loaded=0
+for _ in $(seq 1 150); do
+  if grep -Fq 'load-event=3' "$work/logs/wpe-wayland-visual.log" 2>/dev/null; then
+    loaded=1
+    break
+  fi
+  if ! kill -0 "$visual_pid" 2>/dev/null; then
+    cat "$work/logs/wpe-wayland-visual.log"
+    echo 'WAYLAND_WPE_FRAME=FAIL_BROWSER_EXITED_BEFORE_LOAD' | tee -a "$GITHUB_STEP_SUMMARY"
+    exit 11
+  fi
+  sleep 0.1
+done
+[[ "$loaded" -eq 1 ]] || {
+  cat "$work/logs/wpe-wayland-visual.log"
+  echo 'WAYLAND_WPE_FRAME=FAIL_PAGE_LOAD_TIMEOUT' | tee -a "$GITHUB_STEP_SUMMARY"
+  exit 12
+}
+sleep 1
+set +e
+(
+  cd "$work"
+  XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
+    timeout --signal=TERM --kill-after=3s 15s weston-screenshooter
+) >"$work/logs/weston-screenshooter.log" 2>&1
+capture_rc=$?
+set -e
+cat "$work/logs/weston-screenshooter.log"
+[[ "$capture_rc" -eq 0 ]] || {
+  echo "WAYLAND_WPE_FRAME=FAIL_SCREENSHOT_EXIT_$capture_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+  exit 13
+}
+screenshot=$(find "$work" -maxdepth 3 -type f -name '*.png' -print -quit)
+[[ -n "$screenshot" && -s "$screenshot" ]] || {
+  echo 'WAYLAND_WPE_FRAME=FAIL_SCREENSHOT_FILE_MISSING' | tee -a "$GITHUB_STEP_SUMMARY"
+  exit 14
+}
+python3 - "$screenshot" <<'PY'
+from collections import Counter
+from pathlib import Path
+import sys
+from PIL import Image
+
+path = Path(sys.argv[1])
+image = Image.open(path).convert("RGB")
+if image.size != (640, 480):
+    raise SystemExit(f"WAYLAND_WPE_FRAME=FAIL_DIMENSIONS_{image.width}x{image.height}")
+counts = Counter(image.getdata())
+targets = {
+    "blue_swatch": (0x37, 0x73, 0xB8),
+    "orange_swatch": (0xDA, 0x77, 0x4E),
+    "green_swatch": (0x68, 0xA6, 0x70),
+    "page_background": (0x10, 0x18, 0x27),
+}
+for name, rgb in targets.items():
+    pixels = counts[rgb]
+    print(f"WAYLAND_FRAME_PIXEL_{name}={pixels}")
+    if pixels < 300:
+        raise SystemExit(f"WAYLAND_WPE_FRAME=FAIL_MISSING_{name}_PIXELS")
+print(f"WAYLAND_WPE_FRAME=PASS_PIXELS_640x480 screenshot={path}")
+PY
+cleanup_visual
+cat "$work/logs/wpe-wayland-visual.log"
+echo 'WAYLAND_WPE_FRAME=PASS_WESTON_CAPTURED_RENDERED_PIXELS_640X480' | tee -a "$GITHUB_STEP_SUMMARY"
