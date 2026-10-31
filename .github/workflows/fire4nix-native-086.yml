@@ -49,6 +49,7 @@ jobs:
           grep -q 'load-event=3' build/native086/smoke.log
           grep -q 'GLib main loop exited' build/native086/smoke.log
           sh -n native/Fire4Nix-086-Teste.sh
+          sh native/tests/test_local_html_mime_fallback.sh
           echo 'PASS: ELF AArch64 + missing library 127 + GObject view creation + page-load lifecycle.'
       - name: Package optional candidate (not an automatic replacement)
         shell: bash
