@@ -78,7 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in isolated_loader launch_gamepad launcher_verified_gpu_profile \
+          for name in first_test_graphics_probe isolated_loader launch_gamepad launcher_verified_gpu_profile \
             launcher_wpe_assets_paths ports_installer_gpu_profile runtime_diagnostic \
             runtime_prereqs segv_stage_diagnostic elf_guard wpe_gstreamer_guard \
             wpe_subprocess_target_guard; do
