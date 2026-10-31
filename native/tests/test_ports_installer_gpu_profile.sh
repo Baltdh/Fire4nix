@@ -78,6 +78,25 @@ rm "$APP/runtime/BUILD-REPORT.txt"
 run_ports
 grep -Fxq 'real_browser_exit=0' "$P/Fire4Nix-PORTS-ultimo.txt"
 
+# The app and WPE runtime may live on separate SD cards. The explicit runtime
+# must be validated and passed through to the primary launcher.
+mv "$APP/runtime" "$T/split-runtime"
+rm -f "$FIRE4NIX_TEST_TRACE"
+FIRE4NIX_ROOT="$APP" FIRE4NIX_RUNTIME_ROOT="$T/split-runtime" sh "$LAUNCH" > "$T/split-stdout.txt" 2>&1
+grep -Fxq "PORTS_MOCK_RUNTIME=$T/split-runtime" "$FIRE4NIX_TEST_TRACE"
+grep -Fq "selected_runtime=$T/split-runtime" "$P/Fire4Nix-PORTS-ultimo.txt"
+printf 'invalid WPE payload' > "$T/split-runtime/lib/libWPEWebKit-2.0.so.1"
+rm -f "$FIRE4NIX_TEST_TRACE"
+set +e
+FIRE4NIX_ROOT="$APP" FIRE4NIX_RUNTIME_ROOT="$T/split-runtime" sh "$LAUNCH" > "$T/split-invalid.txt" 2>&1
+split_rc=$?
+set -e
+test "$split_rc" -eq 127
+test ! -e "$FIRE4NIX_TEST_TRACE"
+grep -Fq "skipped_invalid_runtime_elf=$T/split-runtime" "$P/Fire4Nix-PORTS-ultimo.txt"
+make_arm64_elf "$T/split-runtime/lib/libWPEWebKit-2.0.so.1"
+mv "$T/split-runtime" "$APP/runtime"
+
 # Exercise the REAL installer/launcher shell logic with an inert mock native
 # binary. The filesystem and ROMS root exist only under mktemp.
 PKG="$T/package with spaces"
