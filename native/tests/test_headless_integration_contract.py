@@ -225,7 +225,7 @@ class HeadlessIntegrationContract(unittest.TestCase):
             "WPE_PLATFORM=headless",
             "--verify-offline",
             "--verify-home",
-            "WPE_HOME_UI=PASS_REAL_DOM_KEYBOARD_FORM_SHORTCUTS",
+            "WPE_HOME_UI=PASS_REAL_DOM_COMPACT_KEYBOARD_FORM_SHORTCUTS",
             "installer/www/inicio.html",
             "WPE_DATA_URI=PASS_REAL_ENGINE_DOM_JS_CSS_CLICK",
             "WPE_FILE_URI=PASS_REAL_HTML_JS_CSS_CLICK",
