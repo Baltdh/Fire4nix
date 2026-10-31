@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            g++ pkg-config libglib2.0-dev zip file binutils
+            g++ pkg-config libglib2.0-dev zip unzip file binutils
       - name: Compile standalone WPEPlatform launcher
         shell: bash
         run: |
