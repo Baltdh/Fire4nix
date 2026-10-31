@@ -9,12 +9,21 @@ cleanup() {
   rm -rf "$T"
 }
 trap cleanup EXIT HUP INT TERM
+
+make_arm64_elf() {
+  python3 - "$1" <<'PY'
+import struct, sys
+ident = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
+header = struct.pack("<HHIQQQIHHHHHH", 3, 183, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0)
+open(sys.argv[1], "wb").write(ident + header)
+PY
+}
 mkdir -p "$T/install/bin" "$T/install/config" "$T/install/runtime/libexec/wpe-webkit-2.0" "$T/install/runtime/lib" "$T/logs"
 cp "$source_dir/installer/Fire4Nix-Iniciar.sh" "$T/install/Fire4Nix-Iniciar.sh"
 cp "$source_dir/installer/config/fire4nix.gptk" "$T/install/config/fire4nix.gptk"
-printf 'stub-wpe' > "$T/install/runtime/lib/libWPEWebKit-2.0.so.1"
+make_arm64_elf "$T/install/runtime/lib/libWPEWebKit-2.0.so.1"
 for part in WPEWebProcess WPENetworkProcess WPEGPUProcess; do
-  printf 'stub-child' > "$T/install/runtime/libexec/wpe-webkit-2.0/$part"
+  make_arm64_elf "$T/install/runtime/libexec/wpe-webkit-2.0/$part"
 done
 cat > "$T/install/bin/fire4nix-native-aarch64" <<'BROWSER'
 #!/bin/sh
