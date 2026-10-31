@@ -65,6 +65,33 @@ FIRE4NIX_LOG_DIR="$T/logs" \
 grep -Fxq "native_ld_library_path=$T/external-runtime/lib" "$TRACE"
 grep -Fq "runtime_root=$T/external-runtime" "$T/external.log"
 
+# The first-test wrapper must also resolve an explicitly split runtime and
+# pass it through to every launcher stage.
+mkdir -p "$PKG/www" "$T/fakebin" "$T/first-report"
+printf '<!doctype html><title>Fire4Nix offline fixture</title>\\n' > "$PKG/www/primeiro-teste.html"
+cp "$REPO/installer/Fire4Nix-Primeiro-Teste-R36.sh" "$T/package/Fire4Nix-Primeiro-Teste-R36.sh"
+cat > "$T/fakebin/uname" <<'UNAME'
+#!/bin/sh
+case "${1:-}" in
+  -m) echo aarch64 ;;
+  -r) echo 7.1.2 ;;
+  *) /usr/bin/uname "$@" ;;
+esac
+UNAME
+chmod +x "$T/fakebin/uname"
+mv "$PKG/runtime" "$T/package-runtime-backup"
+: > "$TRACE"
+PATH="$T/fakebin:$PATH" \
+FIRE4NIX_RUNTIME_ROOT="$T/external-runtime" \
+FIRE4NIX_TEST_TRACE="$TRACE" \
+FIRE4NIX_LOG_DIR="$T/logs" \
+FIRE4NIX_TEST_REPORT_DIR="$T/first-report" \
+  sh "$T/package/Fire4Nix-Primeiro-Teste-R36.sh" --preflight > "$T/first-test.log" 2>&1
+grep -Fxq "runtime_root=$T/external-runtime" "$T/first-report/Primeiro-Teste-R36H-ULTIMO.txt"
+grep -Fq 'offline_html_js_css_click=PASS' "$T/first-test.log"
+grep -Fq 'native_called=yes' "$TRACE"
+mv "$T/package-runtime-backup" "$PKG/runtime"
+
 # A corrupt or foreign library must fail before dlopen/native execution.
 printf 'not an ELF shared object' > "$PKG/runtime/lib/libWPEWebKit-2.0.so.1"
 : > "$TRACE"
