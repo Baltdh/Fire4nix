@@ -78,15 +78,23 @@ jobs:
                 throw new Error('Matching ARM64 native build did not complete successfully for ' + context.sha)
               }
             } else {
-              // Installer/UI-only changes can reuse the latest successful
-              // native binary. Wait briefly if the branch's first native build
-              // is still running instead of failing on an empty run history.
-              for (let attempt = 0; attempt < 36; attempt++) {
-                const runs = await listRuns()
-                run = runs.find(item => item.conclusion === 'success')
-                if (run) break
+              // Installer/UI-only changes reuse the newest successful native
+              // binary. Give the Actions API a short consistency window, then
+              // wait for any newer in-progress build before choosing an older
+              // successful artifact.
+              await new Promise(resolve => setTimeout(resolve, 15000))
+              let runs = []
+              for (let attempt = 0; attempt < 18; attempt++) {
+                runs = await listRuns()
+                const newest = [...runs].sort((a, b) =>
+                  Date.parse(b.created_at) - Date.parse(a.created_at)
+                )[0]
+                if (!newest || newest.status === 'completed') break
                 await new Promise(resolve => setTimeout(resolve, 10000))
               }
+              run = runs
+                .filter(item => item.conclusion === 'success')
+                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
               if (!run) throw new Error('No successful ARM64 native launcher artifact for this branch')
             }
             core.setOutput('run_id', String(run.id))
@@ -242,7 +250,7 @@ jobs:
             }
           done < "$RUNNER_TEMP/wpe-required-symbols.txt"
           echo 'NATIVE_WPE_2_54_1_REQUIRED_SYMBOLS=26_OF_26'
-          strings "$bin" | grep -Fq 'Fire4Nix native WPEPlatform 1.05'
+          strings "$bin" | grep -Fq 'Fire4Nix native WPEPlatform 1.06'
           strings "$bin" | grep -Fq 'webkit_web_view_load_html'
           grep -Fxq 'GPU_PROCESS_PROFILE=disabled_verified_wayland' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
           grep -Fxq 'WPE_INSTALLED_ASSETS_PROFILE=strict' "$pkg/Fire4Nix/runtime/BUILD-REPORT.txt"
