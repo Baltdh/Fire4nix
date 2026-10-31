@@ -143,7 +143,7 @@ jobs:
             echo "WPE_HOME_UI=FAIL_EXIT_$home_rc" | tee -a "$GITHUB_STEP_SUMMARY"
             exit "$home_rc"
           fi
-          for marker in home_dom virtual_keyboard form_submit_guard shortcuts viewport_css focus_navigation; do
+          for marker in home_dom virtual_keyboard keyboard_compact form_submit_guard shortcuts viewport_css focus_navigation; do
             grep -Fq "[FIRE4NIX-HOME] $marker=PASS" logs/wpe-headless-home-ui.log || {
               echo "WPE_HOME_UI=FAIL_MISSING_$marker" | tee -a "$GITHUB_STEP_SUMMARY"
               exit 34
