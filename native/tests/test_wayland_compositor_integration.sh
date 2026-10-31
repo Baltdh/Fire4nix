@@ -4,12 +4,16 @@
 # WebKit page execution, but not Mali hardware acceleration or an R36H frame.
 set -euo pipefail
 
-binary=${1:?usage: test_wayland_compositor_integration.sh NATIVE_BINARY HTML_FIXTURE WORK_DIR}
+binary=${1:?usage: test_wayland_compositor_integration.sh NATIVE_BINARY HTML_FIXTURE WORK_DIR [HOME_UI_FIXTURE]}
 fixture=${2:?missing HTML fixture}
 work=${3:?missing work directory}
+home_fixture=${4:-}
 for file in "$binary" "$fixture"; do
   [[ -s "$file" ]] || { echo "missing input: $file" >&2; exit 2; }
 done
+if [[ -n "$home_fixture" ]]; then
+  [[ -s "$home_fixture" ]] || { echo "missing home UI fixture: $home_fixture" >&2; exit 2; }
+fi
 command -v weston >/dev/null
 command -v timeout >/dev/null
 command -v readelf >/dev/null
@@ -100,6 +104,42 @@ if grep -Fq 'WPE display disconnected' "$work/logs/wpe-wayland.log"; then
   echo 'WAYLAND_WPE_TEST=FAIL_DISPLAY_DISCONNECTED' | tee -a "$GITHUB_STEP_SUMMARY"
   exit 9
 fi
+
+if [[ -n "$home_fixture" ]]; then
+  home_page="file://$home_fixture"
+  set +e
+  env WPE_PLATFORM=wayland \
+    WEBKIT_EXEC_PATH="$webkit_exec_path" \
+    WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
+    FIRE4NIX_LOW_MEMORY=1 \
+    HOME="$work/home" \
+    XDG_DATA_HOME="$work/data" \
+    XDG_CACHE_HOME="$work/cache" \
+    timeout --signal=TERM --kill-after=5s 90s \
+    "$binary" --verify-home "$home_page" \
+    >"$work/logs/wpe-wayland-home-ui.log" 2>&1
+  home_rc=$?
+  set -e
+  cat "$work/logs/wpe-wayland-home-ui.log"
+  cat "$WESTON_LOG" >> "$work/logs/weston-combined.log"
+  if [[ "$home_rc" -ne 0 ]]; then
+    echo "WAYLAND_WPE_HOME_UI=FAIL_EXIT_$home_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+    exit "$home_rc"
+  fi
+  for marker in \
+    '[FIRE4NIX-HOME] home_dom=PASS' \
+    '[FIRE4NIX-HOME] virtual_keyboard=PASS' \
+    '[FIRE4NIX-HOME] form_submit_guard=PASS' \
+    '[FIRE4NIX-HOME] shortcuts=PASS' \
+    '[FIRE4NIX-HOME] viewport_css=PASS'; do
+    grep -Fq "$marker" "$work/logs/wpe-wayland-home-ui.log" || {
+      echo "WAYLAND_WPE_HOME_UI=FAIL_MISSING_MARKER:$marker" | tee -a "$GITHUB_STEP_SUMMARY"
+      exit 10
+    }
+  done
+  echo 'WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND' | tee -a "$GITHUB_STEP_SUMMARY"
+fi
+
 echo 'WAYLAND_WPE_TEST=PASS_REAL_WPE_WAYLAND_BACKEND_WESTON_PIXMAN_ARM64' | tee -a "$GITHUB_STEP_SUMMARY"
 echo 'WAYLAND_WPE_COMPOSITOR_CONNECTION=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
 echo 'WAYLAND_WPE_VIEW_CREATED=PASS' | tee -a "$GITHUB_STEP_SUMMARY"
