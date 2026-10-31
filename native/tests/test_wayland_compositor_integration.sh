@@ -139,7 +139,20 @@ if [[ -n "$home_fixture" ]]; then
       exit 10
     }
   done
-  echo 'WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND' | tee -a "$GITHUB_STEP_SUMMARY"
+  python3 - "$work/logs/wpe-wayland-home-ui.log" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+match = re.search(r"viewport=(\\d+)x(\\d+);scroll_height=(\\d+)", text)
+if not match:
+    print("WAYLAND_WPE_HOME_UI=FAIL_NO_VIEWPORT_METRICS")
+    raise SystemExit(11)
+width, height, scroll = map(int, match.groups())
+print(f"WAYLAND_HOME_VIEWPORT={width}x{height} SCROLL_HEIGHT={scroll}")
+if (width, height) != (640, 480) or scroll > height:
+    print("WAYLAND_WPE_HOME_UI=FAIL_640X480_OVERFLOW")
+    raise SystemExit(12)
+  PY
+  echo 'WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND_640X480' | tee -a "$GITHUB_STEP_SUMMARY"
 fi
 
 echo 'WAYLAND_WPE_TEST=PASS_REAL_WPE_WAYLAND_BACKEND_WESTON_PIXMAN_ARM64' | tee -a "$GITHUB_STEP_SUMMARY"
