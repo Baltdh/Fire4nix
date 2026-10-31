@@ -54,6 +54,7 @@ class HeadlessIntegrationContract(unittest.TestCase):
         launcher = LAUNCHER.read_text()
         first_test = FIRST_TEST.read_text()
         ports_test = PORTS_TEST.read_text()
+        workflow = WORKFLOW.read_text()
         for token in (
             "--verify-home",
             "bool verifyHome = false",
@@ -95,11 +96,13 @@ class HeadlessIntegrationContract(unittest.TestCase):
         self.assertIn('--verify-home', wayland_test)
         self.assertIn('Fire4Nix Wayland local', wayland_test)
         self.assertIn('Fire4Nix Wayland home', wayland_test)
-        self.assertIn('Fire4Nix offline path', WORKFLOW)
-        self.assertIn('Fire4Nix home path', WORKFLOW)
+        self.assertIn('Fire4Nix offline path', workflow)
+        self.assertIn('Fire4Nix home path', workflow)
         self.assertIn('FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-$ROOT/www/inicio.html}"', launcher)
         self.assertIn('run_stage OFFLINE-ENGINE --verify-offline "$PAGE"', first_test)
         self.assertIn('run_stage HOME-UI --verify-home "$HOME_PAGE"', first_test)
+        self.assertNotIn('file://$PAGE', first_test)
+        self.assertIn('sh "$LAUNCHER" --open "$PAGE"', first_test)
         self.assertIn('"$installed_root/www/primeiro-teste.html" 2>&1', ports_test)
         self.assertNotIn('file://$installed_root/www/primeiro-teste.html', ports_test)
         self.assertIn('WAYLAND_WPE_HOME_UI=PASS_REAL_HOME_PAGE_WAYLAND_640X480', wayland_test)

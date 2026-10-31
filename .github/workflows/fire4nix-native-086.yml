@@ -67,6 +67,18 @@ jobs:
           test "$rc" -eq 127
           grep -q 'loader error:' build/native086/missing-lib.log
           LD_LIBRARY_PATH="$PWD/build/native086/fake" build/native086/fire4nix-native-086-aarch64 --check-library
+          mkdir -p build/native086/runtime/lib
+          cp build/native086/fake/libWPEWebKit-2.0.so.1 build/native086/runtime/lib/
+          FIRE4NIX_RUNTIME_ROOT="$PWD/build/native086/runtime" \
+            build/native086/fire4nix-native-086-aarch64 --check-library
+          printf 'not an ELF shared object\n' > build/native086/runtime/lib/libWPEWebKit-2.0.so.1
+          set +e
+          FIRE4NIX_RUNTIME_ROOT="$PWD/build/native086/runtime" \
+            build/native086/fire4nix-native-086-aarch64 --check-library > build/native086/invalid-runtime.log 2>&1
+          invalid_runtime_rc=$?
+          set -e
+          test "$invalid_runtime_rc" -eq 79
+          grep -Fq 'runtime_elf_rejected' build/native086/invalid-runtime.log
           LD_LIBRARY_PATH="$PWD/build/native086/fake" build/native086/fire4nix-native-086-aarch64 --smoke about:blank > build/native086/smoke.log 2>&1
           grep -q 'load-event=3' build/native086/smoke.log
           grep -q 'GLib main loop exited' build/native086/smoke.log
