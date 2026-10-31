@@ -54,7 +54,7 @@ cp "$ROOT/runtime/lib/libWPEWebKit-2.0.so.1" "$T/sandbox with space/fire4nix-com
   cd /
   FIRE4NIX_LOG_DIR="$T/logs" sh "$LAUNCH" >/dev/null
 )
-grep -q "^skipped_incomplete_or_invalid_runtime=.*fire4nix-completo missing=" "$T/sandbox with space/Fire4Nix-PORTS-ultimo.txt"
+grep -q "^skipped_incomplete_or_invalid_runtime=.*fire4nix-completo/runtime missing=" "$T/sandbox with space/Fire4Nix-PORTS-ultimo.txt"
 grep -q "^selected_install=$ROOT$" "$T/sandbox with space/Fire4Nix-PORTS-ultimo.txt"
 # A corrupt/empty package must NOT be advertised as a successful launch.
 set +e
