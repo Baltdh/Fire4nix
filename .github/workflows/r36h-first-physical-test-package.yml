@@ -23,10 +23,6 @@ on:
       - 'installer/Fire4Nix-Inspecionar-ELF.sh'
       - '.github/workflows/r36h-first-physical-test-package.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - 'Fire4Nix v0.86 ARM64 WPEPlatform candidate'
-    types: [completed]
 
 permissions:
   contents: read
@@ -34,18 +30,56 @@ permissions:
 
 jobs:
   assemble-r36h-first-test:
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'push'
-          && !contains(join(github.event.head_commit.modified, ','), 'native/fire4nix_wpeplatform.cpp'))
-      || (github.event_name == 'workflow_run'
-          && github.event.workflow_run.conclusion == 'success'
-          && github.event.workflow_run.head_repository.full_name == github.repository
-          && github.event.workflow_run.head_branch == 'codex/r36h-file-html-mime-fix-20261031')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Resolve matching ARM64 native launcher artifact
+        id: native-run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '')
+            const changed = [
+              ...(context.payload.commits || []).flatMap(commit => commit.modified || []),
+              ...((context.payload.head_commit && context.payload.head_commit.modified) || [])
+            ]
+            const nativeChanged = changed.includes('native/fire4nix_wpeplatform.cpp')
+            const listRuns = async () => {
+              const response = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'fire4nix-native-086.yml',
+                branch,
+                per_page: 30
+              })
+              return response.data.workflow_runs.filter(item =>
+                item.head_repository?.full_name === context.repo.owner + '/' + context.repo.repo
+              )
+            }
+            let run = null
+            if (nativeChanged) {
+              // The native and package workflows start from the same push.
+              // Wait for the exact SHA to avoid packaging a stale launcher.
+              for (let attempt = 0; attempt < 36; attempt++) {
+                const runs = await listRuns()
+                run = runs.find(item => item.head_sha === context.sha)
+                if (run && run.status === 'completed') break
+                await new Promise(resolve => setTimeout(resolve, 10000))
+              }
+              if (!run || run.conclusion !== 'success') {
+                throw new Error('Matching ARM64 native build did not complete successfully for ' + context.sha)
+              }
+            } else {
+              const runs = await listRuns()
+              run = runs.find(item => item.conclusion === 'success')
+              if (!run) throw new Error('No successful ARM64 native launcher artifact for this branch')
+            }
+            core.setOutput('run_id', String(run.id))
 
       - name: Download pinned ROCKNIX WPE 2.54.1 runtime artifact
         uses: actions/download-artifact@v4
