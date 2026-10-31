@@ -29,7 +29,7 @@ is_elf64_aarch64() {
   file_path=$1
   [ -f "$file_path" ] && [ -r "$file_path" ] && [ ! -L "$file_path" ] || return 1
   command -v od >/dev/null 2>&1 || return 1
-  elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\\n' ' ') || return 1
+  elf_bytes=$(od -An -v -t x1 -N20 "$file_path" 2>/dev/null | tr '\n' ' ') || return 1
   set -- $elf_bytes
   [ "$#" -ge 20 ] || return 1
   [ "$1" = 7f ] && [ "$2" = 45 ] && [ "$3" = 4c ] && [ "$4" = 46 ] &&
@@ -151,8 +151,8 @@ trap 'rm -f "$TMP"' 0
     fi
   elif [ -n "$INVALID_RUNTIME_CANDIDATE" ]; then
     echo 'WPE_library=invalid_elf'
-    printf 'WPE_runtime_source=%s\\n' "$INVALID_RUNTIME_CANDIDATE"
-    printf 'WPE_runtime_error=%s\\n' "$INVALID_RUNTIME_REASON"
+    printf 'WPE_runtime_source=%s\n' "$INVALID_RUNTIME_CANDIDATE"
+    printf 'WPE_runtime_error=%s\n' "$INVALID_RUNTIME_REASON"
   else
     echo 'WPE_library=missing'
     echo 'WPE_runtime_source=not_found_on_checked_SD_paths'
