@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fire4Nix R36H 1.05: preserve diagnosis from the very first failing preflight.
+# Fire4Nix R36H 1.06: preserve diagnosis from the very first failing preflight.
 set -u
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 2
 BIN="$ROOT/bin/fire4nix-native-aarch64"
@@ -139,6 +139,7 @@ fi
 RUNTIME_ROOT=$(CDPATH= cd -- "$RUNTIME_ROOT" 2>/dev/null && pwd -P) ||
     fail 127 "WPE runtime directory does not exist: ${FIRE4NIX_RUNTIME_ROOT:-$ROOT/runtime}"
 printf 'runtime_root_resolved=%s\n' "$RUNTIME_ROOT" >> "$LOG"
+export FIRE4NIX_RUNTIME_ROOT="$RUNTIME_ROOT"
 LIB="$RUNTIME_ROOT/lib/libWPEWebKit-2.0.so.1"
 CHILD="$RUNTIME_ROOT/libexec/wpe-webkit-2.0"
 [ -s "$LIB" ] || fail 127 "Missing WPE WebKit runtime under $RUNTIME_ROOT"
