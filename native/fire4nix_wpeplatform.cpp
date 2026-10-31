@@ -178,8 +178,9 @@ static void homeEvaluationFinished(GObject* object, GAsyncResult* result, gpoint
         const bool shortcutsOK = strstr(report, "shortcuts=4") != nullptr;
         const bool cssOK = strstr(report, "body_background=PASS") != nullptr;
         const bool viewportOK = strstr(report, "viewport_meta=PASS") != nullptr;
+        const bool focusNavigationOK = strstr(report, "focus_navigation=PASS") != nullptr;
         if (titleOK && addressOK && formOK && keyboardOK && keyInputOK &&
-            shortcutsOK && cssOK && viewportOK) {
+            shortcutsOK && cssOK && viewportOK && focusNavigationOK) {
             stage("home UI DOM, keyboard, form guard, shortcuts and viewport verification passed");
             g_printerr("[FIRE4NIX-HOME] home_dom=PASS\n");
             g_printerr("[FIRE4NIX-HOME] virtual_keyboard=PASS\n");
@@ -584,9 +585,16 @@ static void loadChanged(GObject*, int event, gpointer data) {
                 " const ev=new Event('submit',{cancelable:true,bubbles:true});"
                 " if(f) f.dispatchEvent(ev);"
                 " checks.push('form_submit_guard='+(!!f && ev.defaultPrevented?'PASS':'FAIL'));"
-                " checks.push('keyboard_toggle='+(opened && t.getAttribute('aria-expanded')==='true' && getComputedStyle(k).display==='grid'?'PASS':'FAIL'));"
+                " const keyboardVisible=!!k && getComputedStyle(k).display==='grid';"
+                " checks.push('keyboard_toggle='+(opened && !!t && t.getAttribute('aria-expanded')==='true' && keyboardVisible?'PASS':'FAIL'));"
                 " checks.push('keyboard_input='+(typed?'PASS':'FAIL'));"
                 " checks.push('keyboard_keys='+keyCount);"
+                " if(t) t.focus();"
+                " document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));"
+                " const downFocus=!!document.activeElement && document.activeElement.id==='go';"
+                " document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));"
+                " const rightFocus=!!document.activeElement && document.activeElement.classList.contains('tile');"
+                " checks.push('focus_navigation='+(downFocus && rightFocus?'PASS':'FAIL'));"
                 " checks.push('shortcuts='+(nav?nav.querySelectorAll('a.tile').length:0));"
                 " checks.push('viewport='+window.innerWidth+'x'+window.innerHeight);"
                 " checks.push('scroll_height='+(document.documentElement?document.documentElement.scrollHeight:0));"
