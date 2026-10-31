@@ -300,9 +300,11 @@ fi
 printf 'mali_wayland_afbc=%s\n' "${MALI_WAYLAND_AFBC:-not_overridden}" >> "$LOG"
 printf 'mali_default_display=%s\n' "${MALI_DEFAULT_DISPLAY:-unconfigured}" >> "$LOG"
 printf 'wsialloc_use_gbm=%s\n' "${WSIALLOC_USE_GBM:-unconfigured}" >> "$LOG"
-export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-file://$ROOT/www/inicio.html}"
+# Pass filesystem paths, not hand-built file:// URIs. The native launcher
+# converts absolute paths with g_filename_to_uri, including spaces in Ports names.
+export FIRE4NIX_HOME_URL="${FIRE4NIX_HOME_URL:-$ROOT/www/inicio.html}"
 if [ "$MODE" = --verify-offline ]; then
-    URL=${1:-file://$ROOT/www/primeiro-teste.html}
+    URL=${1:-$ROOT/www/primeiro-teste.html}
 else
     URL=${1:-$FIRE4NIX_HOME_URL}
 fi
