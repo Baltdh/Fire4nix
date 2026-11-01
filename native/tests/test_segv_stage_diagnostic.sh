@@ -4,7 +4,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd -P)
 T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
-mkdir -p "$T/pkg/Fire4Nix/bin" "$T/runtime/lib"
+mkdir -p "$T/pkg/Fire4Nix/bin" "$T/runtime/lib" "$T/runtime/libexec/wpe-webkit-2.0"
 cp "$ROOT/installer/Diagnosticar-Fire4Nix.sh" "$T/pkg/Diagnosticar-Fire4Nix.sh"
 python3 - "$T/runtime/lib/libWPEWebKit-2.0.so.1" "$T/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" "$T/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" <<'PY'
 import struct
