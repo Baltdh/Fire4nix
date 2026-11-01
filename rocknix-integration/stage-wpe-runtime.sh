@@ -48,6 +48,7 @@ done
 # Without a cache, preserve the previous strict three-process requirement.
 PROCESSES="WPEWebProcess WPENetworkProcess WPEGPUProcess"
 GPU_PROFILE=required_unverified
+SANDBOX_PROFILE=unreported
 CACHE=${FIRE4NIX_WPE_CMAKE_CACHE:-}
 if [ -n "$CACHE" ]; then
   [ -s "$CACHE" ] || { echo 'ERROR: WPE CMakeCache not found' >&2; exit 3; }
@@ -65,6 +66,13 @@ if [ -n "$CACHE" ]; then
   else
     echo 'ERROR: WPE CMakeCache has no explicit GPU process ON or OFF' >&2
     exit 3
+  fi
+fi
+if [ -n "$CACHE" ]; then
+  if grep -Fxq 'ENABLE_BUBBLEWRAP_SANDBOX:BOOL=OFF' "$CACHE"; then
+    SANDBOX_PROFILE=OFF
+  elif grep -Fxq 'ENABLE_BUBBLEWRAP_SANDBOX:BOOL=ON' "$CACHE"; then
+    SANDBOX_PROFILE=ON
   fi
 fi
 for p in $PROCESSES; do
@@ -215,6 +223,7 @@ done
   echo 'AArch64 ELF and WPEPlatform exported symbol checked.'
   echo "Max allowed direct GLIBC requirement: GLIBC_$TARGET_GLIBC_MAX"
   echo "GPU_PROCESS_PROFILE=$GPU_PROFILE"
+  echo "ENABLE_BUBBLEWRAP_SANDBOX=$SANDBOX_PROFILE"
   echo "WPE_INSTALLED_ASSETS_PROFILE=$ASSET_POLICY"
   echo "WPE_INSTALLED_ASSETS_STATUS=$ASSET_STATUS"
   echo 'Inspector/injected paths copied as installed; absolute build-time data paths may still require relocation verification.'

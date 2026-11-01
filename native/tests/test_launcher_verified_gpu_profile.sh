@@ -48,10 +48,12 @@ run_fail 'Missing WebKit subprocess: WPEGPUProcess'
 cat > "$APP/runtime/BUILD-REPORT.txt" <<'PROOF'
 Fire4Nix WPE runtime staged from ROCKNIX SDK DESTDIR.
 GPU_PROCESS_PROFILE=disabled_verified_wayland
+ENABLE_BUBBLEWRAP_SANDBOX=OFF
 Graphical startup and Mali/Wayland have NOT been tested here.
 PROOF
 run_ok
 grep -Frq 'gpu_process_required=0' "$T/logs"
+grep -Frq 'sandbox_mode=disabled_by_build_configuration_security_reduced' "$T/logs"
 # Both Web and Network subprocesses remain mandatory in GPU-off mode.
 rm "$APP/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
 run_fail 'Missing WebKit subprocess: WPENetworkProcess'

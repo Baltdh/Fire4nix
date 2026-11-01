@@ -34,12 +34,14 @@ ENABLE_WPE_PLATFORM_WAYLAND:BOOL=ON
 USE_GSTREAMER:BOOL=OFF
 USE_GBM:BOOL=OFF
 USE_LIBDRM:BOOL=OFF
+ENABLE_BUBBLEWRAP_SANDBOX:BOOL=OFF
 EOF
 stage "off" "$tmp/gpu-off-cache" > "$tmp/off-result.txt"
 test -s "$tmp/off/libexec/wpe-webkit-2.0/WPEWebProcess"
 test -s "$tmp/off/libexec/wpe-webkit-2.0/WPENetworkProcess"
 test ! -e "$tmp/off/libexec/wpe-webkit-2.0/WPEGPUProcess"
 grep -Fxq 'GPU_PROCESS_PROFILE=disabled_verified_wayland' "$tmp/off/BUILD-REPORT.txt"
+grep -Fxq 'ENABLE_BUBBLEWRAP_SANDBOX=OFF' "$tmp/off/BUILD-REPORT.txt"
 test "$(wc -l < "$tmp/off/SHA256SUMS.txt")" -eq 3
 grep -Fxq 'PROFILE=MEDIA_FREE VERIFIED' "$tmp/off/MEDIA-PROFILE.txt"
 # A doctored cache must never silently relax the GPU binary requirement.
@@ -49,6 +51,7 @@ if stage "bad" "$tmp/bad-cache" > /dev/null 2>&1; then
 fi
 cat > "$tmp/gpu-on-cache" <<'EOF'
 ENABLE_GPU_PROCESS:BOOL=ON
+ENABLE_BUBBLEWRAP_SANDBOX:BOOL=ON
 EOF
 if stage "missing-gpu" "$tmp/gpu-on-cache" > /dev/null 2>&1; then
  echo 'FAIL: GPUProcess enabled but binary missing' >&2; exit 1
@@ -58,5 +61,6 @@ printf 'int main(void) { return 0; }\n' |
 stage "on" "$tmp/gpu-on-cache" > "$tmp/on-result.txt"
 test -s "$tmp/on/libexec/wpe-webkit-2.0/WPEGPUProcess"
 grep -Fxq 'GPU_PROCESS_PROFILE=enabled_verified' "$tmp/on/BUILD-REPORT.txt"
+grep -Fxq 'ENABLE_BUBBLEWRAP_SANDBOX=ON' "$tmp/on/BUILD-REPORT.txt"
 test "$(wc -l < "$tmp/on/SHA256SUMS.txt")" -eq 4
 echo 'WPE_GPU_STAGING_REGRESSION=PASS_ARM64_REAL_ELF_FIXTURES'
