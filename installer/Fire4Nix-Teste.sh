@@ -124,6 +124,8 @@ exit_diagnostic=NA
   fi
   echo "selftest_exit=$exit_selftest"
   if [ -f "$DIAG_SCRIPT" ]; then
+    # This script deliberately avoids errexit: diagnostic failures are data,
+    # and the visual launcher exit must be captured before writing the report.
     if [ "$MODE" = --safe ]; then
       FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" --safe >/dev/null 2>&1
     else

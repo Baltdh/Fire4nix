@@ -43,14 +43,44 @@ test "$live_missing" -eq 127
 grep -q 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 
 # Simulated *installed* launcher: the test suite must record its actual exit.
-mkdir -p "$T/roms/ports/fire4nix-completo/runtime/lib" \
+mkdir -p "$T/roms/ports/fire4nix-completo/bin" \
+ "$T/roms/ports/fire4nix-completo/runtime/lib" \
+ "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0" \
  "$T/roms/ports/fire4nix-completo/www"
-printf dummy > "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
-printf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
+# Fire4Nix-Teste.sh selects an installed root only when both files exist.
+cp "$T/pkg/Fire4Nix/bin/fire4nix-native-aarch64" \
+ "$T/roms/ports/fire4nix-completo/bin/fire4nix-native-aarch64"
+# Use a structurally valid ELF64/AArch64 ET_DYN fixture. The fake
+# launcher below never dlopens it; this only exercises the Ports preflight.
+# Build a real ARM64 WPEPlatform mock so native preflight can dlopen it.
+g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror \
+  $(pkg-config --cflags glib-2.0 gobject-2.0) \
+  "$ROOT/native/tests/mock_wpewebkit.cpp" \
+  $(pkg-config --libs glib-2.0 gobject-2.0) \
+  -Wl,-soname,libWPEWebKit-2.0.so.1 \
+  -o "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
+cp /bin/true "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
+cp /bin/true "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+chmod +x "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" \
+  "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+cat > "$T/roms/ports/fire4nix-completo/runtime/BUILD-REPORT.txt" <<'REPORT'
+WPE_RUNTIME_VERSION=2.54.1
+WPE_INSTALLED_ASSETS_PROFILE=strict
+WPE_INSTALLED_ASSETS_STATUS=verified
+GPU_PROCESS_PROFILE=disabled_verified_wayland
+ENABLE_BUBBLEWRAP_SANDBOX=OFF
+REPORTprintf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
 cat > "$T/roms/ports/fire4nix-completo/Fire4Nix-Iniciar.sh" <<'BROWSER'
 #!/bin/sh
 printf 'TEST_MODE=%s\nTEST_OFFLINE_PAGE=%s\n' "$1" "$2"
-exit 70
+case "$1" in
+  --check-platform|--check-library|--verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage)
+    exit 0 ;;
+  --smoke|--open)
+    exit 70 ;;
+  *)
+    exit 70 ;;
+esac
 BROWSER
 # Regression: an installed runtime without the new dedicated offline
 # first-frame page must explicitly refuse the graphics smoke (exit 127)

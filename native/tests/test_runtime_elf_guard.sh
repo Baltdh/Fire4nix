@@ -35,6 +35,7 @@ PKG="$T/sandbox with space/Fire4Nix"
 mkdir -p "$PKG/bin" "$PKG/config" "$T/logs"
 cp "$REPO/installer/Fire4Nix-Iniciar.sh" "$PKG/Fire4Nix-Iniciar.sh"
 cp "$REPO/installer/Diagnosticar-Fire4Nix.sh" "$T/sandbox with space/Diagnosticar-Fire4Nix.sh"
+test -s "$T/sandbox with space/Diagnosticar-Fire4Nix.sh"
 make_runtime "$PKG/runtime"
 
 cat > "$PKG/bin/fire4nix-native-aarch64" <<'NATIVE'
@@ -137,7 +138,7 @@ mkdir -p "$T/bad-runtime/lib" "$T/roms/tools/Fire4Nix/runtime/lib"
 printf 'invalid header' > "$T/bad-runtime/lib/libWPEWebKit-2.0.so.1"
 FIRE4NIX_DIAGNOSTIC_RUNTIME="$T/bad-runtime" \
 FIRE4NIX_DIAGNOSTIC_OUT="$T/invalid-report.txt" \
-  sh "$T/package/Diagnosticar-Fire4Nix.sh" > "$T/invalid-diagnostic.log" 2>&1
+  sh "$T/sandbox with space/Diagnosticar-Fire4Nix.sh" > "$T/invalid-diagnostic.log" 2>&1
 grep -Fxq 'WPE_library=invalid_elf' "$T/invalid-report.txt"
 grep -Fxq "WPE_runtime_source=$T/bad-runtime" "$T/invalid-report.txt"
 grep -Fxq 'WPE_runtime_error=not_elf64_little_endian_aarch64' "$T/invalid-report.txt"
@@ -148,7 +149,7 @@ grep -Fxq 'WPEPlatform_preflight=skipped_invalid_runtime_elf' "$T/invalid-report
 make_arm64_elf "$T/roms/tools/Fire4Nix/runtime/lib/libWPEWebKit-2.0.so.1"
 FIRE4NIX_ROMS="$T/roms" \
 FIRE4NIX_DIAGNOSTIC_OUT="$T/fallback-report.txt" \
-  sh "$T/package/Diagnosticar-Fire4Nix.sh" --safe > "$T/fallback.log" 2>&1
+  sh "$T/sandbox with space/Diagnosticar-Fire4Nix.sh" --safe > "$T/fallback.log" 2>&1
 grep -Fxq 'WPE_library=present' "$T/fallback-report.txt"
 grep -Fxq "WPE_runtime_source=$T/roms/tools/Fire4Nix/runtime" "$T/fallback-report.txt"
 grep -Fxq "invalid_wpe_runtime_candidate=$PKG/runtime" "$T/fallback-report.txt"
