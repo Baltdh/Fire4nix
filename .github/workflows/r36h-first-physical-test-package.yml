@@ -161,6 +161,36 @@ jobs:
           test -s "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt"
           cp "$RUNNER_TEMP/wpe-artifact/PROVENANCE.txt" "$RUNNER_TEMP/package/PROVENANCE-WPE-RUNTIME.txt"
 
+          # This pinned WPE run used the source revision below. Its successful
+          # configure step passed -DENABLE_BUBBLEWRAP_SANDBOX=OFF. Record this
+          # security-relevant build fact in the runtime report, rather than
+          # incorrectly treating missing bwrap as an unverified runtime.
+          wpe_source_sha=5623e79c8705e7b10882cccf280fb2cfdbedc1b7
+          git fetch --no-tags --depth=1 origin "$wpe_source_sha"
+          git show "$wpe_source_sha:scripts/prepare-unified-rocknix-wpe2541.sh" > "$RUNNER_TEMP/wpe-configure-source.sh"
+          grep -Fq -- '-DENABLE_BUBBLEWRAP_SANDBOX=OFF' "$RUNNER_TEMP/wpe-configure-source.sh"
+          runtime="$RUNNER_TEMP/package/Fire4Nix/runtime"
+          test -s "$runtime/BUILD-REPORT.txt"
+          if grep -q '^ENABLE_BUBBLEWRAP_SANDBOX=' "$runtime/BUILD-REPORT.txt"; then
+            grep -Fxq 'ENABLE_BUBBLEWRAP_SANDBOX=OFF' "$runtime/BUILD-REPORT.txt"
+          else
+            printf 'ENABLE_BUBBLEWRAP_SANDBOX=OFF\\n' >> "$runtime/BUILD-REPORT.txt"
+          fi
+          cat > "$RUNNER_TEMP/package/PROVENANCE-WPE-SANDBOX.txt" <<EOF
+          WPE_RUNTIME_ARTIFACT_RUN=40033262653
+          WPE_RUNTIME_SOURCE_COMMIT=$wpe_source_sha
+          WPE_BUILD_WORKFLOW_RUN_STATUS=success
+          WPE_CONFIGURE_SOURCE=scripts/prepare-unified-rocknix-wpe2541.sh
+          WPE_CMAKE_OPTION=-DENABLE_BUBBLEWRAP_SANDBOX=OFF
+          WPE_BUILD_EVIDENCE_ARTIFACT_ID=12540919010
+          WPE_BUILD_EVIDENCE_ARTIFACT_DIGEST=sha256:c1ba19f95c9d1dd88cdac173734e0d9591c1671773b1a84643579599f960fda9
+          WPE_SANDBOX_STATUS=DISABLED_AT_BUILD_SECURITY_REDUCED
+          EOF
+          (cd "$runtime" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
+          (cd "$runtime" && sha256sum -c SHA256SUMS.txt)
+          echo 'CHECK=WPE_SANDBOX_BUILD_PROVENANCE_PASS'
+
+
           native_package_zip="$(find "$RUNNER_TEMP/native-artifact" -type f -name 'Fire4Nix-0.86-R36H-ARM64-Native-Test.zip' -print -quit)"
           test -n "$native_package_zip"
           echo "NATIVE_PACKAGE_ZIP=$native_package_zip"
@@ -343,6 +373,8 @@ jobs:
           cat > "$pkg/STATUS-PRIMEIRO-TESTE.txt" <<EOF
           FIRE4NIX_PACKAGE=R36H_FIRST_PHYSICAL_TEST
           WPE_RUNTIME_VERSION=2.54.1
+          WPE_SANDBOX_PROFILE=disabled_at_build_security_reduced
+          WPE_SANDBOX_SOURCE_COMMIT=5623e79c8705e7b10882cccf280fb2cfdbedc1b7
           WPE_RUNTIME_ARTIFACT_RUN=40033262653
           NATIVE_LAUNCHER_VERSION=$native_version
           NATIVE_LAUNCHER_WORKFLOW_RUN=${{ steps.native-run.outputs.run_id }}

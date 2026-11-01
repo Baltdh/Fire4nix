@@ -120,7 +120,7 @@ ls -1t "$LOG_DIR"/Fire4Nix-*.log "$LOG_DIR"/Fire4Nix-*-log-* 2>/dev/null | sed -
 while IFS= read -r old; do
     [ -f "$old" ] && rm -f "$old"
 done
-printf 'version=1.06\nroot=%s\nruntime_root=%s\n' "$ROOT" "$RUNTIME_ROOT" >> "$LOG"
+printf 'version=1.07\nroot=%s\nruntime_root=%s\n' "$ROOT" "$RUNTIME_ROOT" >> "$LOG"
 MODE=--open
 case "${1:-}" in
   --open|--smoke|--headless|--check-library|--check-platform|--selftest|--verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage)

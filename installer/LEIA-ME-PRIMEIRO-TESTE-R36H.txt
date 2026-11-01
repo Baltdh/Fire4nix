@@ -2,6 +2,12 @@ FIRE4NIX R36H — BETA DE PRIMEIRO TESTE (2026-10-31)
 =========================================
 
 PACOTE EXPERIMENTAL PARA ROCKNIX / R36H
+AVISO DE SEGURANÇA: este runtime WPE foi compilado com
+ENABLE_BUBBLEWRAP_SANDBOX=OFF. Portanto, os processos WebKit não têm o
+sandbox Bubblewrap de processo. Este pacote é somente para diagnóstico
+controlado: teste primeiro a página offline e use apenas sites conhecidos
+e confiáveis. Não informe senhas, dados bancários ou credenciais neste beta.
+
 Este pacote combina o runtime WPE 2.54.1 compilado com SDK ROCKNIX e o
 launcher nativo Fire4Nix 1.05 ARM64. O WPE 2.54.2 foi usado separadamente
 na validação headless de integração contínua; ele NÃO foi copiado para cá.
