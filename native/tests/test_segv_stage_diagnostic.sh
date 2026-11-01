@@ -12,7 +12,7 @@ import sys
 
 for path in sys.argv[1:]:
     ehdr = bytearray(64)
-    ehdr[:7] = b"\\x7fELF\\x02\\x01\\x01"
+    ehdr[:7] = b"\x7fELF\x02\x01\x01"
     struct.pack_into("<HHI", ehdr, 16, 3, 183, 1)
     struct.pack_into("<Q", ehdr, 32, 64)
     struct.pack_into("<HHHHHH", ehdr, 52, 64, 56, 2, 0, 0, 0)
