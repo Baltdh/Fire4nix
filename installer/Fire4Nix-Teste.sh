@@ -124,12 +124,16 @@ exit_diagnostic=NA
   fi
   echo "selftest_exit=$exit_selftest"
   if [ -f "$DIAG_SCRIPT" ]; then
+    # A failed WPE preflight is diagnostic data, not a reason to skip
+    # the separate visual smoke probe or its meaningful launcher exit code.
+    set +e
     if [ "$MODE" = --safe ]; then
       FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" --safe >/dev/null 2>&1
     else
       FIRE4NIX_DIAGNOSTIC_OUT="$DIAG" sh "$DIAG_SCRIPT" >/dev/null 2>&1
     fi
     exit_diagnostic=$?
+    set -e
     echo "diagnostic_exit=$exit_diagnostic"
     if [ -f "$DIAG" ]; then
       grep -E '^(arch=|WPE_library=|WPE_runtime_source=|WPE_version=|WPEWebProcess=|WPENetworkProcess=|WPEGPUProcess=|gpu_runtime_profile=|gpu_process_required=|WPEPlatform_fault_stage=|WPEPlatform_preflight=|WPEPlatform_preflight_exit=|WPEPlatform_preflight_note=|wayland_socket=|alternate_wayland_socket=|drm_render_node=|gptokeyb=|uinput=|GRAPHICS_STATUS=)' "$DIAG" || true
