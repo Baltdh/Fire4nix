@@ -353,7 +353,7 @@ jobs:
           native_sha="$(sha256sum "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | awk '{print $1}')"
           native_banner="$(strings "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -F 'Fire4Nix native WPEPlatform ' | head -n 1)"
           test -n "$native_banner"
-          native_version="${native_banner##* }"
+          native_version="$(printf '%s\\n' "$native_banner" | sed -n 's/^Fire4Nix native WPEPlatform \\([0-9][0-9.]*\\):.*/\\1/p')"
           case "$native_version" in [0-9]*.[0-9]*) ;; *) echo "Invalid native launcher version: $native_version" >&2; exit 1 ;; esac
           native_glibc="$(readelf --version-info "$pkg/Fire4Nix/bin/fire4nix-native-aarch64" | grep -o 'Name: GLIBC_[0-9.]*' | sed 's/Name: GLIBC_//' | sort -V | tail -n 1)"
           test -n "$native_glibc"
