@@ -174,7 +174,7 @@ jobs:
           if grep -q '^ENABLE_BUBBLEWRAP_SANDBOX=' "$runtime/BUILD-REPORT.txt"; then
             grep -Fxq 'ENABLE_BUBBLEWRAP_SANDBOX=OFF' "$runtime/BUILD-REPORT.txt"
           else
-            printf 'ENABLE_BUBBLEWRAP_SANDBOX=OFF\\n' >> "$runtime/BUILD-REPORT.txt"
+            printf 'ENABLE_BUBBLEWRAP_SANDBOX=OFF\n' >> "$runtime/BUILD-REPORT.txt"
           fi
           cat > "$RUNNER_TEMP/package/PROVENANCE-WPE-SANDBOX.txt" <<EOF
           WPE_RUNTIME_ARTIFACT_RUN=40033262653
