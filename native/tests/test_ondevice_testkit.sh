@@ -45,31 +45,31 @@ grep -q 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME' "$T/reports/Fire4Nix-Ultimo-T
 # Simulated *installed* launcher: the test suite must record its actual exit.
 mkdir -p "$T/roms/ports/fire4nix-completo/bin" \
  "$T/roms/ports/fire4nix-completo/runtime/lib" \
+ "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0" \
  "$T/roms/ports/fire4nix-completo/www"
 # Fire4Nix-Teste.sh selects an installed root only when both files exist.
 cp "$T/pkg/Fire4Nix/bin/fire4nix-native-aarch64" \
  "$T/roms/ports/fire4nix-completo/bin/fire4nix-native-aarch64"
 # Use a structurally valid ELF64/AArch64 ET_DYN fixture. The fake
 # launcher below never dlopens it; this only exercises the Ports preflight.
-python3 - "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1" <<'PY'
-import struct
-import sys
-
-path = sys.argv[1]
-ehdr = bytearray(64)
-ehdr[:7] = b"\x7fELF\x02\x01\x01"
-struct.pack_into("<HHI", ehdr, 16, 3, 183, 1)  # ET_DYN, EM_AARCH64, EV_CURRENT
-struct.pack_into("<Q", ehdr, 32, 64)           # e_phoff
-struct.pack_into("<HHHHHH", ehdr, 52, 64, 56, 2, 0, 0, 0)
-phdrs = bytearray(112)
-struct.pack_into("<IIQQQQQQ", phdrs, 0, 1, 5, 0, 0, 0, 192, 192, 4096)
-struct.pack_into("<IIQQQQQQ", phdrs, 56, 2, 6, 176, 176, 176, 16, 16, 8)
-with open(path, "wb") as stream:
-    stream.write(ehdr)
-    stream.write(phdrs)
-    stream.write(struct.pack("<qQ", 0, 0))  # minimal DT_NULL entry
-PY
-printf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
+# Build a real ARM64 WPEPlatform mock so native preflight can dlopen it.
+g++ -std=c++17 -Os -fPIC -shared -Wall -Wextra -Werror \
+  $(pkg-config --cflags glib-2.0 gobject-2.0) \
+  "$ROOT/native/tests/mock_wpewebkit.cpp" \
+  $(pkg-config --libs glib-2.0 gobject-2.0) \
+  -Wl,-soname,libWPEWebKit-2.0.so.1 \
+  -o "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
+cp /bin/true "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPEWebProcess"
+cp /bin/true "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+chmod +x "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" \
+  "$T/roms/ports/fire4nix-completo/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess"
+cat > "$T/roms/ports/fire4nix-completo/runtime/BUILD-REPORT.txt" <<'REPORT'
+WPE_RUNTIME_VERSION=2.54.1
+WPE_INSTALLED_ASSETS_PROFILE=strict
+WPE_INSTALLED_ASSETS_STATUS=verified
+GPU_PROCESS_PROFILE=disabled_verified_wayland
+ENABLE_BUBBLEWRAP_SANDBOX=OFF
+REPORTprintf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
 cat > "$T/roms/ports/fire4nix-completo/Fire4Nix-Iniciar.sh" <<'BROWSER'
 #!/bin/sh
 printf 'TEST_MODE=%s\nTEST_OFFLINE_PAGE=%s\n' "$1" "$2"
