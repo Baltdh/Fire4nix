@@ -6,7 +6,28 @@ T=$(mktemp -d)
 trap 'rm -rf "$T"' 0
 mkdir -p "$T/pkg/Fire4Nix/bin" "$T/runtime/lib"
 cp "$ROOT/installer/Diagnosticar-Fire4Nix.sh" "$T/pkg/Diagnosticar-Fire4Nix.sh"
-printf 'mock-WPE' > "$T/runtime/lib/libWPEWebKit-2.0.so.1"
+python3 - "$T/runtime/lib/libWPEWebKit-2.0.so.1" "$T/runtime/libexec/wpe-webkit-2.0/WPEWebProcess" "$T/runtime/libexec/wpe-webkit-2.0/WPENetworkProcess" <<'PY'
+import struct
+import sys
+
+for path in sys.argv[1:]:
+    ehdr = bytearray(64)
+    ehdr[:7] = b"\\x7fELF\\x02\\x01\\x01"
+    struct.pack_into("<HHI", ehdr, 16, 3, 183, 1)
+    struct.pack_into("<Q", ehdr, 32, 64)
+    struct.pack_into("<HHHHHH", ehdr, 52, 64, 56, 2, 0, 0, 0)
+    phdrs = bytearray(112)
+    struct.pack_into("<IIQQQQQQ", phdrs, 0, 1, 5, 0, 0, 0, 192, 192, 4096)
+    struct.pack_into("<IIQQQQQQ", phdrs, 56, 2, 6, 176, 176, 176, 16, 16, 8)
+    with open(path, "wb") as stream:
+        stream.write(ehdr)
+        stream.write(phdrs)
+        stream.write(struct.pack("<qQ", 0, 0))
+PY
+cat > "$T/runtime/BUILD-REPORT.txt" <<'REPORT'
+GPU_PROCESS_PROFILE=disabled_verified_wayland
+ENABLE_BUBBLEWRAP_SANDBOX=OFF
+REPORT
 cat > "$T/pkg/Fire4Nix/bin/fire4nix-native-aarch64" <<'NATIVE'
 #!/bin/sh
 echo called >> "$FIRE4NIX_MOCK_CALLS"
