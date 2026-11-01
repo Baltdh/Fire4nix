@@ -158,7 +158,7 @@ trap 'rm -f "$TMP"' 0
     printf 'device_glibc=%s\n' "${device_glibc:-unknown}"
   fi
   if [ -n "$INVALID_RUNTIME_CANDIDATE" ] && [ -n "$RUNTIME" ]; then
-    printf 'invalid_wpe_runtime_candidate=%s\\n' "$INVALID_RUNTIME_CANDIDATE"
+    printf 'invalid_wpe_runtime_candidate=%s\n' "$INVALID_RUNTIME_CANDIDATE"
   fi
   if [ -n "$RUNTIME" ]; then
     echo "WPE_library=present"
