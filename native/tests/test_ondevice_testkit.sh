@@ -45,7 +45,26 @@ grep -q 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME' "$T/reports/Fire4Nix-Ultimo-T
 # Simulated *installed* launcher: the test suite must record its actual exit.
 mkdir -p "$T/roms/ports/fire4nix-completo/runtime/lib" \
  "$T/roms/ports/fire4nix-completo/www"
-printf dummy > "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1"
+# Use a structurally valid ELF64/AArch64 ET_DYN fixture. The fake
+# launcher below never dlopens it; this only exercises the Ports preflight.
+python3 - "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1" <<'PY'
+import struct
+import sys
+
+path = sys.argv[1]
+ehdr = bytearray(64)
+ehdr[:7] = b"\\x7fELF\\x02\\x01\\x01"
+struct.pack_into("<HHI", ehdr, 16, 3, 183, 1)  # ET_DYN, EM_AARCH64, EV_CURRENT
+struct.pack_into("<Q", ehdr, 32, 64)           # e_phoff
+struct.pack_into("<HHHHHH", ehdr, 52, 64, 56, 2, 0, 0, 0)
+phdrs = bytearray(112)
+struct.pack_into("<IIQQQQQQ", phdrs, 0, 1, 5, 0, 0, 0, 192, 192, 4096)
+struct.pack_into("<IIQQQQQQ", phdrs, 56, 2, 6, 176, 176, 176, 16, 16, 8)
+with open(path, "wb") as stream:
+    stream.write(ehdr)
+    stream.write(phdrs)
+    stream.write(struct.pack("<qQ", 0, 0))  # minimal DT_NULL entry
+PY
 printf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
 cat > "$T/roms/ports/fire4nix-completo/Fire4Nix-Iniciar.sh" <<'BROWSER'
 #!/bin/sh
