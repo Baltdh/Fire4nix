@@ -9,7 +9,7 @@ controlado: teste primeiro a página offline e use apenas sites conhecidos
 e confiáveis. Não informe senhas, dados bancários ou credenciais neste beta.
 
 Este pacote combina o runtime WPE 2.54.1 compilado com SDK ROCKNIX e o
-launcher nativo Fire4Nix 1.05 ARM64. O WPE 2.54.2 foi usado separadamente
+launcher nativo Fire4Nix 1.06 ARM64 e script de inicialização 1.07. O WPE 2.54.2 foi usado separadamente
 na validação headless de integração contínua; ele NÃO foi copiado para cá.
 
 Correção incluída nesta revisão: HTML local .html/.htm é lido via GIO e enviado
