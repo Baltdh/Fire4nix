@@ -43,8 +43,12 @@ test "$live_missing" -eq 127
 grep -q 'visual_test=SKIPPED_NO_INSTALLED_RUNTIME' "$T/reports/Fire4Nix-Ultimo-Teste.txt"
 
 # Simulated *installed* launcher: the test suite must record its actual exit.
-mkdir -p "$T/roms/ports/fire4nix-completo/runtime/lib" \
+mkdir -p "$T/roms/ports/fire4nix-completo/bin" \
+ "$T/roms/ports/fire4nix-completo/runtime/lib" \
  "$T/roms/ports/fire4nix-completo/www"
+# Fire4Nix-Teste.sh selects an installed root only when both files exist.
+cp "$T/pkg/Fire4Nix/bin/fire4nix-native-aarch64" \
+ "$T/roms/ports/fire4nix-completo/bin/fire4nix-native-aarch64"
 # Use a structurally valid ELF64/AArch64 ET_DYN fixture. The fake
 # launcher below never dlopens it; this only exercises the Ports preflight.
 python3 - "$T/roms/ports/fire4nix-completo/runtime/lib/libWPEWebKit-2.0.so.1" <<'PY'
@@ -69,7 +73,14 @@ printf html > "$T/roms/ports/fire4nix-completo/www/inicio.html"
 cat > "$T/roms/ports/fire4nix-completo/Fire4Nix-Iniciar.sh" <<'BROWSER'
 #!/bin/sh
 printf 'TEST_MODE=%s\nTEST_OFFLINE_PAGE=%s\n' "$1" "$2"
-exit 70
+case "$1" in
+  --check-platform|--check-library|--verify-offline|--verify-home|--verify-navigation|--verify-form|--verify-storage)
+    exit 0 ;;
+  --smoke|--open)
+    exit 70 ;;
+  *)
+    exit 70 ;;
+esac
 BROWSER
 # Regression: an installed runtime without the new dedicated offline
 # first-frame page must explicitly refuse the graphics smoke (exit 127)
